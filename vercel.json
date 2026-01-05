@@ -4,7 +4,6 @@
   "installCommand": "npm install && cd frontend && npm install",
   "functions": {
     "api/**/*.ts": {
-      "runtime": "nodejs20.x",
       "maxDuration": 30
     }
   },
