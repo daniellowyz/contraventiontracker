@@ -1,0 +1,313 @@
+// Contravention Tracker - Prisma Schema
+// Database: Supabase PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============== ENUMS ==============
+
+enum Role {
+  ADMIN
+  USER
+}
+
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ContraventionStatus {
+  PENDING
+  ACKNOWLEDGED
+  DISPUTED
+  CONFIRMED
+  RESOLVED
+  ESCALATED
+}
+
+enum DisputeStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  UPHELD
+  OVERTURNED
+  WITHDRAWN
+}
+
+enum EscalationLevel {
+  LEVEL_1  // Verbal Reminder (1-2 pts)
+  LEVEL_2  // Written Warning (3-4 pts)
+  LEVEL_3  // Mandatory Training (5-7 pts)
+  LEVEL_4  // Performance Impact (8-11 pts)
+  LEVEL_5  // Severe Consequences (12+ pts)
+}
+
+enum TrainingStatus {
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  OVERDUE
+  WAIVED
+}
+
+enum NotificationChannel {
+  EMAIL
+  SLACK
+  IN_APP
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+// ============== MODELS ==============
+
+model Department {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  headId    String?
+  head      User?    @relation("DepartmentHead", fields: [headId], references: [id])
+  employees User[]   @relation("DepartmentEmployees")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model User {
+  id               String   @id @default(cuid())
+  employeeId       String   @unique  // e.g., "EMP001"
+  email            String   @unique
+  passwordHash     String
+  name             String
+  departmentId     String?
+  department       Department?      @relation("DepartmentEmployees", fields: [departmentId], references: [id])
+  role             Role             @default(USER)
+  slackId          String?
+  isActive         Boolean          @default(true)
+
+  // Relations
+  departmentHeadOf    Department[]     @relation("DepartmentHead")
+  contraventions      Contravention[]  @relation("EmployeeContraventions")
+  loggedContras       Contravention[]  @relation("LoggedByUser")
+  acknowledgedContras Contravention[]  @relation("AcknowledgedByUser")
+  pointsRecord        EmployeePoints?
+  escalations         Escalation[]
+  disputesSubmitted   Dispute[]        @relation("DisputeSubmitter")
+  disputesDecided     Dispute[]        @relation("DisputeDecider")
+  trainingRecords     TrainingRecord[]
+  auditLogs           AuditLog[]
+  notifications       Notification[]
+
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+}
+
+model ContraventionType {
+  id              String          @id @default(cuid())
+  category        String          // DC_PROCUREMENT, MANPOWER, SVP, SVP_VCC, SIGNATORY
+  name            String          @unique
+  description     String?
+  defaultSeverity Severity
+  defaultPoints   Int
+  isActive        Boolean         @default(true)
+  contraventions  Contravention[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
+model Contravention {
+  id              String              @id @default(cuid())
+  referenceNo     String              @unique  // Auto-generated: CONTRA-2026-001
+
+  // Who
+  employeeId      String
+  employee        User                @relation("EmployeeContraventions", fields: [employeeId], references: [id])
+  loggedById      String
+  loggedBy        User                @relation("LoggedByUser", fields: [loggedById], references: [id])
+
+  // What
+  typeId          String
+  type            ContraventionType   @relation(fields: [typeId], references: [id])
+  vendor          String?
+  valueSgd        Decimal?            @db.Decimal(15, 2)
+  description     String
+  summary         String?             @db.Text
+
+  // Classification
+  severity        Severity
+  points          Int
+
+  // Status tracking
+  status          ContraventionStatus @default(PENDING)
+  incidentDate    DateTime
+  resolvedDate    DateTime?
+
+  // Acknowledgment
+  acknowledgedAt  DateTime?
+  acknowledgedById String?
+  acknowledgedBy  User?               @relation("AcknowledgedByUser", fields: [acknowledgedById], references: [id])
+
+  // Evidence
+  evidenceUrls    String[]
+
+  // Relations
+  disputes        Dispute[]
+
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([employeeId])
+  @@index([status])
+  @@index([incidentDate])
+}
+
+model EmployeePoints {
+  id              String            @id @default(cuid())
+  employeeId      String            @unique
+  employee        User              @relation(fields: [employeeId], references: [id])
+  totalPoints     Int               @default(0)
+  currentLevel    EscalationLevel?
+  lastCalculated  DateTime          @default(now())
+
+  // Store point history as JSONB for audit trail
+  // [{date, points, contraventionId, reason, type: 'add'|'decay'|'credit'}]
+  pointsHistory   Json              @default("[]")
+
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+}
+
+model Escalation {
+  id               String          @id @default(cuid())
+  employeeId       String
+  employee         User            @relation(fields: [employeeId], references: [id])
+  level            EscalationLevel
+  triggeredAt      DateTime        @default(now())
+  triggerPoints    Int             // Points at time of escalation
+
+  // Actions
+  actionsRequired  String[]        // List of required actions
+  actionsCompleted String[]        @default([])
+  dueDate          DateTime
+  completedAt      DateTime?
+  notes            String?         @db.Text
+
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@index([employeeId])
+  @@index([level])
+}
+
+model Dispute {
+  id               String          @id @default(cuid())
+  contraventionId  String
+  contravention    Contravention   @relation(fields: [contraventionId], references: [id])
+
+  submittedById    String
+  submittedBy      User            @relation("DisputeSubmitter", fields: [submittedById], references: [id])
+  submittedAt      DateTime        @default(now())
+
+  reason           String          @db.Text
+  evidenceUrls     String[]
+
+  status           DisputeStatus   @default(SUBMITTED)
+  panelDecision    String?         @db.Text
+  decidedAt        DateTime?
+  decidedById      String?
+  decidedBy        User?           @relation("DisputeDecider", fields: [decidedById], references: [id])
+
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+}
+
+model Course {
+  id              String           @id @default(cuid())
+  name            String           @unique
+  description     String?
+  durationHours   Decimal          @db.Decimal(4, 1)
+  provider        String           // Internal, External vendor name
+  validityMonths  Int              // How long certification is valid
+  triggerPoints   Int              @default(5)  // Points threshold to trigger (default 5)
+  pointsCredit    Int              @default(1)  // Points reduction on completion
+  isActive        Boolean          @default(true)
+
+  trainingRecords TrainingRecord[]
+
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+model TrainingRecord {
+  id             String         @id @default(cuid())
+  employeeId     String
+  employee       User           @relation(fields: [employeeId], references: [id])
+  courseId       String
+  course         Course         @relation(fields: [courseId], references: [id])
+
+  assignedDate   DateTime       @default(now())
+  dueDate        DateTime
+  completedDate  DateTime?
+  status         TrainingStatus @default(ASSIGNED)
+  certificateUrl String?
+  pointsCredited Boolean        @default(false)
+
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@unique([employeeId, courseId])
+  @@index([employeeId])
+  @@index([status])
+}
+
+model Notification {
+  id        String              @id @default(cuid())
+  userId    String
+  user      User                @relation(fields: [userId], references: [id])
+  type      String              // CONTRAVENTION_LOGGED, ACKNOWLEDGMENT_DUE, ESCALATION, TRAINING_DUE, etc.
+  title     String
+  message   String              @db.Text
+  link      String?
+  channel   NotificationChannel
+  status    NotificationStatus  @default(PENDING)
+  sentAt    DateTime?
+  errorMsg  String?
+  read      Boolean             @default(false)
+
+  createdAt DateTime            @default(now())
+
+  @@index([userId])
+  @@index([status])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String   // CREATE, UPDATE, DELETE, LOGIN, etc.
+  entityType String   // Contravention, User, Escalation, etc.
+  entityId   String?
+  oldValues  Json?
+  newValues  Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+model SystemConfig {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt
+}
