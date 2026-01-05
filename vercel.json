@@ -3,7 +3,7 @@
   "outputDirectory": "frontend/dist",
   "installCommand": "npm install && cd frontend && npm install",
   "functions": {
-    "api/**/*.ts": {
+    "api/index.ts": {
       "maxDuration": 30
     }
   },
