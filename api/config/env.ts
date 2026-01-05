@@ -2,11 +2,14 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+const portStr = process.env.PORT || '3001';
+const smtpPortStr = process.env.SMTP_PORT || '587';
+
 export const config = {
   // Server
-  port: parseInt(process.env.PORT || '3001', 10),
+  port: Number(portStr),
   nodeEnv: process.env.NODE_ENV || 'development',
-  frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
+  frontendUrl: process.env.FRONTEND_URL || '*',
 
   // Database
   databaseUrl: process.env.DATABASE_URL || '',
@@ -23,7 +26,7 @@ export const config = {
   // Email
   smtp: {
     host: process.env.SMTP_HOST || '',
-    port: parseInt(process.env.SMTP_PORT || '587', 10),
+    port: Number(smtpPortStr),
     user: process.env.SMTP_USER || '',
     pass: process.env.SMTP_PASS || '',
     from: process.env.EMAIL_FROM || 'noreply@example.com',
