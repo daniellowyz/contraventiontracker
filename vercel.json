@@ -1,9 +1,15 @@
 {
-  "buildCommand": "cd frontend && npm install && npm run build",
+  "buildCommand": "npx prisma generate && cd frontend && npm install && npm run build",
   "outputDirectory": "frontend/dist",
-  "installCommand": "cd frontend && npm install",
-  "framework": "vite",
+  "installCommand": "npm install && cd frontend && npm install",
+  "functions": {
+    "api/**/*.ts": {
+      "runtime": "@vercel/node@3.0.0",
+      "maxDuration": 30
+    }
+  },
   "rewrites": [
-    { "source": "/(.*)", "destination": "/" }
+    { "source": "/api/:path*", "destination": "/api/index.ts" },
+    { "source": "/((?!api).*)", "destination": "/" }
   ]
 }
