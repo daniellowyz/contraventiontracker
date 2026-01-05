@@ -1,13 +1,6 @@
-import dotenv from 'dotenv';
-
-dotenv.config();
-
-const portStr = process.env.PORT || '3001';
-const smtpPortStr = process.env.SMTP_PORT || '587';
-
 export const config = {
   // Server
-  port: Number(portStr),
+  port: 3001,
   nodeEnv: process.env.NODE_ENV || 'development',
   frontendUrl: process.env.FRONTEND_URL || '*',
 
@@ -26,7 +19,7 @@ export const config = {
   // Email
   smtp: {
     host: process.env.SMTP_HOST || '',
-    port: Number(smtpPortStr),
+    port: 587,
     user: process.env.SMTP_USER || '',
     pass: process.env.SMTP_PASS || '',
     from: process.env.EMAIL_FROM || 'noreply@example.com',
