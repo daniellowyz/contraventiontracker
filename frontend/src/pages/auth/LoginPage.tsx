@@ -6,6 +6,8 @@ import { useAuthStore } from '@/stores/authStore';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
+import { Masthead } from '@/components/layout/Masthead';
+import { Footer } from '@/components/layout/Footer';
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -36,54 +38,58 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4">
-      <Card className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">Contravention Tracker</h1>
-          <p className="text-gray-500 mt-2">Sign in to your account</p>
-        </div>
+    <div className="min-h-screen flex flex-col">
+      <Masthead />
+      <div className="flex-1 flex items-center justify-center bg-gray-50 py-12 px-4">
+        <Card className="w-full max-w-md">
+          <div className="text-center mb-8">
+            <h1 className="text-2xl font-bold text-gray-900">Contravention Tracker</h1>
+            <p className="text-gray-500 mt-2">Sign in to your account</p>
+          </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
-              {error}
-            </div>
-          )}
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {error && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+                {error}
+              </div>
+            )}
 
-          <Input
-            id="email"
-            type="email"
-            label="Email address"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            required
-          />
+            <Input
+              id="email"
+              type="email"
+              label="Email address"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              required
+            />
 
-          <Input
-            id="password"
-            type="password"
-            label="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Enter your password"
-            required
-          />
+            <Input
+              id="password"
+              type="password"
+              label="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter your password"
+              required
+            />
 
-          <Button
-            type="submit"
-            className="w-full"
-            isLoading={loginMutation.isPending}
-          >
-            Sign in
-          </Button>
-        </form>
+            <Button
+              type="submit"
+              className="w-full"
+              isLoading={loginMutation.isPending}
+            >
+              Sign in
+            </Button>
+          </form>
 
-        <div className="mt-6 pt-6 border-t border-gray-100 text-center text-sm text-gray-500">
-          <p>Demo credentials:</p>
-          <p className="font-mono mt-1">admin@ogp.gov.sg / admin123</p>
-        </div>
-      </Card>
+          <div className="mt-6 pt-6 border-t border-gray-100 text-center text-sm text-gray-500">
+            <p>Demo credentials:</p>
+            <p className="font-mono mt-1">admin@ogp.gov.sg / admin123</p>
+          </div>
+        </Card>
+      </div>
+      <Footer />
     </div>
   );
 }
