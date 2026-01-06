@@ -246,19 +246,19 @@ export function ContraventionFormPage() {
                 />
               </div>
 
-              {/* Authorizer Email */}
+              {/* Approver Email */}
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Authorizer Email
+                  Approver Email
                 </label>
                 <Input
                   type="email"
                   value={formData.authorizerEmail}
                   onChange={(e) => handleChange('authorizerEmail', e.target.value)}
-                  placeholder="Email of the authorization personnel (optional)"
+                  placeholder="e.g., aaron_ma@tech.gov.sg or DD/OGP email"
                 />
                 <p className="mt-1 text-xs text-gray-500">
-                  Enter the email of the person who authorized this action, if applicable.
+                  Email of approver to seek contravention approval (e.g., GT Procurement Director, DD/OGP). Remember to copy finance@open.gov.sg in the email trail.
                 </p>
               </div>
 
