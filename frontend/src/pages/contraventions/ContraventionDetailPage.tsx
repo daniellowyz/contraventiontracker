@@ -100,7 +100,36 @@ export function ContraventionDetailPage() {
       setError('Description is required');
       return;
     }
-    updateMutation.mutate(editData);
+
+    if (!contravention) return;
+
+    // Only send fields that have actually changed
+    const changes: Partial<CreateContraventionInput> = {};
+
+    if (editData.description?.trim() !== contravention.description) {
+      changes.description = editData.description?.trim();
+    }
+    if ((editData.summary?.trim() || '') !== (contravention.summary || '')) {
+      changes.summary = editData.summary?.trim() || undefined;
+    }
+    if ((editData.vendor?.trim() || '') !== (contravention.vendor || '')) {
+      changes.vendor = editData.vendor?.trim() || undefined;
+    }
+    if (editData.valueSgd !== contravention.valueSgd) {
+      changes.valueSgd = editData.valueSgd;
+    }
+    if (editData.incidentDate !== contravention.incidentDate.split('T')[0]) {
+      changes.incidentDate = editData.incidentDate;
+    }
+
+    // Check if any changes were made
+    if (Object.keys(changes).length === 0) {
+      setIsEditing(false);
+      setError('');
+      return;
+    }
+
+    updateMutation.mutate(changes);
   };
 
   const handleCancel = () => {
