@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, Search, X } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Bell, Search, X, ExternalLink } from 'lucide-react';
+import { notificationsApi, Notification } from '@/api/notifications.api';
 
 interface HeaderProps {
   title: string;
@@ -8,21 +10,49 @@ interface HeaderProps {
   actions?: React.ReactNode;
 }
 
-// Mock notifications - in a real app these would come from an API
-const mockNotifications = [
-  { id: '1', title: 'New contravention logged', message: 'A critical contravention has been recorded', time: '5 min ago', read: false },
-  { id: '2', title: 'Dispute submitted', message: 'Employee John Doe has submitted a dispute', time: '1 hour ago', read: false },
-  { id: '3', title: 'Training due', message: '3 employees have overdue training', time: '2 hours ago', read: true },
-];
+function formatTimeAgo(dateString: string): string {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+  if (diffInSeconds < 60) return 'Just now';
+  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} min ago`;
+  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hours ago`;
+  if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)} days ago`;
+  return date.toLocaleDateString('en-SG', { day: 'numeric', month: 'short' });
+}
 
 export function Header({ title, subtitle, actions }: HeaderProps) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [showNotifications, setShowNotifications] = useState(false);
-  const [notifications, setNotifications] = useState(mockNotifications);
   const notificationRef = useRef<HTMLDivElement>(null);
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  // Fetch notifications from API
+  const { data: notifications = [], isLoading } = useQuery({
+    queryKey: ['notifications'],
+    queryFn: notificationsApi.getAll,
+    refetchInterval: 30000, // Refresh every 30 seconds
+  });
+
+  // Mark as read mutation
+  const markAsReadMutation = useMutation({
+    mutationFn: notificationsApi.markAsRead,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    },
+  });
+
+  // Mark all as read mutation
+  const markAllAsReadMutation = useMutation({
+    mutationFn: notificationsApi.markAllAsRead,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    },
+  });
+
+  const unreadCount = notifications.filter((n: Notification) => !n.read).length;
 
   // Close notifications when clicking outside
   useEffect(() => {
@@ -38,7 +68,6 @@ export function Header({ title, subtitle, actions }: HeaderProps) {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      // Navigate to contraventions with search query
       navigate(`/contraventions?search=${encodeURIComponent(searchQuery.trim())}`);
     }
   };
@@ -49,14 +78,21 @@ export function Header({ title, subtitle, actions }: HeaderProps) {
     }
   };
 
-  const markAsRead = (id: string) => {
-    setNotifications(prev =>
-      prev.map(n => n.id === id ? { ...n, read: true } : n)
-    );
+  const handleNotificationClick = (notification: Notification) => {
+    // Mark as read
+    if (!notification.read) {
+      markAsReadMutation.mutate(notification.id);
+    }
+
+    // Navigate to the link if available
+    if (notification.link) {
+      setShowNotifications(false);
+      navigate(notification.link);
+    }
   };
 
-  const markAllAsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+  const handleMarkAllAsRead = () => {
+    markAllAsReadMutation.mutate();
   };
 
   return (
@@ -99,43 +135,57 @@ export function Header({ title, subtitle, actions }: HeaderProps) {
               <Bell className="w-5 h-5" />
               {unreadCount > 0 && (
                 <span className="absolute top-0 right-0 w-5 h-5 bg-red-500 rounded-full text-white text-xs flex items-center justify-center">
-                  {unreadCount}
+                  {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
               )}
             </button>
 
             {/* Notifications Dropdown */}
             {showNotifications && (
-              <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+              <div className="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                   <h3 className="font-semibold text-gray-900">Notifications</h3>
                   {unreadCount > 0 && (
                     <button
-                      onClick={markAllAsRead}
-                      className="text-xs text-blue-600 hover:text-blue-700"
+                      onClick={handleMarkAllAsRead}
+                      disabled={markAllAsReadMutation.isPending}
+                      className="text-xs text-blue-600 hover:text-blue-700 disabled:opacity-50"
                     >
                       Mark all as read
                     </button>
                   )}
                 </div>
-                <div className="max-h-80 overflow-y-auto">
-                  {notifications.length === 0 ? (
-                    <p className="px-4 py-8 text-center text-gray-500 text-sm">No notifications</p>
+                <div className="max-h-96 overflow-y-auto">
+                  {isLoading ? (
+                    <div className="px-4 py-8 text-center">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
+                    </div>
+                  ) : notifications.length === 0 ? (
+                    <div className="px-4 py-8 text-center">
+                      <Bell className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                      <p className="text-gray-500 text-sm">No notifications yet</p>
+                      <p className="text-gray-400 text-xs mt-1">You'll see updates here when there's activity</p>
+                    </div>
                   ) : (
-                    notifications.map(notification => (
+                    notifications.map((notification: Notification) => (
                       <div
                         key={notification.id}
-                        onClick={() => markAsRead(notification.id)}
-                        className={`px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-50 last:border-0 ${
+                        onClick={() => handleNotificationClick(notification)}
+                        className={`px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-50 last:border-0 transition-colors ${
                           !notification.read ? 'bg-blue-50' : ''
                         }`}
                       >
                         <div className="flex items-start gap-3">
-                          <div className={`w-2 h-2 rounded-full mt-2 ${!notification.read ? 'bg-blue-500' : 'bg-transparent'}`} />
-                          <div className="flex-1">
-                            <p className="text-sm font-medium text-gray-900">{notification.title}</p>
-                            <p className="text-xs text-gray-500 mt-0.5">{notification.message}</p>
-                            <p className="text-xs text-gray-400 mt-1">{notification.time}</p>
+                          <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${!notification.read ? 'bg-blue-500' : 'bg-transparent'}`} />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-sm font-medium text-gray-900 truncate">{notification.title}</p>
+                              {notification.link && (
+                                <ExternalLink className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{notification.message}</p>
+                            <p className="text-xs text-gray-400 mt-1">{formatTimeAgo(notification.createdAt)}</p>
                           </div>
                         </div>
                       </div>

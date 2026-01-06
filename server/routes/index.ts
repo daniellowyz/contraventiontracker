@@ -4,6 +4,7 @@ import contraventionRoutes from './contravention.routes';
 import employeeRoutes from './employee.routes';
 import reportRoutes from './report.routes';
 import adminRoutes from './admin.routes';
+import notificationRoutes from './notification.routes';
 
 const router = Router();
 
@@ -18,5 +19,6 @@ router.use('/contraventions', contraventionRoutes);
 router.use('/employees', employeeRoutes);
 router.use('/reports', reportRoutes);
 router.use('/admin', adminRoutes);
+router.use('/notifications', notificationRoutes);
 
 export default router;
