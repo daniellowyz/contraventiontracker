@@ -14,7 +14,8 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "declaration": true,
-    "outDir": "./dist-node"
+    "outDir": "./dist-node",
+    "types": ["node"]
   },
   "include": ["vite.config.ts"]
 }

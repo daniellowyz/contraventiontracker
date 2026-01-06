@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { contraventionsApi, CreateContraventionInput } from '@/api/contraventions.api';
-import { useAuthStore } from '@/stores/auth.store';
+import { useAuthStore } from '@/stores/authStore';
 import { Header } from '@/components/layout/Header';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -15,11 +15,9 @@ import {
   Save,
   X,
   AlertTriangle,
-  Calendar,
   User,
   Building,
   FileText,
-  DollarSign,
   CheckCircle,
   Clock,
   MessageSquare
@@ -33,29 +31,22 @@ const SEVERITY_OPTIONS = [
   { value: 'CRITICAL', label: 'Critical' },
 ];
 
-const STATUS_OPTIONS = [
-  { value: 'PENDING', label: 'Pending' },
-  { value: 'ACKNOWLEDGED', label: 'Acknowledged' },
-  { value: 'DISPUTED', label: 'Disputed' },
-  { value: 'CONFIRMED', label: 'Confirmed' },
-  { value: 'RESOLVED', label: 'Resolved' },
-  { value: 'ESCALATED', label: 'Escalated' },
-];
+type BadgeVariant = 'default' | 'success' | 'warning' | 'danger' | 'info';
 
-const severityColors: Record<Severity, string> = {
+const severityColors: Record<Severity, BadgeVariant> = {
   LOW: 'success',
   MEDIUM: 'warning',
-  HIGH: 'error',
-  CRITICAL: 'error',
+  HIGH: 'danger',
+  CRITICAL: 'danger',
 };
 
-const statusColors: Record<ContraventionStatus, string> = {
+const statusColors: Record<ContraventionStatus, BadgeVariant> = {
   PENDING: 'warning',
   ACKNOWLEDGED: 'info',
-  DISPUTED: 'error',
+  DISPUTED: 'danger',
   CONFIRMED: 'info',
   RESOLVED: 'success',
-  ESCALATED: 'error',
+  ESCALATED: 'danger',
 };
 
 export function ContraventionDetailPage() {
@@ -222,10 +213,10 @@ export function ContraventionDetailPage() {
                 <div className="space-y-4">
                   {/* Status and Severity Badges */}
                   <div className="flex gap-3">
-                    <Badge variant={statusColors[contravention.status] as 'success' | 'warning' | 'error' | 'info'}>
+                    <Badge variant={statusColors[contravention.status]}>
                       {contravention.status}
                     </Badge>
-                    <Badge variant={severityColors[contravention.severity] as 'success' | 'warning' | 'error'}>
+                    <Badge variant={severityColors[contravention.severity]}>
                       {contravention.severity} Severity
                     </Badge>
                     <Badge variant="default">{contravention.points} Points</Badge>

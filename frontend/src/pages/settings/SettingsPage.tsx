@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useAuthStore } from '@/stores/auth.store';
+import { useAuthStore } from '@/stores/authStore';
 import { Header } from '@/components/layout/Header';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -148,7 +148,7 @@ export function SettingsPage() {
                       </label>
                       <Input
                         type="text"
-                        value={user?.department?.name || 'Not assigned'}
+                        value="Not assigned"
                         disabled
                         className="bg-gray-50"
                       />
