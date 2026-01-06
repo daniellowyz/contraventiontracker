@@ -4,6 +4,7 @@ import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
 import { LoginPage } from '@/pages/auth/LoginPage';
 import { DashboardPage } from '@/pages/dashboard/DashboardPage';
 import { ContraventionsListPage } from '@/pages/contraventions/ContraventionsListPage';
+import { ContraventionFormPage } from '@/pages/contraventions/ContraventionFormPage';
 import { EmployeesListPage } from '@/pages/employees/EmployeesListPage';
 import { EmployeeProfilePage } from '@/pages/employees/EmployeeProfilePage';
 import { ReportsPage } from '@/pages/reports/ReportsPage';
@@ -59,6 +60,7 @@ function App() {
         >
           <Route path="/" element={<DashboardPage />} />
           <Route path="/contraventions" element={<ContraventionsListPage />} />
+          <Route path="/contraventions/new" element={<ContraventionFormPage />} />
           <Route path="/employees" element={<EmployeesListPage />} />
           <Route path="/employees/:id" element={<EmployeeProfilePage />} />
           <Route path="/escalations" element={<EscalationsPage />} />
