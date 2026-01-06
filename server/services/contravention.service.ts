@@ -6,6 +6,7 @@ import pointsService from './points.service';
 import { CreateContraventionInput, UpdateContraventionInput, ContraventionFiltersInput } from '../validators/contravention.schema';
 import { addBusinessDays } from '../utils/dateUtils';
 import { ACKNOWLEDGMENT_CONFIG } from '../config/constants';
+import { notificationService } from './notification.service';
 
 export class ContraventionService {
   /**
@@ -76,6 +77,16 @@ export class ContraventionService {
       `${referenceNo}: ${contraventionType.name}`,
       contravention.id
     );
+
+    // Send notification to the employee
+    await notificationService.notifyContraventionLogged({
+      employeeUserId: data.employeeId,
+      contraventionId: contravention.id,
+      referenceNo,
+      typeName: contraventionType.name,
+      severity,
+      points,
+    });
 
     return contravention;
   }
@@ -220,7 +231,7 @@ export class ContraventionService {
       throw new AppError('Contravention has already been processed', 400);
     }
 
-    return prisma.contravention.update({
+    const updated = await prisma.contravention.update({
       where: { id },
       data: {
         status: 'ACKNOWLEDGED',
@@ -231,8 +242,21 @@ export class ContraventionService {
       include: {
         employee: true,
         type: true,
+        loggedBy: { select: { id: true, name: true } },
       },
     });
+
+    // Notify the admin who logged this contravention
+    if (updated.loggedBy) {
+      await notificationService.notifyContraventionAcknowledged({
+        adminUserId: updated.loggedBy.id,
+        contraventionId: id,
+        referenceNo: contravention.referenceNo,
+        employeeName: updated.employee.name,
+      });
+    }
+
+    return updated;
   }
 
   /**
@@ -275,6 +299,15 @@ export class ContraventionService {
     await prisma.contravention.update({
       where: { id: contraventionId },
       data: { status: 'DISPUTED' },
+    });
+
+    // Notify all admins about the dispute
+    const adminUserIds = await notificationService.getAdminUserIds();
+    await notificationService.notifyDisputeSubmitted({
+      adminUserIds,
+      contraventionId,
+      referenceNo: contravention.referenceNo,
+      employeeName: dispute.submittedBy.name,
     });
 
     return dispute;
@@ -343,6 +376,14 @@ export class ContraventionService {
         data: { status: 'CONFIRMED' },
       });
     }
+
+    // Notify the employee about the dispute decision
+    await notificationService.notifyDisputeDecided({
+      employeeUserId: dispute.contravention.employeeId,
+      contraventionId: dispute.contraventionId,
+      referenceNo: dispute.contravention.referenceNo,
+      decision,
+    });
 
     return updatedDispute;
   }
