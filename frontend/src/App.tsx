@@ -5,9 +5,11 @@ import { LoginPage } from '@/pages/auth/LoginPage';
 import { DashboardPage } from '@/pages/dashboard/DashboardPage';
 import { ContraventionsListPage } from '@/pages/contraventions/ContraventionsListPage';
 import { ContraventionFormPage } from '@/pages/contraventions/ContraventionFormPage';
+import { ContraventionDetailPage } from '@/pages/contraventions/ContraventionDetailPage';
 import { EmployeesListPage } from '@/pages/employees/EmployeesListPage';
 import { EmployeeProfilePage } from '@/pages/employees/EmployeeProfilePage';
 import { ReportsPage } from '@/pages/reports/ReportsPage';
+import { SettingsPage } from '@/pages/settings/SettingsPage';
 import { useAuthStore } from '@/stores/authStore';
 
 // Placeholder pages
@@ -25,15 +27,6 @@ function TrainingPage() {
     <div className="p-8">
       <h1 className="text-2xl font-bold mb-4">Training</h1>
       <p className="text-gray-500">Training management coming soon...</p>
-    </div>
-  );
-}
-
-function SettingsPage() {
-  return (
-    <div className="p-8">
-      <h1 className="text-2xl font-bold mb-4">Settings</h1>
-      <p className="text-gray-500">Settings page coming soon...</p>
     </div>
   );
 }
@@ -61,6 +54,7 @@ function App() {
           <Route path="/" element={<DashboardPage />} />
           <Route path="/contraventions" element={<ContraventionsListPage />} />
           <Route path="/contraventions/new" element={<ContraventionFormPage />} />
+          <Route path="/contraventions/:id" element={<ContraventionDetailPage />} />
           <Route path="/employees" element={<EmployeesListPage />} />
           <Route path="/employees/:id" element={<EmployeeProfilePage />} />
           <Route path="/escalations" element={<EscalationsPage />} />

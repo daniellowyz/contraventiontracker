@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { contraventionsApi, ContraventionFilters } from '@/api/contraventions.api';
 import { Header } from '@/components/layout/Header';
 import { Card } from '@/components/ui/Card';
@@ -32,6 +32,7 @@ const SEVERITY_OPTIONS = [
 
 export function ContraventionsListPage() {
   const { isAdmin } = useAuthStore();
+  const navigate = useNavigate();
   const [filters, setFilters] = useState<ContraventionFilters>({
     page: 1,
     limit: 20,
@@ -116,7 +117,11 @@ export function ContraventionsListPage() {
                   </thead>
                   <tbody className="divide-y divide-gray-200">
                     {data.data.map((contravention) => (
-                      <tr key={contravention.id} className="hover:bg-gray-50">
+                      <tr
+                        key={contravention.id}
+                        className="hover:bg-gray-50 cursor-pointer"
+                        onClick={() => navigate(`/contraventions/${contravention.id}`)}
+                      >
                         <td className="px-6 py-4 text-sm font-medium text-gray-900">
                           {contravention.referenceNo}
                         </td>
