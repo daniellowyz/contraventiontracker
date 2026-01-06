@@ -21,10 +21,12 @@ export interface CreateContraventionInput {
   vendor?: string;
   valueSgd?: number;
   description: string;
+  justification: string;
+  mitigation: string;
   summary?: string;
   incidentDate: string;
   evidenceUrls?: string[];
-  authorizerEmail?: string; // Email of the authorization personnel
+  authorizerEmail?: string; // Email of the approver to seek contravention approval
 }
 
 export const contraventionsApi = {

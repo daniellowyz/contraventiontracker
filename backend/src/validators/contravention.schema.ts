@@ -6,6 +6,8 @@ export const createContraventionSchema = z.object({
   vendor: z.string().optional(),
   valueSgd: z.number().optional(),
   description: z.string().min(1, 'Description is required'),
+  justification: z.string().min(1, 'Justification is required'),
+  mitigation: z.string().min(1, 'Mitigation measures are required'),
   summary: z.string().optional(),
   incidentDate: z.string().refine((date) => !isNaN(Date.parse(date)), {
     message: 'Invalid date format',

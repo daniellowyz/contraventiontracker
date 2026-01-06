@@ -51,6 +51,8 @@ export class ContraventionService {
         vendor: data.vendor,
         valueSgd: data.valueSgd,
         description: data.description,
+        justification: data.justification,
+        mitigation: data.mitigation,
         summary: data.summary,
         severity,
         points,
@@ -78,7 +80,60 @@ export class ContraventionService {
       contravention.id
     );
 
+    // Send webhook to Google Apps Script if approver email is provided
+    if (data.authorizerEmail) {
+      this.sendApprovalWebhook(contravention, data).catch((err) => {
+        console.error('Failed to send approval webhook:', err);
+      });
+    }
+
     return contravention;
+  }
+
+  /**
+   * Send webhook to Google Apps Script for email notification
+   */
+  private async sendApprovalWebhook(contravention: any, data: CreateContraventionInput) {
+    const webhookUrl = process.env.APPROVAL_WEBHOOK_URL;
+    if (!webhookUrl) {
+      console.log('APPROVAL_WEBHOOK_URL not configured, skipping webhook');
+      return;
+    }
+
+    const payload = {
+      referenceNo: contravention.referenceNo,
+      approverEmail: data.authorizerEmail,
+      employeeEmail: contravention.employee.email,
+      employeeName: contravention.employee.name,
+      contraventionType: contravention.type.name,
+      vendor: data.vendor || 'N/A',
+      valueSgd: data.valueSgd ? `$${data.valueSgd.toLocaleString()}` : 'N/A',
+      incidentDate: new Date(data.incidentDate).toLocaleDateString('en-SG', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      }),
+      description: data.description,
+      justification: data.justification,
+      mitigation: data.mitigation,
+    };
+
+    try {
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Webhook failed with status: ${response.status}`);
+      }
+
+      console.log('Approval webhook sent successfully for:', contravention.referenceNo);
+    } catch (error) {
+      console.error('Error sending approval webhook:', error);
+      throw error;
+    }
   }
 
   /**

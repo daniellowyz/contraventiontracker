@@ -137,7 +137,9 @@ model Contravention {
   type            ContraventionType   @relation(fields: [typeId], references: [id])
   vendor          String?
   valueSgd        Decimal?            @db.Decimal(15, 2)
-  description     String
+  description     String              @db.Text
+  justification   String?             @db.Text  // Justification for non-compliance
+  mitigation      String?             @db.Text  // Mitigation measures to prevent recurrence
   summary         String?             @db.Text
 
   // Classification

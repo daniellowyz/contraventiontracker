@@ -28,6 +28,8 @@ export function ContraventionFormPage() {
     vendor: string;
     valueSgd: string;
     description: string;
+    justification: string;
+    mitigation: string;
     summary: string;
     incidentDate: string;
     severity: Severity;
@@ -38,6 +40,8 @@ export function ContraventionFormPage() {
     vendor: '',
     valueSgd: '',
     description: '',
+    justification: '',
+    mitigation: '',
     summary: '',
     incidentDate: new Date().toISOString().split('T')[0],
     severity: 'MEDIUM',
@@ -91,11 +95,21 @@ export function ContraventionFormPage() {
       setError('Please enter a description');
       return;
     }
+    if (!formData.justification.trim()) {
+      setError('Please enter a justification for non-compliance');
+      return;
+    }
+    if (!formData.mitigation.trim()) {
+      setError('Please enter mitigation measures');
+      return;
+    }
 
     const submitData: CreateContraventionInput = {
       employeeId: formData.employeeId,
       typeId: formData.typeId,
       description: formData.description.trim(),
+      justification: formData.justification.trim(),
+      mitigation: formData.mitigation.trim(),
       incidentDate: formData.incidentDate,
     };
 
@@ -268,12 +282,49 @@ export function ContraventionFormPage() {
                   Description <span className="text-red-500">*</span>
                 </label>
                 <textarea
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[120px]"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[100px]"
                   value={formData.description}
                   onChange={(e) => handleChange('description', e.target.value)}
-                  placeholder="Detailed description of the contravention..."
+                  placeholder="e.g., A purchase was made under OGP for an event held on 22-23 September 2025 without a prior Approval of Requirement (AOR). Approval is sought for an amount of $2,320.61."
                   required
                 />
+                <p className="mt-1 text-xs text-gray-500">
+                  Describe what happened and the amount involved.
+                </p>
+              </div>
+
+              {/* Justification */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Justification for Non-Compliance <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[100px]"
+                  value={formData.justification}
+                  onChange={(e) => handleChange('justification', e.target.value)}
+                  placeholder="e.g., The AOR was not sought prior to purchase as I was not aware that an AOR was required for invoices billed through Vendors@Gov."
+                  required
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Explain why proper procedures were not followed.
+                </p>
+              </div>
+
+              {/* Mitigation Measures */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Mitigation Measures <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[100px]"
+                  value={formData.mitigation}
+                  onChange={(e) => handleChange('mitigation', e.target.value)}
+                  placeholder="e.g., To prevent this from recurring, I will ensure that an AOR is obtained for all future purchases before any commitment is made to vendors."
+                  required
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Describe steps to prevent this from happening again.
+                </p>
               </div>
             </div>
 
