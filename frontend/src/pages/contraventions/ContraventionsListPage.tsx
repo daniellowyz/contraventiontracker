@@ -30,6 +30,38 @@ const SEVERITY_OPTIONS = [
   { value: 'CRITICAL', label: 'Critical' },
 ];
 
+// Generate fiscal year period options (Apr-Apr)
+// Current fiscal year: if we're in Jan-Apr, we're in the previous fiscal year
+const generateFiscalYearOptions = () => {
+  const now = new Date();
+  const currentMonth = now.getMonth(); // 0-indexed (0 = Jan, 3 = Apr)
+  const currentYear = now.getFullYear();
+
+  // Determine current fiscal year
+  // If Jan-Apr (months 0-3), we're in fiscal year that started previous April
+  // If May-Dec (months 4-11), we're in fiscal year that started this April
+  const currentFiscalStartYear = currentMonth < 4 ? currentYear - 1 : currentYear;
+
+  // Generate options for current and previous fiscal years
+  const options = [
+    { value: '', label: 'All Periods' },
+  ];
+
+  // Add fiscal years (going back 2 years from current fiscal year)
+  for (let i = 0; i <= 2; i++) {
+    const startYear = currentFiscalStartYear - i;
+    const endYear = startYear + 1;
+    options.push({
+      value: `${startYear}-05-01_${endYear}-04-30`,
+      label: `May ${startYear} - Apr ${endYear}`,
+    });
+  }
+
+  return options;
+};
+
+const PERIOD_OPTIONS = generateFiscalYearOptions();
+
 export function ContraventionsListPage() {
   const { isAdmin } = useAuthStore();
   const navigate = useNavigate();
@@ -68,6 +100,13 @@ export function ContraventionsListPage() {
         {/* Filters */}
         <Card className="mb-6">
           <div className="flex flex-wrap gap-4">
+            <div className="w-52">
+              <Select
+                options={PERIOD_OPTIONS}
+                value={filters.period || ''}
+                onChange={(e) => handleFilterChange('period', e.target.value)}
+              />
+            </div>
             <div className="w-48">
               <Select
                 options={STATUS_OPTIONS}

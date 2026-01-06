@@ -9,6 +9,7 @@ export interface ContraventionFilters {
   employeeId?: string;
   dateFrom?: string;
   dateTo?: string;
+  period?: string; // Format: "YYYY-MM-DD_YYYY-MM-DD" for fiscal year filtering
   search?: string;
   page?: number;
   limit?: number;
@@ -23,6 +24,7 @@ export interface CreateContraventionInput {
   summary?: string;
   incidentDate: string;
   evidenceUrls?: string[];
+  authorizerEmail?: string; // Email of the authorization personnel
 }
 
 export const contraventionsApi = {
@@ -30,7 +32,16 @@ export const contraventionsApi = {
     const params = new URLSearchParams();
     Object.entries(filters).forEach(([key, value]) => {
       if (value !== undefined && value !== '') {
-        params.append(key, String(value));
+        // Handle period filter - convert to dateFrom/dateTo
+        if (key === 'period' && typeof value === 'string') {
+          const [dateFrom, dateTo] = value.split('_');
+          if (dateFrom && dateTo) {
+            params.append('dateFrom', dateFrom);
+            params.append('dateTo', dateTo);
+          }
+        } else {
+          params.append(key, String(value));
+        }
       }
     });
     const response = await client.get<PaginatedResponse<Contravention>>(`/contraventions?${params}`);

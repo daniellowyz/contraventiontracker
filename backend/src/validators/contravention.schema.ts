@@ -11,6 +11,7 @@ export const createContraventionSchema = z.object({
     message: 'Invalid date format',
   }),
   evidenceUrls: z.array(z.string().url()).optional(),
+  authorizerEmail: z.string().email('Invalid email format').optional(),
 });
 
 export const updateContraventionSchema = z.object({

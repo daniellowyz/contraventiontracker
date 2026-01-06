@@ -56,6 +56,7 @@ export class ContraventionService {
         points,
         incidentDate: new Date(data.incidentDate),
         evidenceUrls: data.evidenceUrls || [],
+        authorizerEmail: data.authorizerEmail,
         status: 'PENDING',
       },
       include: {

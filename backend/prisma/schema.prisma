@@ -157,6 +157,9 @@ model Contravention {
   // Evidence
   evidenceUrls    String[]
 
+  // Authorization personnel
+  authorizerEmail String?         // Email of the person who authorized the action
+
   // Relations
   disputes        Dispute[]
 

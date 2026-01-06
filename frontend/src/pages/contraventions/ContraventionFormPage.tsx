@@ -31,6 +31,7 @@ export function ContraventionFormPage() {
     summary: string;
     incidentDate: string;
     severity: Severity;
+    authorizerEmail: string;
   }>({
     employeeId: '',
     typeId: '',
@@ -40,6 +41,7 @@ export function ContraventionFormPage() {
     summary: '',
     incidentDate: new Date().toISOString().split('T')[0],
     severity: 'MEDIUM',
+    authorizerEmail: '',
   });
 
   const [error, setError] = useState('');
@@ -105,6 +107,9 @@ export function ContraventionFormPage() {
     }
     if (formData.summary.trim()) {
       submitData.summary = formData.summary.trim();
+    }
+    if (formData.authorizerEmail.trim()) {
+      submitData.authorizerEmail = formData.authorizerEmail.trim();
     }
 
     createMutation.mutate(submitData);
@@ -239,6 +244,22 @@ export function ContraventionFormPage() {
                   onChange={(e) => handleChange('summary', e.target.value)}
                   placeholder="Brief summary of the contravention"
                 />
+              </div>
+
+              {/* Authorizer Email */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Authorizer Email
+                </label>
+                <Input
+                  type="email"
+                  value={formData.authorizerEmail}
+                  onChange={(e) => handleChange('authorizerEmail', e.target.value)}
+                  placeholder="Email of the authorization personnel (optional)"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Enter the email of the person who authorized this action, if applicable.
+                </p>
               </div>
 
               {/* Description */}
