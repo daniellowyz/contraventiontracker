@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { contraventionsApi, ContraventionFilters } from '@/api/contraventions.api';
 import { Header } from '@/components/layout/Header';
@@ -10,7 +10,7 @@ import { Select } from '@/components/ui/Select';
 import { Input } from '@/components/ui/Input';
 import { formatDate, formatCurrency, getSeverityColor, getStatusColor } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
-import { Plus, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, Eye, Trash2 } from 'lucide-react';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All Status' },
@@ -65,18 +65,39 @@ const PERIOD_OPTIONS = generateFiscalYearOptions();
 export function ContraventionsListPage() {
   const { isAdmin } = useAuthStore();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [filters, setFilters] = useState<ContraventionFilters>({
     page: 1,
     limit: 20,
   });
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['contraventions', filters],
     queryFn: () => contraventionsApi.getAll(filters),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: contraventionsApi.delete,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contraventions'] });
+      setDeleteId(null);
+    },
+  });
+
   const handleFilterChange = (key: keyof ContraventionFilters, value: string) => {
     setFilters((prev) => ({ ...prev, [key]: value, page: 1 }));
+  };
+
+  const handleDelete = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    setDeleteId(id);
+  };
+
+  const confirmDelete = () => {
+    if (deleteId) {
+      deleteMutation.mutate(deleteId);
+    }
   };
 
   return (
@@ -191,11 +212,23 @@ export function ContraventionsListPage() {
                           {formatDate(contravention.incidentDate)}
                         </td>
                         <td className="px-6 py-4">
-                          <Link to={`/contraventions/${contravention.id}`}>
-                            <Button variant="ghost" size="sm">
-                              <Eye className="w-4 h-4" />
-                            </Button>
-                          </Link>
+                          <div className="flex items-center gap-1">
+                            <Link to={`/contraventions/${contravention.id}`}>
+                              <Button variant="ghost" size="sm">
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                            </Link>
+                            {isAdmin && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => handleDelete(e, contravention.id)}
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -238,6 +271,30 @@ export function ContraventionsListPage() {
           )}
         </Card>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteId && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete Contravention</h3>
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to delete this contravention? This action cannot be undone and will also reverse any points assigned.
+            </p>
+            <div className="flex justify-end gap-3">
+              <Button variant="secondary" onClick={() => setDeleteId(null)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={confirmDelete}
+                disabled={deleteMutation.isPending}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
