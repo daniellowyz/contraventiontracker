@@ -104,6 +104,188 @@ router.get('/courses', authenticate, async (req: AuthenticatedRequest, res: Resp
   }
 });
 
+// GET /api/admin/training - List all training records (admin only)
+router.get('/training', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const { status } = req.query;
+
+    const where: Record<string, unknown> = {};
+    if (status) where.status = status;
+
+    const trainingRecords = await prisma.trainingRecord.findMany({
+      where,
+      include: {
+        employee: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            employeeId: true,
+            department: { select: { name: true } },
+            pointsRecord: { select: { totalPoints: true } },
+          },
+        },
+        course: true,
+      },
+      orderBy: { assignedDate: 'desc' },
+    });
+
+    res.json({ success: true, data: trainingRecords });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/admin/training/needs-training - Get employees who need training (>3 points)
+router.get('/training/needs-training', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    // Get employees with more than 3 points who don't have active training
+    const employeesNeedingTraining = await prisma.user.findMany({
+      where: {
+        pointsRecord: {
+          totalPoints: { gt: 3 },
+        },
+        trainingRecords: {
+          none: {
+            status: { in: ['ASSIGNED', 'IN_PROGRESS'] },
+          },
+        },
+      },
+      include: {
+        department: { select: { name: true } },
+        pointsRecord: { select: { totalPoints: true, currentLevel: true } },
+        trainingRecords: {
+          where: { status: 'COMPLETED' },
+          orderBy: { completedDate: 'desc' },
+          take: 1,
+        },
+      },
+      orderBy: {
+        pointsRecord: { totalPoints: 'desc' },
+      },
+    });
+
+    res.json({ success: true, data: employeesNeedingTraining });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/admin/training/assign - Assign training to employee (admin only)
+router.post('/training/assign', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const { employeeId, courseId, dueDate } = req.body;
+
+    if (!employeeId || !courseId) {
+      throw new AppError('Employee ID and Course ID are required', 400);
+    }
+
+    // Check if employee exists
+    const employee = await prisma.user.findUnique({
+      where: { id: employeeId },
+    });
+    if (!employee) {
+      throw new AppError('Employee not found', 404);
+    }
+
+    // Check if course exists
+    const course = await prisma.course.findUnique({
+      where: { id: courseId },
+    });
+    if (!course) {
+      throw new AppError('Course not found', 404);
+    }
+
+    // Check if training already assigned
+    const existingTraining = await prisma.trainingRecord.findUnique({
+      where: {
+        employeeId_courseId: { employeeId, courseId },
+      },
+    });
+
+    if (existingTraining && ['ASSIGNED', 'IN_PROGRESS'].includes(existingTraining.status)) {
+      throw new AppError('Training already assigned to this employee', 400);
+    }
+
+    // Create or update training record
+    const training = existingTraining
+      ? await prisma.trainingRecord.update({
+          where: { id: existingTraining.id },
+          data: {
+            status: 'ASSIGNED',
+            assignedDate: new Date(),
+            dueDate: dueDate ? new Date(dueDate) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+            completedDate: null,
+            pointsCredited: false,
+          },
+          include: {
+            employee: { select: { id: true, name: true, email: true } },
+            course: true,
+          },
+        })
+      : await prisma.trainingRecord.create({
+          data: {
+            employeeId,
+            courseId,
+            dueDate: dueDate ? new Date(dueDate) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+            status: 'ASSIGNED',
+          },
+          include: {
+            employee: { select: { id: true, name: true, email: true } },
+            course: true,
+          },
+        });
+
+    res.status(201).json({ success: true, data: training });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// PATCH /api/admin/training/:id/status - Update training status (admin only)
+router.patch('/training/:id/status', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const { status } = req.body;
+
+    if (!status || !['ASSIGNED', 'IN_PROGRESS', 'COMPLETED', 'OVERDUE', 'WAIVED'].includes(status)) {
+      throw new AppError('Invalid status', 400);
+    }
+
+    const training = await prisma.trainingRecord.findUnique({
+      where: { id: req.params.id },
+    });
+
+    if (!training) {
+      throw new AppError('Training record not found', 404);
+    }
+
+    const updateData: Record<string, unknown> = { status };
+
+    if (status === 'COMPLETED') {
+      updateData.completedDate = new Date();
+    }
+
+    const updated = await prisma.trainingRecord.update({
+      where: { id: req.params.id },
+      data: updateData,
+      include: {
+        employee: { select: { id: true, name: true, email: true } },
+        course: true,
+      },
+    });
+
+    // Apply training credit if completed and not already credited
+    if (status === 'COMPLETED' && !training.pointsCredited) {
+      const pointsService = (await import('../services/points.service')).default;
+      await pointsService.applyTrainingCredit(training.employeeId, training.id);
+    }
+
+    res.json({ success: true, data: updated });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // POST /api/admin/courses - Create course (admin only)
 router.post('/courses', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
   try {

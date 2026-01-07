@@ -10,6 +10,7 @@ import { EmployeesListPage } from '@/pages/employees/EmployeesListPage';
 import { EmployeeProfilePage } from '@/pages/employees/EmployeeProfilePage';
 import { ReportsPage } from '@/pages/reports/ReportsPage';
 import { SettingsPage } from '@/pages/settings/SettingsPage';
+import { TrainingPage } from '@/pages/training/TrainingPage';
 import { useAuthStore } from '@/stores/authStore';
 
 // Placeholder pages
@@ -18,15 +19,6 @@ function EscalationsPage() {
     <div className="p-8">
       <h1 className="text-2xl font-bold mb-4">Escalations</h1>
       <p className="text-gray-500">Escalations management coming soon...</p>
-    </div>
-  );
-}
-
-function TrainingPage() {
-  return (
-    <div className="p-8">
-      <h1 className="text-2xl font-bold mb-4">Training</h1>
-      <p className="text-gray-500">Training management coming soon...</p>
     </div>
   );
 }
