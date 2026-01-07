@@ -27,6 +27,7 @@ export interface CreateContraventionInput {
   incidentDate: string;
   evidenceUrls?: string[];
   authorizerEmail?: string; // Email of the approver to seek contravention approval
+  approvalPdfUrl?: string; // URL of the uploaded approval PDF
 }
 
 export const contraventionsApi = {

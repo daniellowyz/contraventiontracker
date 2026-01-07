@@ -59,6 +59,7 @@ export class ContraventionService {
         incidentDate: new Date(data.incidentDate),
         evidenceUrls: data.evidenceUrls || [],
         authorizerEmail: data.authorizerEmail,
+        approvalPdfUrl: data.approvalPdfUrl,
         status: 'PENDING',
       },
       include: {

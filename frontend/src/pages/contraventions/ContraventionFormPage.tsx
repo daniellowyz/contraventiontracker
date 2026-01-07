@@ -8,8 +8,9 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { ArrowLeft, Save, Upload } from 'lucide-react';
+import { ArrowLeft, Save, Upload, Loader2 } from 'lucide-react';
 import { Severity } from '@/types';
+import { uploadApprovalPdf, supabase } from '@/lib/supabase';
 
 const SEVERITY_OPTIONS = [
   { value: 'LOW', label: 'Low' },
@@ -64,6 +65,7 @@ export function ContraventionFormPage() {
   });
 
   const [approvalFile, setApprovalFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState('');
 
   // Fetch employees
@@ -107,7 +109,7 @@ export function ContraventionFormPage() {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -168,7 +170,24 @@ export function ContraventionFormPage() {
     if (formData.approvalStatus === 'needs_approval' && formData.approverEmail) {
       submitData.authorizerEmail = formData.approverEmail;
     }
-    // TODO: Handle file upload for approval PDF when backend supports it
+
+    // Upload PDF if user has approval
+    if (formData.approvalStatus === 'has_approval' && approvalFile && supabase) {
+      try {
+        setIsUploading(true);
+        const tempRefNo = `CONTRA-${Date.now()}`;
+        const pdfUrl = await uploadApprovalPdf(approvalFile, tempRefNo);
+        if (pdfUrl) {
+          submitData.approvalPdfUrl = pdfUrl;
+        }
+      } catch (uploadError) {
+        setError(uploadError instanceof Error ? uploadError.message : 'Failed to upload PDF');
+        setIsUploading(false);
+        return;
+      } finally {
+        setIsUploading(false);
+      }
+    }
 
     createMutation.mutate(submitData);
   };
@@ -438,9 +457,18 @@ export function ContraventionFormPage() {
               >
                 Cancel
               </Button>
-              <Button type="submit" isLoading={createMutation.isPending}>
-                <Save className="w-4 h-4 mr-2" />
-                Create Contravention
+              <Button type="submit" isLoading={createMutation.isPending || isUploading} disabled={isUploading}>
+                {isUploading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Uploading PDF...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4 mr-2" />
+                    Create Contravention
+                  </>
+                )}
               </Button>
             </div>
           </form>
