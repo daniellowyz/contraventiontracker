@@ -8,7 +8,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { ArrowLeft, Save } from 'lucide-react';
+import { ArrowLeft, Save, Upload } from 'lucide-react';
 import { Severity } from '@/types';
 
 const SEVERITY_OPTIONS = [
@@ -16,6 +16,19 @@ const SEVERITY_OPTIONS = [
   { value: 'MEDIUM', label: 'Medium' },
   { value: 'HIGH', label: 'High' },
   { value: 'CRITICAL', label: 'Critical' },
+];
+
+const APPROVAL_STATUS_OPTIONS = [
+  { value: '', label: 'Select approval status...' },
+  { value: 'has_approval', label: 'I already have approval' },
+  { value: 'needs_approval', label: 'I need to request approval' },
+];
+
+const APPROVER_OPTIONS = [
+  { value: '', label: 'Select an approver...' },
+  { value: 'Aaron_ma@ogp.gov.sg', label: 'GT Procurement Director - Aaron Ma' },
+  { value: 'Hygin@ogp.gov.sg', label: 'OGP Deputy Director - Hygin' },
+  { value: 'daniellow@open.gov.sg', label: 'For Sandbox - Daniel Low' },
 ];
 
 export function ContraventionFormPage() {
@@ -33,7 +46,8 @@ export function ContraventionFormPage() {
     summary: string;
     incidentDate: string;
     severity: Severity;
-    authorizerEmail: string;
+    approvalStatus: string;
+    approverEmail: string;
   }>({
     employeeId: '',
     typeId: '',
@@ -45,9 +59,11 @@ export function ContraventionFormPage() {
     summary: '',
     incidentDate: new Date().toISOString().split('T')[0],
     severity: 'MEDIUM',
-    authorizerEmail: '',
+    approvalStatus: '',
+    approverEmail: '',
   });
 
+  const [approvalFile, setApprovalFile] = useState<File | null>(null);
   const [error, setError] = useState('');
 
   // Fetch employees
@@ -79,6 +95,18 @@ export function ContraventionFormPage() {
     setError('');
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.type !== 'application/pdf') {
+        setError('Please upload a PDF file');
+        return;
+      }
+      setApprovalFile(file);
+      setError('');
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -104,6 +132,20 @@ export function ContraventionFormPage() {
       return;
     }
 
+    // Validate approval status
+    if (!formData.approvalStatus) {
+      setError('Please select an approval status');
+      return;
+    }
+    if (formData.approvalStatus === 'has_approval' && !approvalFile) {
+      setError('Please upload the approval PDF');
+      return;
+    }
+    if (formData.approvalStatus === 'needs_approval' && !formData.approverEmail) {
+      setError('Please select an approver');
+      return;
+    }
+
     const submitData: CreateContraventionInput = {
       employeeId: formData.employeeId,
       typeId: formData.typeId,
@@ -122,9 +164,11 @@ export function ContraventionFormPage() {
     if (formData.summary.trim()) {
       submitData.summary = formData.summary.trim();
     }
-    if (formData.authorizerEmail.trim()) {
-      submitData.authorizerEmail = formData.authorizerEmail.trim();
+    // Only send approver email if requesting approval
+    if (formData.approvalStatus === 'needs_approval' && formData.approverEmail) {
+      submitData.authorizerEmail = formData.approverEmail;
     }
+    // TODO: Handle file upload for approval PDF when backend supports it
 
     createMutation.mutate(submitData);
   };
@@ -260,21 +304,79 @@ export function ContraventionFormPage() {
                 />
               </div>
 
-              {/* Approver Email */}
+              {/* Approval Status */}
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Approver Email
+                  Approval Status <span className="text-red-500">*</span>
                 </label>
-                <Input
-                  type="email"
-                  value={formData.authorizerEmail}
-                  onChange={(e) => handleChange('authorizerEmail', e.target.value)}
-                  placeholder="e.g., aaron_ma@tech.gov.sg or DD/OGP email"
+                <Select
+                  options={APPROVAL_STATUS_OPTIONS}
+                  value={formData.approvalStatus}
+                  onChange={(e) => {
+                    handleChange('approvalStatus', e.target.value);
+                    // Reset related fields when changing status
+                    setApprovalFile(null);
+                    handleChange('approverEmail', '');
+                  }}
                 />
                 <p className="mt-1 text-xs text-gray-500">
-                  Email of approver to seek contravention approval (e.g., GT Procurement Director, DD/OGP). Remember to copy finance@open.gov.sg in the email trail.
+                  Select whether you already have approval or need to request it.
                 </p>
               </div>
+
+              {/* Conditional: Upload Approval PDF */}
+              {formData.approvalStatus === 'has_approval' && (
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Upload Approval PDF <span className="text-red-500">*</span>
+                  </label>
+                  <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:border-gray-400 transition-colors">
+                    <div className="space-y-1 text-center">
+                      <Upload className="mx-auto h-12 w-12 text-gray-400" />
+                      <div className="flex text-sm text-gray-600">
+                        <label
+                          htmlFor="approval-file"
+                          className="relative cursor-pointer rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none"
+                        >
+                          <span>Upload a file</span>
+                          <input
+                            id="approval-file"
+                            name="approval-file"
+                            type="file"
+                            accept=".pdf"
+                            className="sr-only"
+                            onChange={handleFileChange}
+                          />
+                        </label>
+                        <p className="pl-1">or drag and drop</p>
+                      </div>
+                      <p className="text-xs text-gray-500">PDF up to 10MB</p>
+                      {approvalFile && (
+                        <p className="text-sm text-green-600 font-medium">
+                          Selected: {approvalFile.name}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Conditional: Select Approver */}
+              {formData.approvalStatus === 'needs_approval' && (
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Select Approver <span className="text-red-500">*</span>
+                  </label>
+                  <Select
+                    options={APPROVER_OPTIONS}
+                    value={formData.approverEmail}
+                    onChange={(e) => handleChange('approverEmail', e.target.value)}
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    An email will be sent to the selected approver requesting approval for this contravention.
+                  </p>
+                </div>
+              )}
 
               {/* Description */}
               <div className="md:col-span-2">
