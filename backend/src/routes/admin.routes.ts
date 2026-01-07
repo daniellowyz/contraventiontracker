@@ -139,31 +139,34 @@ router.get('/training', authenticate, requireAdmin, async (req: AuthenticatedReq
 // GET /api/admin/training/needs-training - Get employees who need training (>3 points)
 router.get('/training/needs-training', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
   try {
-    // Get employees with more than 3 points who don't have active training
-    const employeesNeedingTraining = await prisma.user.findMany({
+    // First get all employees with their points records
+    const allEmployees = await prisma.user.findMany({
       where: {
-        pointsRecord: {
-          totalPoints: { gt: 3 },
-        },
-        trainingRecords: {
-          none: {
-            status: { in: ['ASSIGNED', 'IN_PROGRESS'] },
-          },
-        },
+        isActive: true,
       },
       include: {
         department: { select: { name: true } },
         pointsRecord: { select: { totalPoints: true, currentLevel: true } },
         trainingRecords: {
-          where: { status: 'COMPLETED' },
           orderBy: { completedDate: 'desc' },
-          take: 1,
         },
       },
-      orderBy: {
-        pointsRecord: { totalPoints: 'desc' },
-      },
     });
+
+    // Filter employees who have >3 points and don't have active training
+    const employeesNeedingTraining = allEmployees
+      .filter((emp) => {
+        const points = emp.pointsRecord?.totalPoints || 0;
+        const hasActiveTraining = emp.trainingRecords.some(
+          (tr) => tr.status === 'ASSIGNED' || tr.status === 'IN_PROGRESS'
+        );
+        return points > 3 && !hasActiveTraining;
+      })
+      .map((emp) => ({
+        ...emp,
+        trainingRecords: emp.trainingRecords.filter((tr) => tr.status === 'COMPLETED').slice(0, 1),
+      }))
+      .sort((a, b) => (b.pointsRecord?.totalPoints || 0) - (a.pointsRecord?.totalPoints || 0));
 
     res.json({ success: true, data: employeesNeedingTraining });
   } catch (error) {

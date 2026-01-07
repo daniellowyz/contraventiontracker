@@ -88,7 +88,16 @@ export function TrainingPage() {
   const [assignModal, setAssignModal] = useState<{ open: boolean; employeeId: string; employeeName: string } | null>(null);
   const [selectedCourse, setSelectedCourse] = useState('');
 
-  // Fetch training records
+  // Fetch all training records (without filter) for stats
+  const { data: allTrainingRecords } = useQuery({
+    queryKey: ['training-records-all'],
+    queryFn: async () => {
+      const response = await client.get('/admin/training');
+      return response.data.data as TrainingRecord[];
+    },
+  });
+
+  // Fetch training records with filter for display
   const { data: trainingRecords, isLoading: recordsLoading } = useQuery({
     queryKey: ['training-records', statusFilter],
     queryFn: async () => {
@@ -99,14 +108,13 @@ export function TrainingPage() {
     enabled: activeTab === 'records',
   });
 
-  // Fetch employees needing training (>3 points)
+  // Fetch employees needing training (>3 points) - always fetch for stats
   const { data: employeesNeedingTraining, isLoading: needsTrainingLoading } = useQuery({
     queryKey: ['needs-training'],
     queryFn: async () => {
       const response = await client.get('/admin/training/needs-training');
       return response.data.data as EmployeeNeedingTraining[];
     },
-    enabled: activeTab === 'needs-training',
   });
 
   // Fetch courses for assignment
@@ -126,6 +134,7 @@ export function TrainingPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['training-records'] });
+      queryClient.invalidateQueries({ queryKey: ['training-records-all'] });
       queryClient.invalidateQueries({ queryKey: ['needs-training'] });
       setAssignModal(null);
       setSelectedCourse('');
@@ -140,6 +149,7 @@ export function TrainingPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['training-records'] });
+      queryClient.invalidateQueries({ queryKey: ['training-records-all'] });
       queryClient.invalidateQueries({ queryKey: ['needs-training'] });
     },
   });
@@ -153,13 +163,13 @@ export function TrainingPage() {
     }
   };
 
-  // Calculate stats
+  // Calculate stats from all training records (not filtered)
   const stats = {
-    total: trainingRecords?.length || 0,
-    assigned: trainingRecords?.filter((r) => r.status === 'ASSIGNED').length || 0,
-    inProgress: trainingRecords?.filter((r) => r.status === 'IN_PROGRESS').length || 0,
-    completed: trainingRecords?.filter((r) => r.status === 'COMPLETED').length || 0,
-    overdue: trainingRecords?.filter((r) => r.status === 'OVERDUE').length || 0,
+    total: allTrainingRecords?.length || 0,
+    assigned: allTrainingRecords?.filter((r) => r.status === 'ASSIGNED').length || 0,
+    inProgress: allTrainingRecords?.filter((r) => r.status === 'IN_PROGRESS').length || 0,
+    completed: allTrainingRecords?.filter((r) => r.status === 'COMPLETED').length || 0,
+    overdue: allTrainingRecords?.filter((r) => r.status === 'OVERDUE').length || 0,
     needsTraining: employeesNeedingTraining?.length || 0,
   };
 
