@@ -23,7 +23,7 @@ export async function uploadApprovalPdf(file: File, referenceNo: string): Promis
   const fileName = `${referenceNo}-${Date.now()}.${fileExt}`;
   const filePath = `approvals/${fileName}`;
 
-  const { data, error } = await supabase.storage
+  const { error } = await supabase.storage
     .from(APPROVAL_BUCKET)
     .upload(filePath, file, {
       cacheControl: '3600',
