@@ -109,13 +109,19 @@ export function TrainingPage() {
   });
 
   // Fetch employees needing training (>3 points) - always fetch for stats
-  const { data: employeesNeedingTraining, isLoading: needsTrainingLoading } = useQuery({
+  const { data: employeesNeedingTraining, isLoading: needsTrainingLoading, error: needsTrainingError } = useQuery({
     queryKey: ['needs-training'],
     queryFn: async () => {
       const response = await client.get('/admin/training/needs-training');
       return response.data.data as EmployeeNeedingTraining[];
     },
+    retry: 1,
   });
+
+  // Log error for debugging
+  if (needsTrainingError) {
+    console.error('Error fetching employees needing training:', needsTrainingError);
+  }
 
   // Fetch courses for assignment
   const { data: courses } = useQuery({
