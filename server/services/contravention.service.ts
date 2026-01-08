@@ -5,7 +5,19 @@ import pointsService from './points.service';
 import { CreateContraventionInput, UpdateContraventionInput, ContraventionFiltersInput } from '../validators/contravention.schema';
 import { addBusinessDays } from '../utils/dateUtils';
 import { ACKNOWLEDGMENT_CONFIG } from '../config/constants';
-import { notificationService } from './notification.service';
+// Lazy import notification service to avoid module loading issues in Vercel
+let notificationServiceModule: typeof import('./notification.service') | null = null;
+async function getNotificationService() {
+  if (!notificationServiceModule) {
+    try {
+      notificationServiceModule = await import('./notification.service');
+    } catch (err) {
+      console.error('Failed to load notification service:', err);
+      return null;
+    }
+  }
+  return notificationServiceModule.notificationService;
+}
 
 export class ContraventionService {
   /**
@@ -82,17 +94,23 @@ export class ContraventionService {
     );
 
     // Send notification to the employee (in-app + email)
-    notificationService.notifyContraventionLogged({
-      employeeUserId: employee.id,
-      employeeEmail: employee.email,
-      employeeName: employee.name,
-      contraventionId: contravention.id,
-      referenceNo,
-      typeName: contraventionType.name,
-      severity,
-      points,
-    }).catch((err) => {
-      console.error('Failed to send contravention notification:', err);
+    getNotificationService().then((notificationSvc) => {
+      if (notificationSvc) {
+        notificationSvc.notifyContraventionLogged({
+          employeeUserId: employee.id,
+          employeeEmail: employee.email,
+          employeeName: employee.name,
+          contraventionId: contravention.id,
+          referenceNo,
+          typeName: contraventionType.name,
+          severity,
+          points,
+        }).catch((err: Error) => {
+          console.error('Failed to send contravention notification:', err);
+        });
+      }
+    }).catch((err: Error) => {
+      console.error('Failed to load notification service:', err);
     });
 
     // Send webhook to Google Apps Script if approver email is provided
@@ -308,12 +326,15 @@ export class ContraventionService {
 
     // Notify the admin who logged this contravention
     if (updated.loggedBy) {
-      await notificationService.notifyContraventionAcknowledged({
-        adminUserId: updated.loggedBy.id,
-        contraventionId: id,
-        referenceNo: contravention.referenceNo,
-        employeeName: updated.employee.name,
-      });
+      const notificationSvc = await getNotificationService();
+      if (notificationSvc) {
+        await notificationSvc.notifyContraventionAcknowledged({
+          adminUserId: updated.loggedBy.id,
+          contraventionId: id,
+          referenceNo: contravention.referenceNo,
+          employeeName: updated.employee.name,
+        });
+      }
     }
 
     return updated;
@@ -362,13 +383,16 @@ export class ContraventionService {
     });
 
     // Notify all admins about the dispute
-    const adminUserIds = await notificationService.getAdminUserIds();
-    await notificationService.notifyDisputeSubmitted({
-      adminUserIds,
-      contraventionId,
-      referenceNo: contravention.referenceNo,
-      employeeName: dispute.submittedBy.name,
-    });
+    const notificationSvc = await getNotificationService();
+    if (notificationSvc) {
+      const adminUserIds = await notificationSvc.getAdminUserIds();
+      await notificationSvc.notifyDisputeSubmitted({
+        adminUserIds,
+        contraventionId,
+        referenceNo: contravention.referenceNo,
+        employeeName: dispute.submittedBy.name,
+      });
+    }
 
     return dispute;
   }
@@ -438,12 +462,15 @@ export class ContraventionService {
     }
 
     // Notify the employee about the dispute decision
-    await notificationService.notifyDisputeDecided({
-      employeeUserId: dispute.contravention.employeeId,
-      contraventionId: dispute.contraventionId,
-      referenceNo: dispute.contravention.referenceNo,
-      decision,
-    });
+    const notificationSvc2 = await getNotificationService();
+    if (notificationSvc2) {
+      await notificationSvc2.notifyDisputeDecided({
+        employeeUserId: dispute.contravention.employeeId,
+        contraventionId: dispute.contraventionId,
+        referenceNo: dispute.contravention.referenceNo,
+        decision,
+      });
+    }
 
     return updatedDispute;
   }
