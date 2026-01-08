@@ -504,4 +504,61 @@ router.post(
   }
 );
 
+// POST /api/admin/points/run-decay - Run points decay for all employees (admin only)
+router.post('/points/run-decay', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const pointsService = (await import('../services/points.service')).default;
+    const result = await pointsService.runPointsDecayForAllEmployees();
+
+    res.json({
+      success: true,
+      message: `Processed ${result.processed} employees, ${result.decayed} had points decayed (total: ${result.totalPointsDecayed} points)`,
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/admin/points/decay-status - Get decay status for all employees with points (admin only)
+router.get('/points/decay-status', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const pointsService = (await import('../services/points.service')).default;
+
+    // Get all employees with points
+    const employeesWithPoints = await prisma.employeePoints.findMany({
+      where: { totalPoints: { gt: 0 } },
+      include: { employee: { select: { id: true, name: true, email: true } } },
+    });
+
+    const decayStatuses = await Promise.all(
+      employeesWithPoints.map(async (emp) => {
+        const status = await pointsService.getPointsDecayStatus(emp.employeeId);
+        return {
+          employeeId: emp.employeeId,
+          employeeName: emp.employee.name,
+          currentPoints: emp.totalPoints,
+          ...status,
+        };
+      })
+    );
+
+    res.json({ success: true, data: decayStatuses });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/admin/email-status - Get email sandbox status (admin only)
+router.get('/email-status', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const { notificationService } = await import('../services/notification.service');
+    const status = notificationService.getEmailSandboxStatus();
+
+    res.json({ success: true, data: status });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;

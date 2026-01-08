@@ -6,6 +6,26 @@ import { AppError } from '../middleware/errorHandler';
 
 const router = Router();
 
+// GET /api/admin/email-status - Get email configuration status (admin only)
+router.get('/email-status', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const sandboxMode = process.env.EMAIL_SANDBOX_MODE === 'true';
+    const sandboxEmail = process.env.EMAIL_SANDBOX_RECIPIENT || 'daniellow@open.gov.sg';
+    const emailProviderConfigured = !!process.env.POSTMARK_API_KEY;
+
+    res.json({
+      success: true,
+      data: {
+        enabled: sandboxMode,
+        sandboxEmail,
+        emailProviderConfigured,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // GET /api/admin/types - List contravention types
 router.get('/types', authenticate, async (req: AuthenticatedRequest, res: Response, next) => {
   try {
@@ -503,5 +523,40 @@ router.post(
     }
   }
 );
+
+// ============== FISCAL YEAR POINTS RESET ==============
+
+// GET /api/admin/points/fiscal-year-status - Get fiscal year reset status (admin only)
+router.get('/points/fiscal-year-status', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const pointsService = (await import('../services/points.service')).default;
+    const status = await pointsService.getFiscalYearStatus();
+    res.json({ success: true, data: status });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/admin/points/fiscal-year-reset - Reset all points for new fiscal year (admin only)
+router.post('/points/fiscal-year-reset', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const pointsService = (await import('../services/points.service')).default;
+    const result = await pointsService.resetPointsForNewFiscalYear();
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/admin/escalations/recalculate - Recalculate all escalations for new 3-level system (admin only)
+router.post('/escalations/recalculate', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const pointsService = (await import('../services/points.service')).default;
+    const result = await pointsService.recalculateAllEscalations();
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+});
 
 export default router;

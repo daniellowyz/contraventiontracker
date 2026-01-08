@@ -21,7 +21,8 @@ router.get(
   validateQuery(contraventionFiltersSchema),
   async (req: AuthenticatedRequest, res: Response, next) => {
     try {
-      const result = await contraventionService.findAll(req.query as any);
+      // Use parsedQuery which has proper types from zod validation
+      const result = await contraventionService.findAll((req as any).parsedQuery);
       res.json({ success: true, ...result });
     } catch (error) {
       next(error);

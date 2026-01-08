@@ -11,17 +11,8 @@ import { EmployeeProfilePage } from '@/pages/employees/EmployeeProfilePage';
 import { ReportsPage } from '@/pages/reports/ReportsPage';
 import { SettingsPage } from '@/pages/settings/SettingsPage';
 import { TrainingPage } from '@/pages/training/TrainingPage';
+import { EscalationsPage } from '@/pages/escalations/EscalationsPage';
 import { useAuthStore } from '@/stores/authStore';
-
-// Placeholder pages
-function EscalationsPage() {
-  return (
-    <div className="p-8">
-      <h1 className="text-2xl font-bold mb-4">Escalations</h1>
-      <p className="text-gray-500">Escalations management coming soon...</p>
-    </div>
-  );
-}
 
 function App() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);

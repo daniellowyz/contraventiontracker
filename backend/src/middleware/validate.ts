@@ -31,7 +31,9 @@ export function validateQuery(schema: ZodSchema) {
   return (req: Request, res: Response, next: NextFunction): void => {
     try {
       const parsed = schema.parse(req.query);
-      Object.assign(req.query, parsed);
+      // Store parsed values with proper types in req.parsedQuery
+      // In Express 5, req.query is read-only so we use a custom property
+      (req as any).parsedQuery = parsed;
       next();
     } catch (error) {
       next(error);

@@ -69,15 +69,11 @@ export function getLevelName(level: string | null): string {
   if (!level) return 'None';
   switch (level) {
     case 'LEVEL_1':
-      return 'Verbal Reminder';
+      return 'Verbal Advisory';
     case 'LEVEL_2':
-      return 'Written Warning';
-    case 'LEVEL_3':
       return 'Mandatory Training';
-    case 'LEVEL_4':
+    case 'LEVEL_3':
       return 'Performance Impact';
-    case 'LEVEL_5':
-      return 'Severe Consequences';
     default:
       return level;
   }
@@ -87,15 +83,11 @@ export function getLevelColor(level: string | null): string {
   if (!level) return 'bg-gray-100 text-gray-800';
   switch (level) {
     case 'LEVEL_1':
-      return 'bg-blue-100 text-blue-800';
-    case 'LEVEL_2':
       return 'bg-yellow-100 text-yellow-800';
-    case 'LEVEL_3':
+    case 'LEVEL_2':
       return 'bg-orange-100 text-orange-800';
-    case 'LEVEL_4':
+    case 'LEVEL_3':
       return 'bg-red-100 text-red-800';
-    case 'LEVEL_5':
-      return 'bg-red-200 text-red-900';
     default:
       return 'bg-gray-100 text-gray-800';
   }
