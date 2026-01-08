@@ -161,6 +161,7 @@ model Contravention {
 
   // Authorization personnel
   authorizerEmail String?         // Email of the person who authorized the action
+  approvalPdfUrl  String?         // URL of the uploaded approval PDF in Supabase storage
 
   // Relations
   disputes        Dispute[]
