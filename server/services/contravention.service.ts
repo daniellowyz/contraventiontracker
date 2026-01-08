@@ -5,18 +5,12 @@ import pointsService from './points.service';
 import { CreateContraventionInput, UpdateContraventionInput, ContraventionFiltersInput } from '../validators/contravention.schema';
 import { addBusinessDays } from '../utils/dateUtils';
 import { ACKNOWLEDGMENT_CONFIG } from '../config/constants';
-// Lazy import notification service to avoid module loading issues in Vercel
-let notificationServiceModule: typeof import('./notification.service') | null = null;
-async function getNotificationService() {
-  if (!notificationServiceModule) {
-    try {
-      notificationServiceModule = await import('./notification.service');
-    } catch (err) {
-      console.error('Failed to load notification service:', err);
-      return null;
-    }
-  }
-  return notificationServiceModule.notificationService;
+// Notification service temporarily disabled for debugging
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function getNotificationService(): Promise<null> {
+  // Temporarily disabled to debug 500 error
+  console.log('Notification service disabled for debugging');
+  return null;
 }
 
 export class ContraventionService {
