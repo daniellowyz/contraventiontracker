@@ -14,6 +14,7 @@ export const createContraventionSchema = z.object({
   }),
   evidenceUrls: z.array(z.string().url()).optional(),
   authorizerEmail: z.string().email('Invalid email format').optional(),
+  approvalPdfUrl: z.string().url('Invalid URL format').optional(),
 });
 
 export const updateContraventionSchema = z.object({
