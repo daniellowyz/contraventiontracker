@@ -4,7 +4,7 @@
 // Configuration
 const SENDER_EMAIL = 'finance@open.gov.sg';  // Send from this email (must be configured in Gmail settings)
 const ALWAYS_CC = 'adriel@open.gov.sg';      // Always CC this email on all contravention emails
-const APP_URL = 'https://contravention-tracker.vercel.app';
+const APP_URL = 'https://contraventiontracker.vercel.app';
 
 // Sandbox mode - set to true to redirect all emails to SANDBOX_EMAIL for testing
 const SANDBOX_MODE = false;

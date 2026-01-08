@@ -13,7 +13,7 @@ const EMAIL_CONFIG = {
   FROM_NAME: process.env.EMAIL_FROM_NAME || 'Contravention Tracker',
 
   // App URL for links in emails
-  APP_URL: process.env.APP_URL || 'https://contravention-tracker.vercel.app',
+  APP_URL: process.env.APP_URL || 'https://contraventiontracker.vercel.app',
 };
 
 export interface EmailParams {
