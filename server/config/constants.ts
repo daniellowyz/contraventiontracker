@@ -1,10 +1,12 @@
 // Escalation Matrix Configuration
+// Level 1: 1-2 points - Finance verbal advisory
+// Level 2: 3+ points - Mandatory training required
+// Level 3: Post-training offense OR single offense >3 points - Performance impact
 export const ESCALATION_MATRIX = {
-  LEVEL_1: { min: 1, max: 2, name: 'Verbal Reminder', actions: ['Supervisor notified', 'Verbal counseling session'] },
-  LEVEL_2: { min: 3, max: 4, name: 'Written Warning', actions: ['Formal written warning issued', 'Copy to HR file', 'Supervisor and Department Head notified'] },
-  LEVEL_3: { min: 5, max: 7, name: 'Mandatory Training', actions: ['Complete Procurement Compliance Course within 30 days', '90-day probation period', 'Weekly check-ins with Finance'] },
-  LEVEL_4: { min: 8, max: 11, name: 'Performance Impact', actions: ['Performance Improvement Plan (PIP)', 'Approval limits reduced', 'Monthly review meetings with HR and Finance'] },
-  LEVEL_5: { min: 12, max: Infinity, name: 'Severe Consequences', actions: ['Procurement privileges suspended', 'Full audit of past 12 months', 'Executive review', 'HR disciplinary process initiated'] },
+  LEVEL_1: { min: 1, max: 2, name: 'Verbal Advisory', actions: ['Finance verbal advisory on contravention and prevention'] },
+  LEVEL_2: { min: 3, max: Infinity, name: 'Mandatory Training', actions: ['Complete Procurement Compliance Training within 30 days'] },
+  // Level 3 is triggered when: employee commits offense after completing training, OR single offense with >3 points
+  LEVEL_3: { min: 0, max: Infinity, name: 'Performance Impact', actions: ['Affects performance review', 'Manager to review employee contravention record at end of performance cycle'] },
 };
 
 // Severity Points Mapping
@@ -17,10 +19,11 @@ export const SEVERITY_POINTS = {
 
 // Points Configuration
 export const POINTS_CONFIG = {
-  TRAINING_TRIGGER_THRESHOLD: 5, // Points at which training is triggered
-  DECAY_RATE: 1, // Points removed per period
-  DECAY_PERIOD_MONTHS: 6, // Months of clean record for decay
+  TRAINING_TRIGGER_THRESHOLD: 3, // Points at which training is triggered (Level 2)
   TRAINING_CREDIT: 1, // Points reduction for completing training
+  // Fiscal Year Reset Configuration (Apr-Mar cycle)
+  FISCAL_YEAR_START_MONTH: 4, // April (1-indexed: 1=Jan, 4=Apr)
+  RESET_ALL_POINTS: true, // Reset ALL points at fiscal year boundary
 };
 
 // Contravention Type Defaults

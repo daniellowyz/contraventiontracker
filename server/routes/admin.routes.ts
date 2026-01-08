@@ -1,4 +1,4 @@
-import { Router, Response } from 'express';
+import { Router, Response, NextFunction } from 'express';
 import prisma from '../config/database';
 import { authenticate, requireAdmin } from '../middleware/auth';
 import { AuthenticatedRequest } from '../types';
@@ -556,6 +556,39 @@ router.get('/email-status', authenticate, requireAdmin, async (req: Authenticate
     const status = notificationService.getEmailSandboxStatus();
 
     res.json({ success: true, data: status });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/admin/points/fiscal-year-status - Get fiscal year reset status (admin only)
+router.get('/points/fiscal-year-status', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const pointsService = (await import('../services/points.service')).default;
+    const status = await pointsService.getFiscalYearStatus();
+    res.json({ success: true, data: status });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/admin/points/fiscal-year-reset - Reset all points for new fiscal year (admin only)
+router.post('/points/fiscal-year-reset', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const pointsService = (await import('../services/points.service')).default;
+    const result = await pointsService.resetPointsForNewFiscalYear();
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/admin/escalations/recalculate - Recalculate all escalations for new 3-level system (admin only)
+router.post('/escalations/recalculate', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const pointsService = (await import('../services/points.service')).default;
+    const result = await pointsService.recalculateAllEscalations();
+    res.json({ success: true, data: result });
   } catch (error) {
     next(error);
   }
