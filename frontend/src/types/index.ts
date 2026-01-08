@@ -57,6 +57,8 @@ export interface Contravention {
   acknowledgedBy?: { id: string; name: string };
   loggedBy: { id: string; name: string };
   disputes?: Dispute[];
+  approvalPdfUrl?: string;
+  authorizerEmail?: string;
   createdAt: string;
   updatedAt: string;
 }

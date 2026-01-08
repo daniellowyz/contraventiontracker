@@ -1,5 +1,4 @@
 import prisma from '../config/database';
-import { ContraventionStatus, Severity } from '../types';
 import { AppError } from '../middleware/errorHandler';
 import generateReferenceNumber from '../utils/generateRefNo';
 import pointsService from './points.service';
@@ -60,6 +59,7 @@ export class ContraventionService {
         incidentDate: new Date(data.incidentDate),
         evidenceUrls: data.evidenceUrls || [],
         authorizerEmail: data.authorizerEmail,
+        approvalPdfUrl: data.approvalPdfUrl,
         status: 'PENDING',
       },
       include: {
@@ -81,14 +81,18 @@ export class ContraventionService {
       contravention.id
     );
 
-    // Send notification to the employee
-    await notificationService.notifyContraventionLogged({
-      employeeUserId: data.employeeId,
+    // Send notification to the employee (in-app + email)
+    notificationService.notifyContraventionLogged({
+      employeeUserId: employee.id,
+      employeeEmail: employee.email,
+      employeeName: employee.name,
       contraventionId: contravention.id,
       referenceNo,
       typeName: contraventionType.name,
       severity,
       points,
+    }).catch((err) => {
+      console.error('Failed to send contravention notification:', err);
     });
 
     // Send webhook to Google Apps Script if approver email is provided

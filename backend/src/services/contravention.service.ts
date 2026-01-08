@@ -3,6 +3,7 @@ import { ContraventionStatus, Severity } from '../types';
 import { AppError } from '../middleware/errorHandler';
 import generateReferenceNumber from '../utils/generateRefNo';
 import pointsService from './points.service';
+import { notificationService } from './notification.service';
 import { CreateContraventionInput, UpdateContraventionInput, ContraventionFiltersInput } from '../validators/contravention.schema';
 import { addBusinessDays } from '../utils/dateUtils';
 import { ACKNOWLEDGMENT_CONFIG } from '../config/constants';
@@ -87,6 +88,20 @@ export class ContraventionService {
         console.error('Failed to send approval webhook:', err);
       });
     }
+
+    // Send notification to the employee (in-app + email)
+    notificationService.notifyContraventionLogged({
+      employeeUserId: employee.id,
+      employeeEmail: employee.email,
+      employeeName: employee.name,
+      contraventionId: contravention.id,
+      referenceNo: contravention.referenceNo,
+      typeName: contraventionType.name,
+      severity: severity,
+      points: points,
+    }).catch((err) => {
+      console.error('Failed to send contravention notification:', err);
+    });
 
     return contravention;
   }

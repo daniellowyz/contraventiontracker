@@ -20,7 +20,9 @@ import {
   FileText,
   CheckCircle,
   Clock,
-  MessageSquare
+  MessageSquare,
+  ExternalLink,
+  FileCheck
 } from 'lucide-react';
 import { Severity, ContraventionStatus } from '@/types';
 
@@ -360,6 +362,31 @@ export function ContraventionDetailPage() {
                     <div>
                       <label className="block text-sm font-medium text-gray-500">Incident Date</label>
                       <p className="text-gray-900">{formatDate(contravention.incidentDate)}</p>
+                    </div>
+                  )}
+
+                  {/* Approval Document */}
+                  {contravention.approvalPdfUrl && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-500">Approval Document</label>
+                      <a
+                        href={contravention.approvalPdfUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 mt-1 px-3 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors"
+                      >
+                        <FileCheck className="w-4 h-4" />
+                        <span>View Approval Document</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                  )}
+
+                  {/* Authorizer Email */}
+                  {contravention.authorizerEmail && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-500">Authorizer Email</label>
+                      <p className="text-gray-900">{contravention.authorizerEmail}</p>
                     </div>
                   )}
                 </div>

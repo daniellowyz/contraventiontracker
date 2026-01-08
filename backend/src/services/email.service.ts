@@ -542,7 +542,6 @@ export const emailService = {
       enabled: EMAIL_CONFIG.SANDBOX_MODE,
       sandboxEmail: EMAIL_CONFIG.SANDBOX_EMAIL,
       emailProviderConfigured: !!EMAIL_CONFIG.POSTMARK_API_KEY,
-      gasWebhookConfigured: !!EMAIL_CONFIG.GAS_WEBHOOK_URL,
     };
   },
 };
