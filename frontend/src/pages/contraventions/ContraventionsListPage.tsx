@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
 import { Input } from '@/components/ui/Input';
+import { MonthYearPicker } from '@/components/ui/MonthYearPicker';
 import { formatDate, formatCurrency, getSeverityColor, getStatusColor } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
 import { Plus, ChevronLeft, ChevronRight, Eye, Trash2 } from 'lucide-react';
@@ -30,37 +31,6 @@ const SEVERITY_OPTIONS = [
   { value: 'CRITICAL', label: 'Critical' },
 ];
 
-// Generate fiscal year period options (Apr-Apr)
-// Current fiscal year: if we're in Jan-Apr, we're in the previous fiscal year
-const generateFiscalYearOptions = () => {
-  const now = new Date();
-  const currentMonth = now.getMonth(); // 0-indexed (0 = Jan, 3 = Apr)
-  const currentYear = now.getFullYear();
-
-  // Determine current fiscal year
-  // If Jan-Apr (months 0-3), we're in fiscal year that started previous April
-  // If May-Dec (months 4-11), we're in fiscal year that started this April
-  const currentFiscalStartYear = currentMonth < 4 ? currentYear - 1 : currentYear;
-
-  // Generate options for current and previous fiscal years
-  const options = [
-    { value: '', label: 'All Periods' },
-  ];
-
-  // Add fiscal years (going back 2 years from current fiscal year)
-  for (let i = 0; i <= 2; i++) {
-    const startYear = currentFiscalStartYear - i;
-    const endYear = startYear + 1;
-    options.push({
-      value: `${startYear}-05-01_${endYear}-04-30`,
-      label: `May ${startYear} - Apr ${endYear}`,
-    });
-  }
-
-  return options;
-};
-
-const PERIOD_OPTIONS = generateFiscalYearOptions();
 
 export function ContraventionsListPage() {
   const { isAdmin } = useAuthStore();
@@ -71,6 +41,7 @@ export function ContraventionsListPage() {
     limit: 20,
   });
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [dateError, setDateError] = useState<string>('');
 
   const { data, isLoading } = useQuery({
     queryKey: ['contraventions', filters],
@@ -87,6 +58,58 @@ export function ContraventionsListPage() {
 
   const handleFilterChange = (key: keyof ContraventionFilters, value: string) => {
     setFilters((prev) => ({ ...prev, [key]: value, page: 1 }));
+  };
+
+  // Convert first day of month to last day of month for dateTo
+  const getLastDayOfMonth = (dateString: string): string => {
+    const date = new Date(dateString);
+    const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+    return lastDay.toISOString().split('T')[0];
+  };
+
+  const handleDateFromChange = (value: string | undefined) => {
+    const dateFrom = value || undefined;
+    setFilters((prev) => {
+      let dateTo = prev.dateTo;
+      let error = '';
+      
+      // Validate date range
+      if (dateFrom && dateTo) {
+        const fromDate = new Date(dateFrom);
+        const toDate = new Date(dateTo);
+        if (fromDate > toDate) {
+          error = 'To date must be after From date';
+          // Clear dateTo if invalid
+          dateTo = undefined;
+        }
+      }
+      
+      setDateError(error);
+      return { ...prev, dateFrom, dateTo, page: 1 };
+    });
+  };
+
+  const handleDateToChange = (value: string | undefined) => {
+    // Convert to last day of selected month
+    const dateTo = value ? getLastDayOfMonth(value) : undefined;
+    setFilters((prev) => {
+      let error = '';
+      let finalDateTo = dateTo;
+      
+      // Validate date range
+      if (prev.dateFrom && dateTo) {
+        const fromDate = new Date(prev.dateFrom);
+        const toDate = new Date(dateTo);
+        if (fromDate > toDate) {
+          error = 'To date must be after From date';
+          // Don't update dateTo if invalid
+          finalDateTo = prev.dateTo;
+        }
+      }
+      
+      setDateError(error);
+      return { ...prev, dateTo: finalDateTo, page: 1 };
+    });
   };
 
   const handleDelete = (e: React.MouseEvent, id: string) => {
@@ -121,11 +144,24 @@ export function ContraventionsListPage() {
         {/* Filters */}
         <Card className="mb-6">
           <div className="flex flex-wrap gap-4">
-            <div className="w-52">
-              <Select
-                options={PERIOD_OPTIONS}
-                value={filters.period || ''}
-                onChange={(e) => handleFilterChange('period', e.target.value)}
+            <div className="w-38">
+              <MonthYearPicker
+                value={filters.dateFrom}
+                onChange={handleDateFromChange}
+                placeholder="From MMM YYYY"
+                error={dateError && filters.dateFrom ? dateError : undefined}
+              />
+            </div>
+            <div className="w-38">
+              <MonthYearPicker
+                value={filters.dateTo ? (() => {
+                  // Convert last day back to first day for display
+                  const date = new Date(filters.dateTo);
+                  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`;
+                })() : undefined}
+                onChange={handleDateToChange}
+                placeholder="To MMM YYYY"
+                error={dateError && filters.dateTo ? dateError : undefined}
               />
             </div>
             <div className="w-48">
