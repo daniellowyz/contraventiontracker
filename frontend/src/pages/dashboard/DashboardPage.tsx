@@ -27,11 +27,13 @@ export function DashboardPage() {
     if (data.count === 0) return;
 
     // month is in format "YYYY-MM", convert to date range
-    const [year, month] = data.month.split('-');
-    const dateFrom = `${year}-${month}-01`;
-    // Get last day of month
-    const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
-    const dateTo = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
+    const [year, monthStr] = data.month.split('-');
+    const monthNum = parseInt(monthStr, 10);
+    const dateFrom = `${year}-${monthStr}-01`;
+    // Get last day of month: new Date(year, month, 0) gives last day of previous month
+    // So we use monthNum (1-12) directly since JS months are 0-indexed
+    const lastDay = new Date(parseInt(year), monthNum, 0).getDate();
+    const dateTo = `${year}-${monthStr}-${String(lastDay).padStart(2, '0')}`;
 
     navigate(`/contraventions?dateFrom=${dateFrom}&dateTo=${dateTo}`);
   };

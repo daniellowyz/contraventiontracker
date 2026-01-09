@@ -188,7 +188,12 @@ export class ContraventionService {
     if (dateFrom || dateTo) {
       where.incidentDate = {};
       if (dateFrom) (where.incidentDate as Record<string, Date>).gte = new Date(dateFrom);
-      if (dateTo) (where.incidentDate as Record<string, Date>).lte = new Date(dateTo);
+      if (dateTo) {
+        // Set time to end of day (23:59:59.999) to include all records on that date
+        const endDate = new Date(dateTo);
+        endDate.setHours(23, 59, 59, 999);
+        (where.incidentDate as Record<string, Date>).lte = endDate;
+      }
     }
 
     if (search) {
