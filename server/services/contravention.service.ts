@@ -187,12 +187,15 @@ export class ContraventionService {
 
     if (dateFrom || dateTo) {
       where.incidentDate = {};
-      if (dateFrom) (where.incidentDate as Record<string, Date>).gte = new Date(dateFrom);
+      if (dateFrom) {
+        // Parse date string as UTC start of day
+        const [year, month, day] = dateFrom.split('-').map(Number);
+        (where.incidentDate as Record<string, Date>).gte = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+      }
       if (dateTo) {
-        // Set time to end of day (23:59:59.999) to include all records on that date
-        const endDate = new Date(dateTo);
-        endDate.setHours(23, 59, 59, 999);
-        (where.incidentDate as Record<string, Date>).lte = endDate;
+        // Parse date string as UTC end of day (23:59:59.999)
+        const [year, month, day] = dateTo.split('-').map(Number);
+        (where.incidentDate as Record<string, Date>).lte = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
       }
     }
 

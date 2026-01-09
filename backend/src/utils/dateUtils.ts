@@ -35,17 +35,17 @@ export function addMonths(date: Date, months: number): Date {
 }
 
 /**
- * Get the start of a month
+ * Get the start of a month (UTC)
  */
 export function startOfMonth(date: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth(), 1);
+  return new Date(Date.UTC(date.getFullYear(), date.getMonth(), 1, 0, 0, 0, 0));
 }
 
 /**
- * Get the end of a month
+ * Get the end of a month (UTC)
  */
 export function endOfMonth(date: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999);
+  return new Date(Date.UTC(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999));
 }
 
 /**
