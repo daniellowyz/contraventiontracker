@@ -3,9 +3,6 @@ export function Footer() {
     <footer className="bg-neutral-800 px-4 py-10 text-white lg:px-32">
       <div className="flex flex-col gap-8">
         <p className="text-2xl font-bold">Contravention Tracker</p>
-        <div className="flex flex-col">
-          <p className="text-gray-300">Traffic Safety Management System</p>
-        </div>
         <div className="flex flex-wrap gap-4 text-sm">
           <a
             href="https://www.tech.gov.sg/contact-us/"
