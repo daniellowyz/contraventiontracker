@@ -1,8 +1,7 @@
 // Enums
 export type Role = 'ADMIN' | 'USER';
 export type Severity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
-export type ContraventionStatus = 'PENDING' | 'ACKNOWLEDGED' | 'DISPUTED' | 'CONFIRMED' | 'RESOLVED' | 'ESCALATED';
-export type DisputeStatus = 'SUBMITTED' | 'UNDER_REVIEW' | 'UPHELD' | 'OVERTURNED' | 'WITHDRAWN';
+export type ContraventionStatus = 'PENDING_UPLOAD' | 'PENDING_REVIEW' | 'COMPLETED';
 export type EscalationLevel = 'LEVEL_1' | 'LEVEL_2' | 'LEVEL_3' | 'LEVEL_4' | 'LEVEL_5';
 export type TrainingStatus = 'ASSIGNED' | 'IN_PROGRESS' | 'COMPLETED' | 'OVERDUE' | 'WAIVED';
 
@@ -56,25 +55,10 @@ export interface Contravention {
   acknowledgedAt?: string;
   acknowledgedBy?: { id: string; name: string };
   loggedBy: { id: string; name: string };
-  disputes?: Dispute[];
   approvalPdfUrl?: string;
   authorizerEmail?: string;
   createdAt: string;
   updatedAt: string;
-}
-
-// Dispute
-export interface Dispute {
-  id: string;
-  contraventionId: string;
-  submittedBy: { id: string; name: string };
-  reason: string;
-  evidenceUrls: string[];
-  status: DisputeStatus;
-  panelDecision?: string;
-  decidedAt?: string;
-  decidedBy?: { id: string; name: string };
-  createdAt: string;
 }
 
 // Escalation

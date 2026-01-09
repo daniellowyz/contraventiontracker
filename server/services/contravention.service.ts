@@ -3,8 +3,6 @@ import { AppError } from '../middleware/errorHandler';
 import generateReferenceNumber from '../utils/generateRefNo';
 import pointsService from './points.service';
 import { CreateContraventionInput, UpdateContraventionInput, ContraventionFiltersInput } from '../validators/contravention.schema';
-import { addBusinessDays } from '../utils/dateUtils';
-import { ACKNOWLEDGMENT_CONFIG } from '../config/constants';
 // Lazy import notification service to avoid module loading issues in Vercel
 let notificationServiceModule: typeof import('./notification.service') | null = null;
 async function getNotificationService() {
@@ -72,7 +70,8 @@ export class ContraventionService {
         evidenceUrls: data.evidenceUrls || [],
         authorizerEmail: data.authorizerEmail,
         approvalPdfUrl: data.approvalPdfUrl,
-        status: 'PENDING',
+        // If PDF is already uploaded, go to PENDING_REVIEW, otherwise PENDING_UPLOAD
+        status: data.approvalPdfUrl ? 'PENDING_REVIEW' : 'PENDING_UPLOAD',
       },
       include: {
         employee: {
@@ -250,12 +249,6 @@ export class ContraventionService {
         acknowledgedBy: {
           select: { id: true, name: true },
         },
-        disputes: {
-          include: {
-            submittedBy: { select: { id: true, name: true } },
-            decidedBy: { select: { id: true, name: true } },
-          },
-        },
       },
     });
 
@@ -294,9 +287,9 @@ export class ContraventionService {
   }
 
   /**
-   * Acknowledge a contravention
+   * Upload approval PDF - transitions from PENDING_UPLOAD to PENDING_REVIEW
    */
-  async acknowledge(id: string, acknowledgedById: string, notes?: string) {
+  async uploadApproval(id: string, approvalPdfUrl: string) {
     const contravention = await prisma.contravention.findUnique({
       where: { id },
     });
@@ -305,174 +298,74 @@ export class ContraventionService {
       throw new AppError('Contravention not found', 404);
     }
 
-    if (contravention.status !== 'PENDING') {
-      throw new AppError('Contravention has already been processed', 400);
+    if (contravention.status !== 'PENDING_UPLOAD') {
+      throw new AppError('Contravention is not pending approval upload', 400);
     }
 
     const updated = await prisma.contravention.update({
       where: { id },
       data: {
-        status: 'ACKNOWLEDGED',
-        acknowledgedAt: new Date(),
-        acknowledgedById,
-        summary: notes ? `${contravention.summary || ''}\n\nAcknowledgment notes: ${notes}` : contravention.summary,
+        status: 'PENDING_REVIEW',
+        approvalPdfUrl,
       },
       include: {
-        employee: true,
+        employee: {
+          select: { id: true, name: true, email: true, department: true },
+        },
         type: true,
         loggedBy: { select: { id: true, name: true } },
       },
     });
 
-    // Notify the admin who logged this contravention
-    if (updated.loggedBy) {
-      const notificationSvc = await getNotificationService();
-      if (notificationSvc) {
-        await notificationSvc.notifyContraventionAcknowledged({
-          adminUserId: updated.loggedBy.id,
-          contraventionId: id,
-          referenceNo: contravention.referenceNo,
-          employeeName: updated.employee.name,
-        });
-      }
-    }
-
     return updated;
   }
 
   /**
-   * Submit a dispute
+   * Mark contravention as complete - transitions from PENDING_REVIEW to COMPLETED (admin only)
    */
-  async submitDispute(contraventionId: string, submittedById: string, reason: string, evidenceUrls?: string[]) {
+  async markComplete(id: string, completedById: string, notes?: string) {
     const contravention = await prisma.contravention.findUnique({
-      where: { id: contraventionId },
+      where: { id },
     });
 
     if (!contravention) {
       throw new AppError('Contravention not found', 404);
     }
 
-    if (contravention.status !== 'PENDING' && contravention.status !== 'ACKNOWLEDGED') {
-      throw new AppError('Cannot dispute this contravention', 400);
+    if (contravention.status !== 'PENDING_REVIEW') {
+      throw new AppError('Contravention is not pending review', 400);
     }
 
-    // Check dispute deadline
-    const deadlineDate = addBusinessDays(contravention.createdAt, ACKNOWLEDGMENT_CONFIG.DEADLINE_DAYS);
-    if (new Date() > deadlineDate) {
-      throw new AppError('Dispute deadline has passed', 400);
-    }
-
-    // Create dispute
-    const dispute = await prisma.dispute.create({
+    const updated = await prisma.contravention.update({
+      where: { id },
       data: {
-        contraventionId,
-        submittedById,
-        reason,
-        evidenceUrls: evidenceUrls || [],
-        status: 'SUBMITTED',
+        status: 'COMPLETED',
+        resolvedDate: new Date(),
+        acknowledgedById: completedById,
+        acknowledgedAt: new Date(),
+        summary: notes ? `${contravention.summary || ''}\n\nAdmin notes: ${notes}` : contravention.summary,
       },
       include: {
-        submittedBy: { select: { id: true, name: true } },
+        employee: {
+          select: { id: true, name: true, email: true, department: true },
+        },
+        type: true,
+        loggedBy: { select: { id: true, name: true } },
       },
     });
 
-    // Update contravention status
-    await prisma.contravention.update({
-      where: { id: contraventionId },
-      data: { status: 'DISPUTED' },
-    });
-
-    // Notify all admins about the dispute
+    // Notify the employee that their contravention has been completed
     const notificationSvc = await getNotificationService();
     if (notificationSvc) {
-      const adminUserIds = await notificationSvc.getAdminUserIds();
-      await notificationSvc.notifyDisputeSubmitted({
-        adminUserIds,
-        contraventionId,
+      await notificationSvc.notifyContraventionAcknowledged({
+        adminUserId: contravention.employeeId,
+        contraventionId: id,
         referenceNo: contravention.referenceNo,
-        employeeName: dispute.submittedBy.name,
+        employeeName: updated.employee.name,
       });
     }
 
-    return dispute;
-  }
-
-  /**
-   * Resolve a dispute
-   */
-  async resolveDispute(
-    disputeId: string,
-    decidedById: string,
-    decision: 'UPHELD' | 'OVERTURNED',
-    panelDecision: string
-  ) {
-    const dispute = await prisma.dispute.findUnique({
-      where: { id: disputeId },
-      include: { contravention: true },
-    });
-
-    if (!dispute) {
-      throw new AppError('Dispute not found', 404);
-    }
-
-    if (dispute.status !== 'SUBMITTED' && dispute.status !== 'UNDER_REVIEW') {
-      throw new AppError('Dispute has already been resolved', 400);
-    }
-
-    // Update dispute
-    const updatedDispute = await prisma.dispute.update({
-      where: { id: disputeId },
-      data: {
-        status: decision,
-        panelDecision,
-        decidedAt: new Date(),
-        decidedById,
-      },
-    });
-
-    // Update contravention based on decision
-    if (decision === 'OVERTURNED') {
-      // Remove points
-      const pointsRecord = await prisma.employeePoints.findUnique({
-        where: { employeeId: dispute.contravention.employeeId },
-      });
-
-      if (pointsRecord) {
-        const newTotal = Math.max(0, pointsRecord.totalPoints - dispute.contravention.points);
-        const newLevel = pointsService.getEscalationLevel(newTotal);
-
-        await prisma.employeePoints.update({
-          where: { employeeId: dispute.contravention.employeeId },
-          data: {
-            totalPoints: newTotal,
-            currentLevel: newLevel,
-          },
-        });
-      }
-
-      await prisma.contravention.update({
-        where: { id: dispute.contraventionId },
-        data: { status: 'RESOLVED', resolvedDate: new Date() },
-      });
-    } else {
-      await prisma.contravention.update({
-        where: { id: dispute.contraventionId },
-        data: { status: 'CONFIRMED' },
-      });
-    }
-
-    // Notify the employee about the dispute decision
-    const notificationSvc2 = await getNotificationService();
-    if (notificationSvc2) {
-      await notificationSvc2.notifyDisputeDecided({
-        employeeUserId: dispute.contravention.employeeId,
-        contraventionId: dispute.contraventionId,
-        referenceNo: dispute.contravention.referenceNo,
-        decision,
-      });
-    }
-
-    return updatedDispute;
+    return updated;
   }
 
   /**
@@ -483,7 +376,6 @@ export class ContraventionService {
       where: { employeeId },
       include: {
         type: true,
-        disputes: true,
       },
       orderBy: { incidentDate: 'desc' },
     });
@@ -518,11 +410,6 @@ export class ContraventionService {
         },
       });
     }
-
-    // Delete related disputes first
-    await prisma.dispute.deleteMany({
-      where: { contraventionId: id },
-    });
 
     return prisma.contravention.delete({
       where: { id },

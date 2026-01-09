@@ -48,18 +48,12 @@ export function getSeverityColor(severity: string): string {
 
 export function getStatusColor(status: string): string {
   switch (status) {
-    case 'PENDING':
+    case 'PENDING_UPLOAD':
       return 'bg-yellow-100 text-yellow-800';
-    case 'ACKNOWLEDGED':
+    case 'PENDING_REVIEW':
       return 'bg-blue-100 text-blue-800';
-    case 'DISPUTED':
-      return 'bg-purple-100 text-purple-800';
-    case 'CONFIRMED':
-      return 'bg-orange-100 text-orange-800';
-    case 'RESOLVED':
+    case 'COMPLETED':
       return 'bg-green-100 text-green-800';
-    case 'ESCALATED':
-      return 'bg-red-100 text-red-800';
     default:
       return 'bg-gray-100 text-gray-800';
   }

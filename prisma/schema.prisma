@@ -24,12 +24,9 @@ enum Severity {
 }
 
 enum ContraventionStatus {
-  PENDING
-  ACKNOWLEDGED
-  DISPUTED
-  CONFIRMED
-  RESOLVED
-  ESCALATED
+  PENDING_UPLOAD    // Waiting for approval PDF to be uploaded
+  PENDING_REVIEW    // PDF uploaded, waiting for admin review
+  COMPLETED         // Admin has verified and marked complete
 }
 
 enum DisputeStatus {
@@ -147,7 +144,7 @@ model Contravention {
   points          Int
 
   // Status tracking
-  status          ContraventionStatus @default(PENDING)
+  status          ContraventionStatus @default(PENDING_UPLOAD)
   incidentDate    DateTime
   resolvedDate    DateTime?
 

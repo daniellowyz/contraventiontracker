@@ -5,9 +5,8 @@ import { validateBody, validateQuery } from '../middleware/validate';
 import {
   createContraventionSchema,
   updateContraventionSchema,
-  acknowledgeSchema,
-  submitDisputeSchema,
-  resolveDisputeSchema,
+  uploadApprovalSchema,
+  markCompleteSchema,
   contraventionFiltersSchema,
 } from '../validators/contravention.schema';
 import { AuthenticatedRequest } from '../types';
@@ -86,17 +85,16 @@ router.delete(
   }
 );
 
-// POST /api/contraventions/:id/acknowledge - Acknowledge contravention
+// POST /api/contraventions/:id/upload-approval - Upload approval PDF (transitions PENDING_UPLOAD -> PENDING_REVIEW)
 router.post(
-  '/:id/acknowledge',
+  '/:id/upload-approval',
   authenticate,
-  validateBody(acknowledgeSchema),
+  validateBody(uploadApprovalSchema),
   async (req: AuthenticatedRequest, res: Response, next) => {
     try {
-      const contravention = await contraventionService.acknowledge(
+      const contravention = await contraventionService.uploadApproval(
         req.params.id,
-        req.user!.userId,
-        req.body.notes
+        req.body.approvalPdfUrl
       );
       res.json({ success: true, data: contravention });
     } catch (error) {
@@ -105,20 +103,20 @@ router.post(
   }
 );
 
-// POST /api/contraventions/:id/dispute - Submit dispute
+// POST /api/contraventions/:id/complete - Mark as complete (admin only, transitions PENDING_REVIEW -> COMPLETED)
 router.post(
-  '/:id/dispute',
+  '/:id/complete',
   authenticate,
-  validateBody(submitDisputeSchema),
+  requireAdmin,
+  validateBody(markCompleteSchema),
   async (req: AuthenticatedRequest, res: Response, next) => {
     try {
-      const dispute = await contraventionService.submitDispute(
+      const contravention = await contraventionService.markComplete(
         req.params.id,
         req.user!.userId,
-        req.body.reason,
-        req.body.evidenceUrls
+        req.body.notes
       );
-      res.status(201).json({ success: true, data: dispute });
+      res.json({ success: true, data: contravention });
     } catch (error) {
       next(error);
     }

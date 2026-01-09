@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { contraventionsApi, CreateContraventionInput } from '@/api/contraventions.api';
@@ -20,11 +20,13 @@ import {
   FileText,
   CheckCircle,
   Clock,
-  MessageSquare,
+  Upload,
   ExternalLink,
-  FileCheck
+  FileCheck,
+  Loader2
 } from 'lucide-react';
 import { Severity, ContraventionStatus } from '@/types';
+import { uploadApprovalPdf } from '@/lib/supabase';
 
 const SEVERITY_OPTIONS = [
   { value: 'LOW', label: 'Low' },
@@ -43,12 +45,15 @@ const severityColors: Record<Severity, BadgeVariant> = {
 };
 
 const statusColors: Record<ContraventionStatus, BadgeVariant> = {
-  PENDING: 'warning',
-  ACKNOWLEDGED: 'info',
-  DISPUTED: 'danger',
-  CONFIRMED: 'info',
-  RESOLVED: 'success',
-  ESCALATED: 'danger',
+  PENDING_UPLOAD: 'warning',
+  PENDING_REVIEW: 'info',
+  COMPLETED: 'success',
+};
+
+const statusLabels: Record<ContraventionStatus, string> = {
+  PENDING_UPLOAD: 'Awaiting Approval',
+  PENDING_REVIEW: 'Admin Review',
+  COMPLETED: 'Completed',
 };
 
 export function ContraventionDetailPage() {
@@ -61,6 +66,9 @@ export function ContraventionDetailPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<Partial<CreateContraventionInput> & { severity?: Severity }>({});
   const [error, setError] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch contravention details
   const { data: contravention, isLoading, isError } = useQuery({
@@ -138,6 +146,50 @@ export function ContraventionDetailPage() {
     setIsEditing(false);
     setEditData({});
     setError('');
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !contravention) return;
+
+    // Validate file type
+    if (file.type !== 'application/pdf') {
+      setUploadError('Please upload a PDF file');
+      return;
+    }
+
+    // Validate file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadError('File size must be less than 10MB');
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadError('');
+
+    try {
+      // Upload to Supabase
+      const publicUrl = await uploadApprovalPdf(file, contravention.referenceNo);
+
+      if (!publicUrl) {
+        throw new Error('Failed to upload file - Supabase not configured');
+      }
+
+      // Update contravention with the PDF URL
+      await contraventionsApi.uploadApproval(id!, publicUrl);
+
+      // Refresh data
+      queryClient.invalidateQueries({ queryKey: ['contravention', id] });
+      queryClient.invalidateQueries({ queryKey: ['contraventions'] });
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Failed to upload approval document');
+    } finally {
+      setIsUploading(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -245,7 +297,7 @@ export function ContraventionDetailPage() {
                   {/* Status and Severity Badges */}
                   <div className="flex gap-3">
                     <Badge variant={statusColors[contravention.status]}>
-                      {contravention.status}
+                      {statusLabels[contravention.status]}
                     </Badge>
                     <Badge variant={severityColors[contravention.severity]}>
                       {contravention.severity} Severity
@@ -393,43 +445,6 @@ export function ContraventionDetailPage() {
               </div>
             </Card>
 
-            {/* Disputes Section */}
-            {contravention.disputes && contravention.disputes.length > 0 && (
-              <Card>
-                <div className="p-6">
-                  <h2 className="text-lg font-semibold text-gray-900 mb-4">Disputes</h2>
-                  <div className="space-y-4">
-                    {contravention.disputes.map((dispute) => (
-                      <div key={dispute.id} className="border border-gray-200 rounded-lg p-4">
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <Badge variant={dispute.status === 'UPHELD' ? 'success' : dispute.status === 'OVERTURNED' ? 'warning' : 'info'}>
-                              {dispute.status}
-                            </Badge>
-                            <p className="mt-2 text-sm text-gray-900">{dispute.reason}</p>
-                            <p className="mt-1 text-xs text-gray-500">
-                              Submitted by {dispute.submittedBy.name} on {formatDateTime(dispute.createdAt)}
-                            </p>
-                          </div>
-                        </div>
-                        {dispute.panelDecision && (
-                          <div className="mt-3 pt-3 border-t border-gray-100">
-                            <p className="text-sm text-gray-700">
-                              <span className="font-medium">Panel Decision:</span> {dispute.panelDecision}
-                            </p>
-                            {dispute.decidedBy && (
-                              <p className="text-xs text-gray-500 mt-1">
-                                Decided by {dispute.decidedBy.name} on {dispute.decidedAt && formatDateTime(dispute.decidedAt)}
-                              </p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </Card>
-            )}
           </div>
 
           {/* Sidebar */}
@@ -513,21 +528,67 @@ export function ContraventionDetailPage() {
             </Card>
 
             {/* Quick Actions */}
-            {!isEditing && (
+            {!isEditing && contravention.status !== 'COMPLETED' && (
               <Card>
                 <div className="p-6">
                   <h3 className="text-sm font-semibold text-gray-900 mb-4">Actions</h3>
+
+                  {uploadError && (
+                    <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-600">
+                      {uploadError}
+                    </div>
+                  )}
+
                   <div className="space-y-2">
-                    {contravention.status === 'PENDING' && (
-                      <Button variant="secondary" className="w-full justify-start">
-                        <CheckCircle className="w-4 h-4 mr-2" />
-                        Acknowledge
-                      </Button>
+                    {contravention.status === 'PENDING_UPLOAD' && (
+                      <>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="application/pdf"
+                          onChange={handleFileUpload}
+                          className="hidden"
+                        />
+                        <Button
+                          variant="secondary"
+                          className="w-full justify-start"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={isUploading}
+                        >
+                          {isUploading ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              Uploading...
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="w-4 h-4 mr-2" />
+                              Upload Approval Document
+                            </>
+                          )}
+                        </Button>
+                        <p className="text-xs text-gray-500 mt-1">
+                          PDF only, max 10MB
+                        </p>
+                      </>
                     )}
-                    {(contravention.status === 'PENDING' || contravention.status === 'ACKNOWLEDGED') && (
-                      <Button variant="secondary" className="w-full justify-start">
-                        <MessageSquare className="w-4 h-4 mr-2" />
-                        Submit Dispute
+                    {contravention.status === 'PENDING_REVIEW' && isAdmin && (
+                      <Button
+                        variant="primary"
+                        className="w-full justify-start"
+                        onClick={() => {
+                          if (confirm('Are you sure you want to mark this contravention as complete?')) {
+                            contraventionsApi.markComplete(id!).then(() => {
+                              queryClient.invalidateQueries({ queryKey: ['contravention', id] });
+                              queryClient.invalidateQueries({ queryKey: ['contraventions'] });
+                            }).catch((err) => {
+                              setError(err.message || 'Failed to mark as complete');
+                            });
+                          }
+                        }}
+                      >
+                        <CheckCircle className="w-4 h-4 mr-2" />
+                        Mark as Complete
                       </Button>
                     )}
                   </div>

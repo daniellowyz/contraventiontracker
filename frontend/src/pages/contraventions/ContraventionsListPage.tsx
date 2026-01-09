@@ -15,13 +15,16 @@ import { Plus, ChevronLeft, ChevronRight, Eye, Trash2 } from 'lucide-react';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All Status' },
-  { value: 'PENDING', label: 'Pending' },
-  { value: 'ACKNOWLEDGED', label: 'Acknowledged' },
-  { value: 'DISPUTED', label: 'Disputed' },
-  { value: 'CONFIRMED', label: 'Confirmed' },
-  { value: 'RESOLVED', label: 'Resolved' },
-  { value: 'ESCALATED', label: 'Escalated' },
+  { value: 'PENDING_UPLOAD', label: 'Pending Approval Upload' },
+  { value: 'PENDING_REVIEW', label: 'Pending Admin Review' },
+  { value: 'COMPLETED', label: 'Completed' },
 ];
+
+const STATUS_LABELS: Record<string, string> = {
+  PENDING_UPLOAD: 'Awaiting Approval',
+  PENDING_REVIEW: 'Admin Review',
+  COMPLETED: 'Completed',
+};
 
 const SEVERITY_OPTIONS = [
   { value: '', label: 'All Severity' },
@@ -241,7 +244,7 @@ export function ContraventionsListPage() {
                         </td>
                         <td className="px-6 py-4">
                           <Badge className={getStatusColor(contravention.status)}>
-                            {contravention.status}
+                            {STATUS_LABELS[contravention.status] || contravention.status}
                           </Badge>
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-500">

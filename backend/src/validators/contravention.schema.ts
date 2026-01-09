@@ -24,7 +24,7 @@ export const updateContraventionSchema = z.object({
   summary: z.string().optional(),
   severity: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).optional(),
   points: z.number().int().min(0).optional(),
-  status: z.enum(['PENDING', 'ACKNOWLEDGED', 'DISPUTED', 'CONFIRMED', 'RESOLVED', 'ESCALATED']).optional(),
+  status: z.enum(['PENDING_UPLOAD', 'PENDING_REVIEW', 'COMPLETED']).optional(),
   evidenceUrls: z.array(z.string().url()).optional(),
 });
 
@@ -43,7 +43,7 @@ export const resolveDisputeSchema = z.object({
 });
 
 export const contraventionFiltersSchema = z.object({
-  status: z.enum(['PENDING', 'ACKNOWLEDGED', 'DISPUTED', 'CONFIRMED', 'RESOLVED', 'ESCALATED']).optional(),
+  status: z.enum(['PENDING_UPLOAD', 'PENDING_REVIEW', 'COMPLETED']).optional(),
   severity: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).optional(),
   typeId: z.string().optional(),
   departmentId: z.string().optional(),
@@ -51,6 +51,7 @@ export const contraventionFiltersSchema = z.object({
   dateFrom: z.string().optional(),
   dateTo: z.string().optional(),
   search: z.string().optional(),
+  period: z.string().optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });

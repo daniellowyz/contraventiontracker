@@ -71,17 +71,14 @@ export const contraventionsApi = {
     return response.data;
   },
 
-  acknowledge: async (id: string, notes?: string) => {
-    const response = await client.post<ApiResponse<Contravention>>(`/contraventions/${id}/acknowledge`, { notes });
+  uploadApproval: async (id: string, approvalPdfUrl: string) => {
+    const response = await client.post<ApiResponse<Contravention>>(`/contraventions/${id}/upload-approval`, { approvalPdfUrl });
     return response.data.data!;
   },
 
-  submitDispute: async (id: string, reason: string, evidenceUrls?: string[]) => {
-    const response = await client.post<ApiResponse>(`/contraventions/${id}/dispute`, {
-      reason,
-      evidenceUrls,
-    });
-    return response.data;
+  markComplete: async (id: string, notes?: string) => {
+    const response = await client.post<ApiResponse<Contravention>>(`/contraventions/${id}/complete`, { notes });
+    return response.data.data!;
   },
 
   getTypes: async () => {
