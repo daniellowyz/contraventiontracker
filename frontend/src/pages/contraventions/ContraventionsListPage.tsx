@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { contraventionsApi, ContraventionFilters } from '@/api/contraventions.api';
 import { Header } from '@/components/layout/Header';
 import { Card } from '@/components/ui/Card';
@@ -39,12 +39,44 @@ export function ContraventionsListPage() {
   const { isAdmin } = useAuthStore();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [filters, setFilters] = useState<ContraventionFilters>({
-    page: 1,
-    limit: 20,
-  });
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Initialize filters from URL search params
+  const getInitialFilters = (): ContraventionFilters => {
+    const dateFrom = searchParams.get('dateFrom') || undefined;
+    const dateTo = searchParams.get('dateTo') || undefined;
+    const severity = searchParams.get('severity') || undefined;
+    const status = searchParams.get('status') || undefined;
+    const search = searchParams.get('search') || undefined;
+    const page = parseInt(searchParams.get('page') || '1', 10);
+
+    return {
+      dateFrom,
+      dateTo,
+      severity,
+      status,
+      search,
+      page,
+      limit: 20,
+    };
+  };
+
+  const [filters, setFilters] = useState<ContraventionFilters>(getInitialFilters);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [dateError, setDateError] = useState<string>('');
+
+  // Sync URL params when filters change
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (filters.dateFrom) params.set('dateFrom', filters.dateFrom);
+    if (filters.dateTo) params.set('dateTo', filters.dateTo);
+    if (filters.severity) params.set('severity', filters.severity);
+    if (filters.status) params.set('status', filters.status);
+    if (filters.search) params.set('search', filters.search);
+    if (filters.page && filters.page > 1) params.set('page', filters.page.toString());
+
+    setSearchParams(params, { replace: true });
+  }, [filters, setSearchParams]);
 
   const { data, isLoading } = useQuery({
     queryKey: ['contraventions', filters],

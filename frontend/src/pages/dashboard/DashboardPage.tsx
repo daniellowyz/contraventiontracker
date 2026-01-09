@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { reportsApi } from '@/api/reports.api';
 import { Header } from '@/components/layout/Header';
 import { Card, CardTitle } from '@/components/ui/Card';
@@ -15,10 +16,31 @@ const SEVERITY_COLORS = {
 };
 
 export function DashboardPage() {
+  const navigate = useNavigate();
   const { data: stats, isLoading } = useQuery({
     queryKey: ['dashboard'],
     queryFn: reportsApi.getDashboard,
   });
+
+  // Handle bar chart click - navigate to contraventions filtered by month
+  const handleBarClick = (data: { month: string; count: number }) => {
+    if (data.count === 0) return;
+
+    // month is in format "YYYY-MM", convert to date range
+    const [year, month] = data.month.split('-');
+    const dateFrom = `${year}-${month}-01`;
+    // Get last day of month
+    const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
+    const dateTo = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
+
+    navigate(`/contraventions?dateFrom=${dateFrom}&dateTo=${dateTo}`);
+  };
+
+  // Handle pie chart click - navigate to contraventions filtered by severity
+  const handlePieClick = (data: { name: string; value: number }) => {
+    if (data.value === 0) return;
+    navigate(`/contraventions?severity=${data.name}`);
+  };
 
   if (isLoading) {
     return (
@@ -98,7 +120,7 @@ export function DashboardPage() {
             <CardTitle className="mb-6">Monthly Trend</CardTitle>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={stats.monthlyTrend}>
+                <BarChart data={stats.monthlyTrend} style={{ cursor: 'pointer' }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                   <XAxis
                     dataKey="month"
@@ -110,7 +132,13 @@ export function DashboardPage() {
                     formatter={(value: number) => [value, 'Contraventions']}
                     labelFormatter={(label) => `Month: ${label}`}
                   />
-                  <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                  <Bar
+                    dataKey="count"
+                    fill="#3b82f6"
+                    radius={[4, 4, 0, 0]}
+                    onClick={(data) => handleBarClick(data)}
+                    style={{ cursor: 'pointer' }}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -130,9 +158,11 @@ export function DashboardPage() {
                     cy="50%"
                     outerRadius={80}
                     label={({ name, value }) => `${name}: ${value}`}
+                    onClick={(data) => handlePieClick(data)}
+                    style={{ cursor: 'pointer' }}
                   >
                     {severityData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
+                      <Cell key={`cell-${index}`} fill={entry.color} style={{ cursor: 'pointer' }} />
                     ))}
                   </Pie>
                   <Tooltip />
