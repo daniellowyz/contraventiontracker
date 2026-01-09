@@ -90,6 +90,9 @@ export function Header({ title, subtitle, actions }: HeaderProps) {
         </div>
 
         <div className="flex items-center gap-4">
+          {/* Actions */}
+          {actions}
+
           {/* Notifications */}
           <div className="relative" ref={notificationRef}>
             <button
@@ -159,9 +162,6 @@ export function Header({ title, subtitle, actions }: HeaderProps) {
               </div>
             )}
           </div>
-
-          {/* Actions */}
-          {actions}
         </div>
       </div>
     </header>
