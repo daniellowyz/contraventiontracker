@@ -14,9 +14,9 @@ export class ReportService {
     // Get total contraventions
     const totalContraventions = await prisma.contravention.count();
 
-    // Get pending acknowledgments
+    // Get pending approval uploads
     const pendingAcknowledgment = await prisma.contravention.count({
-      where: { status: 'PENDING' },
+      where: { status: 'PENDING_UPLOAD' },
     });
 
     // Get this month's contraventions
@@ -29,11 +29,11 @@ export class ReportService {
       },
     });
 
-    // Get critical issues
+    // Get critical issues (not completed)
     const criticalIssues = await prisma.contravention.count({
       where: {
         severity: 'CRITICAL',
-        status: { not: 'RESOLVED' },
+        status: { not: 'COMPLETED' },
       },
     });
 
@@ -49,12 +49,9 @@ export class ReportService {
     });
 
     const byStatus: Record<string, number> = {
-      PENDING: 0,
-      ACKNOWLEDGED: 0,
-      DISPUTED: 0,
-      CONFIRMED: 0,
-      RESOLVED: 0,
-      ESCALATED: 0,
+      PENDING_UPLOAD: 0,
+      PENDING_REVIEW: 0,
+      COMPLETED: 0,
     };
     statusCounts.forEach((s) => {
       byStatus[s.status] = s._count;
