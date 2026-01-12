@@ -1,36 +1,59 @@
 import client from './client';
 import { ApiResponse, User } from '@/types';
 
-interface LoginResponse {
+interface AuthUser {
+  userId: string;
+  employeeId: string;
+  email: string;
+  name: string;
+  role: 'ADMIN' | 'USER';
+}
+
+interface VerifyOtpResponse {
   token: string;
-  user: {
-    userId: string;
-    employeeId: string;
-    email: string;
-    name: string;
-    role: 'ADMIN' | 'USER';
-  };
+  user: AuthUser;
+}
+
+interface RequestOtpResponse {
+  success: boolean;
+  message: string;
 }
 
 export const authApi = {
-  login: async (email: string, password: string) => {
-    const response = await client.post<ApiResponse<LoginResponse>>('/auth/login', {
+  /**
+   * Step 1: Request OTP for email
+   */
+  requestOtp: async (email: string) => {
+    const response = await client.post<ApiResponse<RequestOtpResponse>>('/auth/request-otp', {
       email,
-      password,
     });
     return response.data.data!;
   },
 
+  /**
+   * Step 2: Verify OTP and get token
+   */
+  verifyOtp: async (email: string, otp: string) => {
+    const response = await client.post<ApiResponse<VerifyOtpResponse>>('/auth/verify-otp', {
+      email,
+      otp,
+    });
+    return response.data.data!;
+  },
+
+  /**
+   * Logout and clear session cookie
+   */
+  logout: async () => {
+    const response = await client.post<ApiResponse>('/auth/logout');
+    return response.data;
+  },
+
+  /**
+   * Get current user info
+   */
   getCurrentUser: async () => {
     const response = await client.get<ApiResponse<User>>('/auth/me');
     return response.data.data!;
-  },
-
-  changePassword: async (currentPassword: string, newPassword: string) => {
-    const response = await client.post<ApiResponse>('/auth/change-password', {
-      currentPassword,
-      newPassword,
-    });
-    return response.data;
   },
 };

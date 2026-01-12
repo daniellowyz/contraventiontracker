@@ -81,7 +81,7 @@ model User {
   id               String   @id @default(cuid())
   employeeId       String   @unique  // e.g., "EMP001"
   email            String   @unique
-  passwordHash     String
+  passwordHash     String?  // Optional - migrating to OTP auth
   name             String
   departmentId     String?
   department       Department?      @relation("DepartmentEmployees", fields: [departmentId], references: [id])
@@ -101,9 +101,27 @@ model User {
   trainingRecords     TrainingRecord[]
   auditLogs           AuditLog[]
   notifications       Notification[]
+  otpRecords          OtpRecord[]
 
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
+}
+
+// OTP Record for email authentication
+model OtpRecord {
+  id           String   @id @default(cuid())
+  email        String   // Email address OTP was sent to
+  otpHash      String   // SHA-256 hash of OTP with email as salt
+  attempts     Int      @default(0)  // Failed attempt counter (max 5)
+  expiresAt    DateTime // OTP expires after 15 minutes
+  usedAt       DateTime? // When OTP was successfully used
+  userId       String?  // Optional link to existing user
+  user         User?    @relation(fields: [userId], references: [id])
+
+  createdAt    DateTime @default(now())
+
+  @@index([email])
+  @@index([expiresAt])
 }
 
 model ContraventionType {

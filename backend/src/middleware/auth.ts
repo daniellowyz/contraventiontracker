@@ -3,23 +3,43 @@ import jwt from 'jsonwebtoken';
 import config from '../config/env';
 import { AuthenticatedRequest, JwtPayload } from '../types';
 
+const COOKIE_NAME = 'auth_token';
+
+/**
+ * Extract token from request
+ * Checks both Authorization header and cookies
+ */
+function extractToken(req: AuthenticatedRequest): string | null {
+  // First check Authorization header (Bearer token)
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    return authHeader.split(' ')[1];
+  }
+
+  // Then check cookies
+  const cookieToken = req.cookies?.[COOKIE_NAME];
+  if (cookieToken) {
+    return cookieToken;
+  }
+
+  return null;
+}
+
 export function authenticate(
   req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
 ): void {
   try {
-    const authHeader = req.headers.authorization;
+    const token = extractToken(req);
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (!token) {
       res.status(401).json({
         success: false,
         error: 'No token provided',
       });
       return;
     }
-
-    const token = authHeader.split(' ')[1];
 
     const decoded = jwt.verify(token, config.jwtSecret) as JwtPayload;
     req.user = decoded;
@@ -71,10 +91,9 @@ export function optionalAuth(
   next: NextFunction
 ): void {
   try {
-    const authHeader = req.headers.authorization;
+    const token = extractToken(req);
 
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.split(' ')[1];
+    if (token) {
       const decoded = jwt.verify(token, config.jwtSecret) as JwtPayload;
       req.user = decoded;
     }

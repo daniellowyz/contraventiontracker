@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
 import routes from './routes';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import config from './config/env';
@@ -19,6 +20,9 @@ app.use(
     allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
+
+// Cookie parsing (for JWT cookie auth)
+app.use(cookieParser());
 
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
