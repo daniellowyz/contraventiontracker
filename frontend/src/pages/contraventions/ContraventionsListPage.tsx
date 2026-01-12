@@ -15,13 +15,13 @@ import { Plus, ChevronLeft, ChevronRight, Eye, Trash2 } from 'lucide-react';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All Status' },
-  { value: 'PENDING_UPLOAD', label: 'Pending Approval Upload' },
-  { value: 'PENDING_REVIEW', label: 'Pending Admin Review' },
+  { value: 'PENDING_UPLOAD', label: 'Pending Approval' },
+  { value: 'PENDING_REVIEW', label: 'Admin Review' },
   { value: 'COMPLETED', label: 'Completed' },
 ];
 
 const STATUS_LABELS: Record<string, string> = {
-  PENDING_UPLOAD: 'Awaiting Approval',
+  PENDING_UPLOAD: 'Pending Approval',
   PENDING_REVIEW: 'Admin Review',
   COMPLETED: 'Completed',
 };

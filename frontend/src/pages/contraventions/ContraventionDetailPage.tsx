@@ -25,7 +25,7 @@ import {
   ExternalLink,
   FileCheck,
   Loader2,
-  UserCog
+  Trash2
 } from 'lucide-react';
 import { Severity, ContraventionStatus } from '@/types';
 import { uploadApprovalPdf } from '@/lib/supabase';
@@ -35,6 +35,12 @@ const SEVERITY_OPTIONS = [
   { value: 'MEDIUM', label: 'Medium' },
   { value: 'HIGH', label: 'High' },
   { value: 'CRITICAL', label: 'Critical' },
+];
+
+const STATUS_OPTIONS = [
+  { value: 'PENDING_UPLOAD', label: 'Pending Approval' },
+  { value: 'PENDING_REVIEW', label: 'Admin Review' },
+  { value: 'COMPLETED', label: 'Completed' },
 ];
 
 type BadgeVariant = 'default' | 'success' | 'warning' | 'danger' | 'info';
@@ -53,7 +59,7 @@ const statusColors: Record<ContraventionStatus, BadgeVariant> = {
 };
 
 const statusLabels: Record<ContraventionStatus, string> = {
-  PENDING_UPLOAD: 'Awaiting Approval',
+  PENDING_UPLOAD: 'Pending Approval',
   PENDING_REVIEW: 'Admin Review',
   COMPLETED: 'Completed',
 };
@@ -66,12 +72,11 @@ export function ContraventionDetailPage() {
   const isAdmin = user?.role === 'ADMIN';
 
   const [isEditing, setIsEditing] = useState(false);
-  const [editData, setEditData] = useState<Partial<CreateContraventionInput> & { severity?: Severity }>({});
+  const [editData, setEditData] = useState<Partial<CreateContraventionInput> & { severity?: Severity; employeeId?: string; status?: ContraventionStatus }>({});
   const [error, setError] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
-  const [isReassigning, setIsReassigning] = useState(false);
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch contravention details
@@ -81,11 +86,11 @@ export function ContraventionDetailPage() {
     enabled: !!id,
   });
 
-  // Fetch employees for reassignment (only for admins)
+  // Fetch employees for reassignment (only for admins when editing)
   const { data: employeesData } = useQuery({
     queryKey: ['employees'],
     queryFn: () => employeesApi.getAll(),
-    enabled: isAdmin && isReassigning,
+    enabled: isAdmin && isEditing,
   });
 
   // Update mutation
@@ -102,19 +107,17 @@ export function ContraventionDetailPage() {
     },
   });
 
-  // Reassign employee mutation
-  const reassignMutation = useMutation({
-    mutationFn: (newEmployeeId: string) => contraventionsApi.update(id!, { employeeId: newEmployeeId }),
+  // Delete mutation
+  const deleteMutation = useMutation({
+    mutationFn: () => contraventionsApi.delete(id!),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['contravention', id] });
       queryClient.invalidateQueries({ queryKey: ['contraventions'] });
       queryClient.invalidateQueries({ queryKey: ['employees'] });
-      setIsReassigning(false);
-      setSelectedEmployeeId('');
-      setError('');
+      navigate('/contraventions');
     },
     onError: (err: Error) => {
-      setError(err.message || 'Failed to reassign contravention');
+      setError(err.message || 'Failed to delete contravention');
+      setIsDeleting(false);
     },
   });
 
@@ -127,6 +130,8 @@ export function ContraventionDetailPage() {
         summary: contravention.summary || '',
         incidentDate: contravention.incidentDate.split('T')[0],
         severity: contravention.severity,
+        employeeId: contravention.employee.id,
+        status: contravention.status,
       });
       setIsEditing(true);
     }
@@ -141,7 +146,7 @@ export function ContraventionDetailPage() {
     if (!contravention) return;
 
     // Only send fields that have actually changed
-    const changes: Partial<CreateContraventionInput> = {};
+    const changes: Partial<CreateContraventionInput> & { employeeId?: string; status?: ContraventionStatus } = {};
 
     if (editData.description?.trim() !== contravention.description) {
       changes.description = editData.description?.trim();
@@ -158,6 +163,14 @@ export function ContraventionDetailPage() {
     if (editData.incidentDate !== contravention.incidentDate.split('T')[0]) {
       changes.incidentDate = editData.incidentDate;
     }
+    // Include employee reassignment if changed
+    if (editData.employeeId && editData.employeeId !== contravention.employee.id) {
+      changes.employeeId = editData.employeeId;
+    }
+    // Include status change if changed (admin only)
+    if (editData.status && editData.status !== contravention.status) {
+      changes.status = editData.status;
+    }
 
     // Check if any changes were made
     if (Object.keys(changes).length === 0) {
@@ -167,6 +180,13 @@ export function ContraventionDetailPage() {
     }
 
     updateMutation.mutate(changes);
+  };
+
+  const handleDelete = () => {
+    if (confirm('Are you sure you want to permanently delete this contravention? This will also reverse the points assigned to the employee. This action cannot be undone.')) {
+      setIsDeleting(true);
+      deleteMutation.mutate();
+    }
   };
 
   const handleCancel = () => {
@@ -427,6 +447,44 @@ export function ContraventionDetailPage() {
                     </div>
                   )}
 
+                  {/* Employee Reassignment (Admin only when editing) */}
+                  {isEditing && isAdmin && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Assigned Employee</label>
+                      <select
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        value={editData.employeeId || ''}
+                        onChange={(e) => setEditData({ ...editData, employeeId: e.target.value })}
+                      >
+                        {employeesData?.map((emp: EmployeeListItem) => (
+                          <option key={emp.id} value={emp.id}>
+                            {emp.name} ({emp.department?.name || 'No Department'})
+                          </option>
+                        ))}
+                      </select>
+                      {editData.employeeId !== contravention.employee.id && (
+                        <p className="text-xs text-amber-600 mt-1">
+                          Points will be transferred to the new employee when saved.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Status Override (Admin only when editing) */}
+                  {isEditing && isAdmin && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                      <Select
+                        options={STATUS_OPTIONS}
+                        value={editData.status || ''}
+                        onChange={(e) => setEditData({ ...editData, status: e.target.value as ContraventionStatus })}
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Override status manually if needed.
+                      </p>
+                    </div>
+                  )}
+
                   {/* Incident Date */}
                   {isEditing ? (
                     <div>
@@ -468,6 +526,33 @@ export function ContraventionDetailPage() {
                       <p className="text-gray-900">{contravention.authorizerEmail}</p>
                     </div>
                   )}
+
+                  {/* Delete Button (Admin only when editing) */}
+                  {isEditing && isAdmin && (
+                    <div className="pt-4 mt-4 border-t border-gray-200">
+                      <Button
+                        variant="danger"
+                        onClick={handleDelete}
+                        disabled={isDeleting || deleteMutation.isPending}
+                        className="w-full"
+                      >
+                        {isDeleting || deleteMutation.isPending ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Deleting...
+                          </>
+                        ) : (
+                          <>
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Delete Contravention
+                          </>
+                        )}
+                      </Button>
+                      <p className="text-xs text-gray-500 mt-2 text-center">
+                        This will permanently delete the contravention and reverse points.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             </Card>
@@ -479,86 +564,22 @@ export function ContraventionDetailPage() {
             {/* Employee Info */}
             <Card>
               <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-semibold text-gray-900">Employee</h3>
-                  {isAdmin && !isReassigning && (
-                    <button
-                      onClick={() => {
-                        setIsReassigning(true);
-                        setSelectedEmployeeId(contravention.employee.id);
-                      }}
-                      className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
-                    >
-                      <UserCog className="w-3 h-3" />
-                      Reassign
-                    </button>
+                <h3 className="text-sm font-semibold text-gray-900 mb-4">Employee</h3>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <User className="w-4 h-4 text-gray-400" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{contravention.employee.name}</p>
+                      <p className="text-xs text-gray-500">{contravention.employee.email}</p>
+                    </div>
+                  </div>
+                  {contravention.employee.department && (
+                    <div className="flex items-center gap-3">
+                      <Building className="w-4 h-4 text-gray-400" />
+                      <p className="text-sm text-gray-600">{contravention.employee.department.name}</p>
+                    </div>
                   )}
                 </div>
-
-                {isReassigning ? (
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">
-                        Select New Employee
-                      </label>
-                      <select
-                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        value={selectedEmployeeId}
-                        onChange={(e) => setSelectedEmployeeId(e.target.value)}
-                      >
-                        {employeesData?.map((emp: EmployeeListItem) => (
-                          <option key={emp.id} value={emp.id}>
-                            {emp.name} ({emp.department?.name || 'No Department'})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => {
-                          setIsReassigning(false);
-                          setSelectedEmployeeId('');
-                        }}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={() => {
-                          if (selectedEmployeeId && selectedEmployeeId !== contravention.employee.id) {
-                            if (confirm('Are you sure you want to reassign this contravention? Points will be transferred to the new employee.')) {
-                              reassignMutation.mutate(selectedEmployeeId);
-                            }
-                          } else {
-                            setIsReassigning(false);
-                          }
-                        }}
-                        isLoading={reassignMutation.isPending}
-                        disabled={!selectedEmployeeId || selectedEmployeeId === contravention.employee.id}
-                      >
-                        Confirm
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3">
-                      <User className="w-4 h-4 text-gray-400" />
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">{contravention.employee.name}</p>
-                        <p className="text-xs text-gray-500">{contravention.employee.email}</p>
-                      </div>
-                    </div>
-                    {contravention.employee.department && (
-                      <div className="flex items-center gap-3">
-                        <Building className="w-4 h-4 text-gray-400" />
-                        <p className="text-sm text-gray-600">{contravention.employee.department.name}</p>
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
             </Card>
 
