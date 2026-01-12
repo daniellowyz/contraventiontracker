@@ -619,7 +619,7 @@ export function ContraventionDetailPage() {
             </Card>
 
             {/* Quick Actions */}
-            {!isEditing && contravention.status !== 'COMPLETED' && (
+            {!isEditing && (contravention.status !== 'COMPLETED' || isAdmin) && (
               <Card>
                 <div className="p-6">
                   <h3 className="text-sm font-semibold text-gray-900 mb-4">Actions</h3>
@@ -631,7 +631,8 @@ export function ContraventionDetailPage() {
                   )}
 
                   <div className="space-y-2">
-                    {contravention.status === 'PENDING_UPLOAD' && (
+                    {/* Regular users can upload when PENDING_UPLOAD, admins can upload anytime */}
+                    {(contravention.status === 'PENDING_UPLOAD' || isAdmin) && (
                       <>
                         <input
                           ref={fileInputRef}
@@ -654,7 +655,7 @@ export function ContraventionDetailPage() {
                           ) : (
                             <>
                               <Upload className="w-4 h-4 mr-2" />
-                              Upload Approval Document
+                              {contravention.approvalPdfUrl ? 'Replace Approval Document' : 'Upload Approval Document'}
                             </>
                           )}
                         </Button>

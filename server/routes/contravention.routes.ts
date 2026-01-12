@@ -85,16 +85,19 @@ router.delete(
   }
 );
 
-// POST /api/contraventions/:id/upload-approval - Upload approval PDF (transitions PENDING_UPLOAD -> PENDING_REVIEW)
+// POST /api/contraventions/:id/upload-approval - Upload approval PDF
+// Admins can upload/replace approval documents regardless of status
 router.post(
   '/:id/upload-approval',
   authenticate,
   validateBody(uploadApprovalSchema),
   async (req: AuthenticatedRequest, res: Response, next) => {
     try {
+      const isAdmin = req.user!.role === 'ADMIN';
       const contravention = await contraventionService.uploadApproval(
         req.params.id,
-        req.body.approvalPdfUrl
+        req.body.approvalPdfUrl,
+        isAdmin
       );
       res.json({ success: true, data: contravention });
     } catch (error) {
