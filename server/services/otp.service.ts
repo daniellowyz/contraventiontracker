@@ -7,7 +7,7 @@ import { AppError } from '../middleware/errorHandler';
 const OTP_LENGTH = 6;
 const OTP_EXPIRY_MINUTES = 15;
 const MAX_ATTEMPTS = 5;
-const ALLOWED_DOMAINS = ['@open.gov.sg', '@tech.gov.sg', '@ogp.gov.sg'];
+const ALLOWED_DOMAINS = ['@open.gov.sg', '@tech.gov.sg', '@ogp.gov.sg', '@hack2026.gov.sg'];
 
 export class OtpService {
   /**
