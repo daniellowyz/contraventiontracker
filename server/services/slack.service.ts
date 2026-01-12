@@ -64,27 +64,38 @@ export class SlackService {
       throw new Error('Slack token not configured. Set SLACK_TOKEN environment variable.');
     }
 
+    console.log('[SlackService] Starting to fetch users from Slack...');
+    console.log('[SlackService] Token configured:', this.token ? `${this.token.substring(0, 10)}...` : 'NOT SET');
+
     const allUsers: NormalizedSlackUser[] = [];
     let cursor: string | undefined;
+    let pageCount = 0;
 
     do {
+      pageCount++;
+      console.log(`[SlackService] Fetching page ${pageCount}...`);
+
       const response = await this.fetchUsersPage(cursor);
 
       if (!response.ok) {
+        console.error('[SlackService] Slack API error:', response.error);
         throw new Error(`Slack API error: ${response.error}`);
       }
 
-      if (response.members) {
-        const normalizedUsers = response.members
-          .filter(user => this.isValidUser(user))
-          .map(user => this.normalizeUser(user));
+      console.log(`[SlackService] Page ${pageCount}: Got ${response.members?.length || 0} members`);
 
+      if (response.members) {
+        const validUsers = response.members.filter(user => this.isValidUser(user));
+        console.log(`[SlackService] Page ${pageCount}: ${validUsers.length} users passed domain filter`);
+
+        const normalizedUsers = validUsers.map(user => this.normalizeUser(user));
         allUsers.push(...normalizedUsers);
       }
 
       cursor = response.response_metadata?.next_cursor;
     } while (cursor);
 
+    console.log(`[SlackService] Fetch complete. Total users: ${allUsers.length}`);
     return allUsers;
   }
 

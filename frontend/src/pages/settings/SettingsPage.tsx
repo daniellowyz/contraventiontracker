@@ -175,8 +175,16 @@ export function SettingsPage() {
       setSlackSyncResult(data.data as SlackSyncResult);
       refetchUsers();
     },
-    onError: (error: Error & { response?: { data?: { error?: string } } }) => {
-      const message = error.response?.data?.error || error.message || 'Failed to sync from Slack';
+    onError: (error: Error & { response?: { data?: { error?: string | { code?: string; message?: string } } } }) => {
+      let message = 'Failed to sync from Slack';
+      const errorData = error.response?.data?.error;
+      if (typeof errorData === 'string') {
+        message = errorData;
+      } else if (errorData && typeof errorData === 'object') {
+        message = errorData.message || errorData.code || JSON.stringify(errorData);
+      } else if (error.message) {
+        message = error.message;
+      }
       setSlackSyncResult({
         created: 0,
         updated: 0,
