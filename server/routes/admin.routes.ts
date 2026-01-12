@@ -186,15 +186,27 @@ router.post('/slack/sync', authenticate, requireAdmin, async (req: Authenticated
     console.log('[SlackSync] Starting sync...');
     const startTime = Date.now();
 
+    // Step 1: Fetch from Slack (this is fast, usually 1-2 seconds)
     const slackUsers = await slackService.fetchAllUsers();
     console.log(`[SlackSync] Fetched ${slackUsers.length} users from Slack in ${Date.now() - startTime}ms`);
 
-    // Get existing users in one query
+    // Step 2: Test DB connection first with a simple query
+    console.log('[SlackSync] Testing database connection...');
+    const dbStartTime = Date.now();
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      console.log(`[SlackSync] DB connection OK in ${Date.now() - dbStartTime}ms`);
+    } catch (dbError) {
+      console.error('[SlackSync] DB connection failed:', dbError);
+      throw new AppError(`Database connection failed: ${(dbError as Error).message}`, 503);
+    }
+
+    // Step 3: Get existing users in one query
     const existingUsers = await prisma.user.findMany({
       select: { email: true, id: true },
     });
     const existingEmailMap = new Map(existingUsers.map(u => [u.email.toLowerCase(), u.id]));
-    console.log(`[SlackSync] Found ${existingUsers.length} existing users in DB`);
+    console.log(`[SlackSync] Found ${existingUsers.length} existing users in DB (${Date.now() - startTime}ms total)`);
 
     const results = {
       created: 0,
@@ -229,7 +241,7 @@ router.post('/slack/sync', authenticate, requireAdmin, async (req: Authenticated
           skipDuplicates: true,
         });
         results.created = createResult.count;
-        console.log(`[SlackSync] Created ${createResult.count} new users`);
+        console.log(`[SlackSync] Created ${createResult.count} new users (${Date.now() - startTime}ms total)`);
 
         // Create points records for new users (need to fetch their IDs first)
         const newlyCreatedUsers = await prisma.user.findMany({
@@ -247,39 +259,49 @@ router.post('/slack/sync', authenticate, requireAdmin, async (req: Authenticated
           });
         }
       } catch (err) {
-        results.errors.push(`Batch create failed: ${(err as Error).message}`);
+        const errorMsg = (err as Error).message;
+        console.error('[SlackSync] Batch create error:', errorMsg);
+        results.errors.push(`Batch create failed: ${errorMsg}`);
       }
     }
 
     // Skip individual updates to save time - just count them as "already synced"
-    // Users can be updated individually through the UI if needed
     results.updated = existingSlackUsers.length;
     console.log(`[SlackSync] ${existingSlackUsers.length} existing users already in sync`);
 
-    // Skip deactivation for now - it's causing timeout and not critical
-    // Users not in Slack can be manually deactivated
+    // Skip audit log if running low on time (over 8 seconds)
+    const elapsed = Date.now() - startTime;
+    if (elapsed < 8000) {
+      await prisma.auditLog.create({
+        data: {
+          entityType: 'USER',
+          entityId: 'SLACK_SYNC',
+          action: 'SYNC',
+          userId: req.user!.userId,
+          changes: results,
+        },
+      });
+    } else {
+      console.log('[SlackSync] Skipping audit log to save time');
+    }
 
     console.log(`[SlackSync] Sync completed in ${Date.now() - startTime}ms`);
-
-    // Log to audit trail
-    await prisma.auditLog.create({
-      data: {
-        entityType: 'USER',
-        entityId: 'SLACK_SYNC',
-        action: 'SYNC',
-        userId: req.user!.userId,
-        changes: results,
-      },
-    });
 
     res.json({
       success: true,
       data: results,
-      message: `Sync complete: ${results.created} created, ${results.updated} updated`,
+      message: `Sync complete: ${results.created} created, ${results.updated} already synced`,
+      timing: `${Date.now() - startTime}ms`,
     });
   } catch (error) {
-    console.error('[SlackSync] Error:', error);
-    next(error);
+    const errorMessage = (error as Error).message || 'Unknown error';
+    console.error('[SlackSync] Error:', errorMessage);
+    // Return detailed error for debugging
+    if (error instanceof AppError) {
+      next(error);
+    } else {
+      next(new AppError(`Slack sync failed: ${errorMessage}`, 500));
+    }
   }
 });
 

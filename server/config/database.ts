@@ -12,15 +12,19 @@ function createPrismaClient(): PrismaClient {
     throw new Error('DATABASE_URL environment variable is not set');
   }
 
+  // Check if using Supabase pooler (recommended for serverless)
+  const isPoolerUrl = connectionString.includes('pooler.supabase.com');
+  console.log(`[Database] Connecting to ${isPoolerUrl ? 'Supabase pooler' : 'direct connection'}`);
+
   const pool = new Pool({
     connectionString,
     ssl: {
       rejectUnauthorized: false,
     },
     // Optimize for serverless - minimal connections, fast timeout
-    max: 3, // Max connections in pool
-    idleTimeoutMillis: 10000, // Close idle connections after 10s
-    connectionTimeoutMillis: 5000, // Fail fast if can't connect in 5s
+    max: isPoolerUrl ? 1 : 3, // Single connection when using external pooler
+    idleTimeoutMillis: 5000, // Close idle connections quickly
+    connectionTimeoutMillis: 4000, // Fail fast - need to leave time for retry
   });
 
   const adapter = new PrismaPg(pool);
