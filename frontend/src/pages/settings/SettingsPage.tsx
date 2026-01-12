@@ -71,6 +71,23 @@ interface SlackSyncResult {
   errors: string[];
 }
 
+interface DuplicateUser {
+  ogpUser: {
+    id: string;
+    email: string;
+    name: string;
+    employeeId: string;
+    contraventionCount: number;
+  };
+  openUser: {
+    id: string;
+    email: string;
+    name: string;
+    employeeId: string;
+    contraventionCount: number;
+  };
+}
+
 export function SettingsPage() {
   const { user, isAdmin } = useAuthStore();
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
@@ -192,6 +209,32 @@ export function SettingsPage() {
         skipped: 0,
         errors: [message],
       });
+    },
+  });
+
+  // Admin: Fetch duplicate users (ogp vs open)
+  const { data: duplicatesData, refetch: refetchDuplicates } = useQuery({
+    queryKey: ['user-duplicates'],
+    queryFn: async () => {
+      const response = await client.get('/admin/users/duplicates');
+      return response.data.data as DuplicateUser[];
+    },
+    enabled: isAdmin && activeTab === 'users',
+  });
+
+  // Admin: Merge users mutation
+  const mergeUsersMutation = useMutation({
+    mutationFn: async ({ sourceId, targetId }: { sourceId: string; targetId: string }) => {
+      const response = await client.post('/admin/users/merge', { sourceId, targetId });
+      return response.data;
+    },
+    onSuccess: (data) => {
+      alert(data.message);
+      refetchUsers();
+      refetchDuplicates();
+    },
+    onError: (error: Error & { response?: { data?: { error?: string } } }) => {
+      alert(error.response?.data?.error || error.message || 'Failed to merge users');
     },
   });
 
@@ -688,6 +731,63 @@ export function SettingsPage() {
                         >
                           &times;
                         </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Duplicate Users Section */}
+                  {duplicatesData && duplicatesData.length > 0 && (
+                    <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <div className="flex items-center gap-2 mb-3">
+                        <AlertTriangle className="w-5 h-5 text-yellow-600" />
+                        <h4 className="font-medium text-yellow-800">
+                          Duplicate Users Found ({duplicatesData.length})
+                        </h4>
+                      </div>
+                      <p className="text-sm text-yellow-700 mb-4">
+                        The following users have both @ogp.gov.sg and @open.gov.sg accounts.
+                        Merging will transfer all contraventions from the ogp account to the open account.
+                      </p>
+                      <div className="space-y-3">
+                        {duplicatesData.map((dup, idx) => (
+                          <div key={idx} className="bg-white p-3 rounded border border-yellow-200 flex items-center justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-4 text-sm">
+                                <div className="flex-1">
+                                  <p className="font-medium text-gray-900">{dup.ogpUser.name}</p>
+                                  <p className="text-gray-600">{dup.ogpUser.email}</p>
+                                  <p className="text-xs text-gray-500">
+                                    {dup.ogpUser.contraventionCount} contravention(s)
+                                  </p>
+                                </div>
+                                <div className="text-gray-400">→</div>
+                                <div className="flex-1">
+                                  <p className="font-medium text-gray-900">{dup.openUser.name}</p>
+                                  <p className="text-green-600">{dup.openUser.email}</p>
+                                  <p className="text-xs text-gray-500">
+                                    {dup.openUser.contraventionCount} contravention(s)
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={() => {
+                                if (confirm(`Merge ${dup.ogpUser.email} into ${dup.openUser.email}?\n\nThis will transfer all contraventions and delete the ogp account.`)) {
+                                  mergeUsersMutation.mutate({
+                                    sourceId: dup.ogpUser.id,
+                                    targetId: dup.openUser.id,
+                                  });
+                                }
+                              }}
+                              disabled={mergeUsersMutation.isPending}
+                              className="ml-4"
+                            >
+                              {mergeUsersMutation.isPending ? 'Merging...' : 'Merge'}
+                            </Button>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   )}

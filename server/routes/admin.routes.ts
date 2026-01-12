@@ -137,6 +137,208 @@ router.patch('/users/:id/status', authenticate, requireAdmin, async (req: Authen
   }
 });
 
+// POST /api/admin/users/merge - Merge two user accounts (admin only)
+// Transfers all data from sourceId to targetId, then deletes source
+router.post('/users/merge', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { sourceId, targetId } = req.body as { sourceId: string; targetId: string };
+
+    if (!sourceId || !targetId) {
+      throw new AppError('Both sourceId and targetId are required', 400);
+    }
+
+    if (sourceId === targetId) {
+      throw new AppError('Cannot merge a user with themselves', 400);
+    }
+
+    // Get both users
+    const [sourceUser, targetUser] = await Promise.all([
+      prisma.user.findUnique({ where: { id: sourceId } }),
+      prisma.user.findUnique({ where: { id: targetId } }),
+    ]);
+
+    if (!sourceUser) {
+      throw new AppError('Source user not found', 404);
+    }
+    if (!targetUser) {
+      throw new AppError('Target user not found', 404);
+    }
+
+    console.log(`[UserMerge] Merging ${sourceUser.email} -> ${targetUser.email}`);
+
+    // Transfer all relations from source to target
+    const transfers = await prisma.$transaction([
+      // Transfer contraventions (employee)
+      prisma.contravention.updateMany({
+        where: { employeeId: sourceId },
+        data: { employeeId: targetId },
+      }),
+      // Transfer contraventions (logged by)
+      prisma.contravention.updateMany({
+        where: { loggedById: sourceId },
+        data: { loggedById: targetId },
+      }),
+      // Transfer contraventions (acknowledged by)
+      prisma.contravention.updateMany({
+        where: { acknowledgedById: sourceId },
+        data: { acknowledgedById: targetId },
+      }),
+      // Transfer escalations
+      prisma.escalation.updateMany({
+        where: { employeeId: sourceId },
+        data: { employeeId: targetId },
+      }),
+      // Transfer disputes (submitted by)
+      prisma.dispute.updateMany({
+        where: { submittedById: sourceId },
+        data: { submittedById: targetId },
+      }),
+      // Transfer disputes (decided by)
+      prisma.dispute.updateMany({
+        where: { decidedById: sourceId },
+        data: { decidedById: targetId },
+      }),
+      // Transfer training records
+      prisma.trainingRecord.updateMany({
+        where: { employeeId: sourceId },
+        data: { employeeId: targetId },
+      }),
+      // Transfer audit logs
+      prisma.auditLog.updateMany({
+        where: { userId: sourceId },
+        data: { userId: targetId },
+      }),
+      // Transfer notifications
+      prisma.notification.updateMany({
+        where: { userId: sourceId },
+        data: { userId: targetId },
+      }),
+      // Delete OTP records for source (not needed)
+      prisma.otpRecord.deleteMany({
+        where: { userId: sourceId },
+      }),
+    ]);
+
+    // Handle EmployeePoints - merge points if both exist, or transfer
+    const [sourcePoints, targetPoints] = await Promise.all([
+      prisma.employeePoints.findUnique({ where: { employeeId: sourceId } }),
+      prisma.employeePoints.findUnique({ where: { employeeId: targetId } }),
+    ]);
+
+    if (sourcePoints) {
+      if (targetPoints) {
+        // Both have points - add source points to target and delete source
+        await prisma.employeePoints.update({
+          where: { employeeId: targetId },
+          data: {
+            totalPoints: targetPoints.totalPoints + sourcePoints.totalPoints,
+            currentLevel: sourcePoints.currentLevel > targetPoints.currentLevel
+              ? sourcePoints.currentLevel
+              : targetPoints.currentLevel,
+          },
+        });
+        await prisma.employeePoints.delete({ where: { employeeId: sourceId } });
+      } else {
+        // Only source has points - transfer to target
+        await prisma.employeePoints.update({
+          where: { employeeId: sourceId },
+          data: { employeeId: targetId },
+        });
+      }
+    }
+
+    // Delete the source user
+    await prisma.user.delete({ where: { id: sourceId } });
+
+    // Log the merge
+    await prisma.auditLog.create({
+      data: {
+        entityType: 'USER',
+        entityId: targetId,
+        action: 'MERGE',
+        userId: req.user!.userId,
+        newValues: {
+          mergedFrom: sourceUser.email,
+          mergedTo: targetUser.email,
+          sourceId,
+          targetId,
+        },
+      },
+    });
+
+    console.log(`[UserMerge] Successfully merged ${sourceUser.email} into ${targetUser.email}`);
+
+    res.json({
+      success: true,
+      message: `Successfully merged ${sourceUser.email} into ${targetUser.email}`,
+      data: {
+        deletedUser: sourceUser.email,
+        targetUser: targetUser.email,
+        transferredRecords: transfers.reduce((sum: number, t: { count: number }) => sum + t.count, 0),
+      },
+    });
+  } catch (error) {
+    console.error('[UserMerge] Error:', error);
+    next(error);
+  }
+});
+
+// GET /api/admin/users/duplicates - Find potential duplicate users (ogp vs open)
+router.get('/users/duplicates', authenticate, requireAdmin, async (_req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    // Get all users with ogp.gov.sg emails
+    const ogpUsers = await prisma.user.findMany({
+      where: { email: { endsWith: '@ogp.gov.sg' } },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        employeeId: true,
+        _count: { select: { contraventions: true } },
+      },
+    });
+
+    // For each ogp user, check if there's a matching open.gov.sg user
+    const duplicates = [];
+    for (const ogpUser of ogpUsers) {
+      const username = ogpUser.email.replace('@ogp.gov.sg', '');
+      const openEmail = `${username}@open.gov.sg`;
+
+      const openUser = await prisma.user.findUnique({
+        where: { email: openEmail },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          employeeId: true,
+          _count: { select: { contraventions: true } },
+        },
+      });
+
+      if (openUser) {
+        duplicates.push({
+          ogpUser: {
+            ...ogpUser,
+            contraventionCount: ogpUser._count.contraventions,
+          },
+          openUser: {
+            ...openUser,
+            contraventionCount: openUser._count.contraventions,
+          },
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      data: duplicates,
+      count: duplicates.length,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // ==================== SLACK INTEGRATION ====================
 
 // GET /api/admin/slack/status - Check Slack integration status (admin only)
