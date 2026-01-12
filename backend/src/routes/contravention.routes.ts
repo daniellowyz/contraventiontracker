@@ -85,6 +85,7 @@ router.delete(
 );
 
 // POST /api/contraventions/:id/upload-approval - Upload approval PDF
+// Admins can upload/replace approval documents regardless of status
 router.post(
   '/:id/upload-approval',
   authenticate,
@@ -94,10 +95,12 @@ router.post(
       if (!approvalPdfUrl) {
         return res.status(400).json({ success: false, error: 'approvalPdfUrl is required' });
       }
+      const isAdmin = req.user!.role === 'ADMIN';
       const contravention = await contraventionService.uploadApproval(
         req.params.id,
         approvalPdfUrl,
-        req.user!.userId
+        req.user!.userId,
+        isAdmin
       );
       res.json({ success: true, data: contravention });
     } catch (error) {

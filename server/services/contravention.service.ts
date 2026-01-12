@@ -341,8 +341,9 @@ export class ContraventionService {
 
   /**
    * Upload approval PDF - transitions from PENDING_UPLOAD to PENDING_REVIEW
+   * Admins can upload/replace approval documents regardless of status
    */
-  async uploadApproval(id: string, approvalPdfUrl: string) {
+  async uploadApproval(id: string, approvalPdfUrl: string, isAdmin: boolean = false) {
     const contravention = await prisma.contravention.findUnique({
       where: { id },
     });
@@ -351,14 +352,20 @@ export class ContraventionService {
       throw new AppError('Contravention not found', 404);
     }
 
-    if (contravention.status !== 'PENDING_UPLOAD') {
+    // Non-admins can only upload when status is PENDING_UPLOAD
+    if (!isAdmin && contravention.status !== 'PENDING_UPLOAD') {
       throw new AppError('Contravention is not pending approval upload', 400);
     }
+
+    // Determine new status based on current status
+    // If already COMPLETED, keep it COMPLETED (admin just replacing doc)
+    // Otherwise, move to PENDING_REVIEW
+    const newStatus = contravention.status === 'COMPLETED' ? 'COMPLETED' : 'PENDING_REVIEW';
 
     const updated = await prisma.contravention.update({
       where: { id },
       data: {
-        status: 'PENDING_REVIEW',
+        status: newStatus,
         approvalPdfUrl,
       },
       include: {
