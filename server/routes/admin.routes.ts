@@ -3,8 +3,318 @@ import prisma from '../config/database';
 import { authenticate, requireAdmin } from '../middleware/auth';
 import { AuthenticatedRequest } from '../types';
 import { AppError } from '../middleware/errorHandler';
+import slackService from '../services/slack.service';
 
 const router = Router();
+
+// ==================== USER MANAGEMENT ====================
+
+// GET /api/admin/users - List all users (admin only)
+router.get('/users', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const { search, role } = req.query;
+
+    const where: Record<string, unknown> = {};
+
+    if (search) {
+      where.OR = [
+        { name: { contains: search as string, mode: 'insensitive' } },
+        { email: { contains: search as string, mode: 'insensitive' } },
+        { employeeId: { contains: search as string, mode: 'insensitive' } },
+      ];
+    }
+
+    if (role) {
+      where.role = role;
+    }
+
+    const users = await prisma.user.findMany({
+      where,
+      select: {
+        id: true,
+        employeeId: true,
+        email: true,
+        name: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+        department: { select: { id: true, name: true } },
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    res.json({ success: true, data: users });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// PATCH /api/admin/users/:id/role - Update user role (admin only)
+router.patch('/users/:id/role', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const { role } = req.body;
+
+    if (!role || !['ADMIN', 'USER'].includes(role)) {
+      throw new AppError('Invalid role. Must be ADMIN or USER.', 400);
+    }
+
+    // Prevent self-demotion
+    if (req.params.id === req.user!.userId && role === 'USER') {
+      throw new AppError('Cannot demote yourself from admin.', 400);
+    }
+
+    const user = await prisma.user.update({
+      where: { id: req.params.id },
+      data: { role },
+      select: {
+        id: true,
+        employeeId: true,
+        email: true,
+        name: true,
+        role: true,
+        isActive: true,
+      },
+    });
+
+    // Log to audit trail
+    await prisma.auditLog.create({
+      data: {
+        entityType: 'USER',
+        entityId: user.id,
+        action: 'ROLE_CHANGE',
+        userId: req.user!.userId,
+        changes: { role },
+      },
+    });
+
+    res.json({ success: true, data: user });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// PATCH /api/admin/users/:id/status - Activate/deactivate user (admin only)
+router.patch('/users/:id/status', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const { isActive } = req.body;
+
+    if (typeof isActive !== 'boolean') {
+      throw new AppError('isActive must be a boolean.', 400);
+    }
+
+    // Prevent self-deactivation
+    if (req.params.id === req.user!.userId && !isActive) {
+      throw new AppError('Cannot deactivate yourself.', 400);
+    }
+
+    const user = await prisma.user.update({
+      where: { id: req.params.id },
+      data: { isActive },
+      select: {
+        id: true,
+        employeeId: true,
+        email: true,
+        name: true,
+        role: true,
+        isActive: true,
+      },
+    });
+
+    // Log to audit trail
+    await prisma.auditLog.create({
+      data: {
+        entityType: 'USER',
+        entityId: user.id,
+        action: isActive ? 'ACTIVATE' : 'DEACTIVATE',
+        userId: req.user!.userId,
+        changes: { isActive },
+      },
+    });
+
+    res.json({ success: true, data: user });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ==================== SLACK INTEGRATION ====================
+
+// GET /api/admin/slack/status - Check Slack integration status (admin only)
+router.get('/slack/status', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    res.json({
+      success: true,
+      data: {
+        configured: slackService.isConfigured(),
+        message: slackService.isConfigured()
+          ? 'Slack integration is configured'
+          : 'SLACK_TOKEN environment variable not set',
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/admin/slack/users - Fetch all users from Slack (admin only)
+router.get('/slack/users', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    if (!slackService.isConfigured()) {
+      throw new AppError('Slack integration not configured. Set SLACK_TOKEN environment variable.', 400);
+    }
+
+    const slackUsers = await slackService.fetchAllUsers();
+
+    res.json({
+      success: true,
+      data: slackUsers,
+      count: slackUsers.length,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/admin/slack/sync - Sync users from Slack to database (admin only)
+router.post('/slack/sync', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    if (!slackService.isConfigured()) {
+      throw new AppError('Slack integration not configured. Set SLACK_TOKEN environment variable.', 400);
+    }
+
+    const slackUsers = await slackService.fetchAllUsers();
+
+    // Get existing users
+    const existingUsers = await prisma.user.findMany({
+      select: { email: true, id: true },
+    });
+    const existingEmailMap = new Map(existingUsers.map(u => [u.email.toLowerCase(), u.id]));
+
+    const results = {
+      created: 0,
+      updated: 0,
+      deactivated: 0,
+      skipped: 0,
+      errors: [] as string[],
+    };
+
+    // Process each Slack user
+    for (const slackUser of slackUsers) {
+      try {
+        const existingId = existingEmailMap.get(slackUser.email);
+
+        if (existingId) {
+          // Update existing user if needed
+          await prisma.user.update({
+            where: { id: existingId },
+            data: {
+              name: slackUser.name,
+              isActive: slackUser.isActive,
+            },
+          });
+          results.updated++;
+        } else {
+          // Create new user
+          const count = await prisma.user.count();
+          const employeeId = `EMP${String(count + 1).padStart(4, '0')}`;
+
+          const newUser = await prisma.user.create({
+            data: {
+              email: slackUser.email,
+              name: slackUser.name,
+              employeeId,
+              role: 'USER',
+              isActive: slackUser.isActive,
+            },
+          });
+
+          // Create initial points record
+          await prisma.employeePoints.create({
+            data: {
+              employeeId: newUser.id,
+              totalPoints: 0,
+            },
+          });
+
+          results.created++;
+        }
+      } catch (err) {
+        results.errors.push(`Failed to process ${slackUser.email}: ${(err as Error).message}`);
+        results.skipped++;
+      }
+    }
+
+    // Optionally deactivate users who are no longer in Slack
+    const slackEmailSet = new Set(slackUsers.map(u => u.email));
+    for (const [email, id] of existingEmailMap) {
+      if (!slackEmailSet.has(email)) {
+        // User exists in DB but not in Slack - mark as inactive
+        await prisma.user.update({
+          where: { id },
+          data: { isActive: false },
+        });
+        results.deactivated++;
+      }
+    }
+
+    // Log to audit trail
+    await prisma.auditLog.create({
+      data: {
+        entityType: 'USER',
+        entityId: 'SLACK_SYNC',
+        action: 'SYNC',
+        userId: req.user!.userId,
+        changes: results,
+      },
+    });
+
+    res.json({
+      success: true,
+      data: results,
+      message: `Sync complete: ${results.created} created, ${results.updated} updated, ${results.deactivated} deactivated`,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/admin/slack/compare - Compare Slack users with database (admin only)
+router.get('/slack/compare', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    if (!slackService.isConfigured()) {
+      throw new AppError('Slack integration not configured. Set SLACK_TOKEN environment variable.', 400);
+    }
+
+    const slackUsers = await slackService.fetchAllUsers();
+
+    // Get existing users
+    const existingUsers = await prisma.user.findMany({
+      select: { email: true, name: true, isActive: true },
+    });
+    const existingEmailSet = new Set(existingUsers.map(u => u.email.toLowerCase()));
+    const slackEmailSet = new Set(slackUsers.map(u => u.email));
+
+    // Users in Slack but not in DB
+    const newUsers = slackUsers.filter(u => !existingEmailSet.has(u.email));
+
+    // Users in DB but not in Slack (potentially left)
+    const missingFromSlack = existingUsers.filter(u => !slackEmailSet.has(u.email.toLowerCase()));
+
+    res.json({
+      success: true,
+      data: {
+        slackUserCount: slackUsers.length,
+        dbUserCount: existingUsers.length,
+        newUsers: newUsers.map(u => ({ email: u.email, name: u.name })),
+        missingFromSlack: missingFromSlack.map(u => ({ email: u.email, name: u.name, isActive: u.isActive })),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ==================== CONTRAVENTION TYPES ====================
 
 // GET /api/admin/types - List contravention types
 router.get('/types', authenticate, async (req: AuthenticatedRequest, res: Response, next) => {
