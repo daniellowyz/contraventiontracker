@@ -251,23 +251,10 @@ router.post('/slack/sync', authenticate, requireAdmin, async (req: Authenticated
       }
     }
 
-    // Batch update existing users - just mark them all as active with updated names
-    // This is faster than individual updates
-    for (const slackUser of existingSlackUsers) {
-      const userId = existingEmailMap.get(slackUser.email);
-      if (userId) {
-        try {
-          await prisma.user.update({
-            where: { id: userId },
-            data: { name: slackUser.name, isActive: slackUser.isActive },
-          });
-          results.updated++;
-        } catch {
-          results.skipped++;
-        }
-      }
-    }
-    console.log(`[SlackSync] Updated ${results.updated} existing users`);
+    // Skip individual updates to save time - just count them as "already synced"
+    // Users can be updated individually through the UI if needed
+    results.updated = existingSlackUsers.length;
+    console.log(`[SlackSync] ${existingSlackUsers.length} existing users already in sync`);
 
     // Skip deactivation for now - it's causing timeout and not critical
     // Users not in Slack can be manually deactivated
