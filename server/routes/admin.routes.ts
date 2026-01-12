@@ -339,6 +339,175 @@ router.get('/users/duplicates', authenticate, requireAdmin, async (_req: Authent
   }
 });
 
+// POST /api/admin/users/remap-contraventions - Remap contraventions from one user to another
+router.post('/users/remap-contraventions', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { sourceUserId, targetUserId } = req.body as { sourceUserId: string; targetUserId: string };
+
+    if (!sourceUserId || !targetUserId) {
+      throw new AppError('Both sourceUserId and targetUserId are required', 400);
+    }
+
+    if (sourceUserId === targetUserId) {
+      throw new AppError('Cannot remap to the same user', 400);
+    }
+
+    // Get both users
+    const [sourceUser, targetUser] = await Promise.all([
+      prisma.user.findUnique({ where: { id: sourceUserId } }),
+      prisma.user.findUnique({ where: { id: targetUserId } }),
+    ]);
+
+    if (!sourceUser) {
+      throw new AppError('Source user not found', 404);
+    }
+    if (!targetUser) {
+      throw new AppError('Target user not found', 404);
+    }
+
+    console.log(`[RemapContraventions] Remapping contraventions from ${sourceUser.email} -> ${targetUser.email}`);
+
+    // Remap contraventions
+    const result = await prisma.contravention.updateMany({
+      where: { employeeId: sourceUserId },
+      data: { employeeId: targetUserId },
+    });
+
+    // Log the remap
+    await prisma.auditLog.create({
+      data: {
+        entityType: 'USER',
+        entityId: targetUserId,
+        action: 'REMAP_CONTRAVENTIONS',
+        userId: req.user!.userId,
+        newValues: {
+          fromUser: sourceUser.email,
+          toUser: targetUser.email,
+          contraventionsRemapped: result.count,
+        },
+      },
+    });
+
+    console.log(`[RemapContraventions] Successfully remapped ${result.count} contraventions`);
+
+    res.json({
+      success: true,
+      message: `Successfully remapped ${result.count} contravention(s) from ${sourceUser.email} to ${targetUser.email}`,
+      data: {
+        fromUser: sourceUser.email,
+        toUser: targetUser.email,
+        contraventionsRemapped: result.count,
+      },
+    });
+  } catch (error) {
+    console.error('[RemapContraventions] Error:', error);
+    next(error);
+  }
+});
+
+// DELETE /api/admin/users/:id - Delete a user (admin only)
+// Only allows deletion of ogp.gov.sg users with no contraventions
+router.delete('/users/:id', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+
+    const user = await prisma.user.findUnique({
+      where: { id },
+      include: {
+        _count: {
+          select: {
+            contraventions: true,
+            escalations: true,
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new AppError('User not found', 404);
+    }
+
+    // Safety check: only allow deletion of ogp.gov.sg users
+    if (!user.email.endsWith('@ogp.gov.sg')) {
+      throw new AppError('Can only delete @ogp.gov.sg placeholder accounts', 400);
+    }
+
+    // Safety check: don't delete users with contraventions
+    if (user._count.contraventions > 0) {
+      throw new AppError(`Cannot delete user with ${user._count.contraventions} contravention(s). Remap them first.`, 400);
+    }
+
+    console.log(`[DeleteUser] Deleting user ${user.email}`);
+
+    // Delete related records first
+    await prisma.$transaction([
+      prisma.otpRecord.deleteMany({ where: { userId: id } }),
+      prisma.notification.deleteMany({ where: { userId: id } }),
+      prisma.auditLog.deleteMany({ where: { userId: id } }),
+      prisma.employeePoints.deleteMany({ where: { employeeId: id } }),
+    ]);
+
+    // Delete the user
+    await prisma.user.delete({ where: { id } });
+
+    // Log the deletion
+    await prisma.auditLog.create({
+      data: {
+        entityType: 'USER',
+        entityId: id,
+        action: 'DELETE',
+        userId: req.user!.userId,
+        newValues: {
+          deletedUser: user.email,
+          deletedUserName: user.name,
+        },
+      },
+    });
+
+    console.log(`[DeleteUser] Successfully deleted user ${user.email}`);
+
+    res.json({
+      success: true,
+      message: `Successfully deleted user ${user.email}`,
+      data: { deletedUser: user.email },
+    });
+  } catch (error) {
+    console.error('[DeleteUser] Error:', error);
+    next(error);
+  }
+});
+
+// GET /api/admin/users/ogp - Get all ogp.gov.sg users with their contravention counts
+router.get('/users/ogp', authenticate, requireAdmin, async (_req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const ogpUsers = await prisma.user.findMany({
+      where: { email: { endsWith: '@ogp.gov.sg' } },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        employeeId: true,
+        _count: { select: { contraventions: true } },
+      },
+      orderBy: { email: 'asc' },
+    });
+
+    res.json({
+      success: true,
+      data: ogpUsers.map((u: typeof ogpUsers[number]) => ({
+        id: u.id,
+        email: u.email,
+        name: u.name,
+        employeeId: u.employeeId,
+        contraventionCount: u._count.contraventions,
+      })),
+      count: ogpUsers.length,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // ==================== SLACK INTEGRATION ====================
 
 // GET /api/admin/slack/status - Check Slack integration status (admin only)

@@ -232,11 +232,66 @@ export function SettingsPage() {
       alert(data.message);
       refetchUsers();
       refetchDuplicates();
+      refetchOgpUsers();
     },
     onError: (error: Error & { response?: { data?: { error?: string } } }) => {
       alert(error.response?.data?.error || error.message || 'Failed to merge users');
     },
   });
+
+  // Admin: Fetch OGP users (for manual remap/delete)
+  interface OgpUser {
+    id: string;
+    email: string;
+    name: string;
+    employeeId: string;
+    contraventionCount: number;
+  }
+  const { data: ogpUsersData, refetch: refetchOgpUsers } = useQuery({
+    queryKey: ['ogp-users'],
+    queryFn: async () => {
+      const response = await client.get('/admin/users/ogp');
+      return response.data.data as OgpUser[];
+    },
+    enabled: isAdmin && activeTab === 'users',
+  });
+
+  // Admin: Remap contraventions mutation
+  const remapContraventionsMutation = useMutation({
+    mutationFn: async ({ sourceUserId, targetUserId }: { sourceUserId: string; targetUserId: string }) => {
+      const response = await client.post('/admin/users/remap-contraventions', { sourceUserId, targetUserId });
+      return response.data;
+    },
+    onSuccess: (data) => {
+      alert(data.message);
+      refetchOgpUsers();
+      refetchUsers();
+    },
+    onError: (error: Error & { response?: { data?: { error?: string } } }) => {
+      alert(error.response?.data?.error || error.message || 'Failed to remap contraventions');
+    },
+  });
+
+  // Admin: Delete user mutation
+  const deleteUserMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const response = await client.delete(`/admin/users/${userId}`);
+      return response.data;
+    },
+    onSuccess: (data) => {
+      alert(data.message);
+      refetchOgpUsers();
+      refetchUsers();
+      refetchDuplicates();
+    },
+    onError: (error: Error & { response?: { data?: { error?: string } } }) => {
+      alert(error.response?.data?.error || error.message || 'Failed to delete user');
+    },
+  });
+
+  // State for remap modal
+  const [remapModalUser, setRemapModalUser] = useState<OgpUser | null>(null);
+  const [remapTargetEmail, setRemapTargetEmail] = useState('');
 
   const handleProfileSave = () => {
     // In a real app, this would call an API
@@ -788,6 +843,122 @@ export function SettingsPage() {
                             </Button>
                           </div>
                         ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* OGP Users Management Section - for unmatched ogp.gov.sg accounts */}
+                  {ogpUsersData && ogpUsersData.length > 0 && (
+                    <div className="mb-6 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                      <div className="flex items-center gap-2 mb-3">
+                        <AlertTriangle className="w-5 h-5 text-orange-600" />
+                        <h4 className="font-medium text-orange-800">
+                          OGP Placeholder Accounts ({ogpUsersData.length})
+                        </h4>
+                      </div>
+                      <p className="text-sm text-orange-700 mb-4">
+                        These @ogp.gov.sg accounts don't have matching @open.gov.sg accounts.
+                        You can manually remap their contraventions to another user, or delete them if they have no contraventions.
+                      </p>
+                      <div className="space-y-2 max-h-64 overflow-y-auto">
+                        {ogpUsersData.map((ogpUser) => (
+                          <div key={ogpUser.id} className="bg-white p-3 rounded border border-orange-200 flex items-center justify-between">
+                            <div className="flex-1">
+                              <p className="font-medium text-gray-900">{ogpUser.name}</p>
+                              <p className="text-sm text-gray-600">{ogpUser.email}</p>
+                              <p className="text-xs text-gray-500">
+                                {ogpUser.contraventionCount} contravention(s)
+                              </p>
+                            </div>
+                            <div className="flex gap-2">
+                              {ogpUser.contraventionCount > 0 ? (
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  onClick={() => {
+                                    setRemapModalUser(ogpUser);
+                                    setRemapTargetEmail('');
+                                  }}
+                                >
+                                  Remap
+                                </Button>
+                              ) : (
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  onClick={() => {
+                                    if (confirm(`Delete ${ogpUser.email}?\n\nThis account has no contraventions and will be permanently deleted.`)) {
+                                      deleteUserMutation.mutate(ogpUser.id);
+                                    }
+                                  }}
+                                  disabled={deleteUserMutation.isPending}
+                                  className="text-red-600 hover:text-red-700"
+                                >
+                                  {deleteUserMutation.isPending ? 'Deleting...' : 'Delete'}
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Remap Modal */}
+                  {remapModalUser && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                      <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+                        <h3 className="text-lg font-semibold mb-4">Remap Contraventions</h3>
+                        <p className="text-sm text-gray-600 mb-4">
+                          Transfer {remapModalUser.contraventionCount} contravention(s) from <strong>{remapModalUser.email}</strong> to another user.
+                        </p>
+                        <div className="mb-4">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Target User Email
+                          </label>
+                          <input
+                            type="email"
+                            value={remapTargetEmail}
+                            onChange={(e) => setRemapTargetEmail(e.target.value)}
+                            placeholder="user@open.gov.sg"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            Enter the email of the user to transfer contraventions to
+                          </p>
+                        </div>
+                        <div className="flex gap-3 justify-end">
+                          <Button
+                            variant="secondary"
+                            onClick={() => {
+                              setRemapModalUser(null);
+                              setRemapTargetEmail('');
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            variant="primary"
+                            onClick={() => {
+                              const targetUser = usersData?.find(u => u.email.toLowerCase() === remapTargetEmail.toLowerCase());
+                              if (!targetUser) {
+                                alert('User not found. Please enter a valid email address.');
+                                return;
+                              }
+                              if (confirm(`Remap ${remapModalUser.contraventionCount} contravention(s) from ${remapModalUser.email} to ${targetUser.email}?`)) {
+                                remapContraventionsMutation.mutate({
+                                  sourceUserId: remapModalUser.id,
+                                  targetUserId: targetUser.id,
+                                });
+                                setRemapModalUser(null);
+                                setRemapTargetEmail('');
+                              }
+                            }}
+                            disabled={!remapTargetEmail || remapContraventionsMutation.isPending}
+                          >
+                            {remapContraventionsMutation.isPending ? 'Remapping...' : 'Remap'}
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   )}
