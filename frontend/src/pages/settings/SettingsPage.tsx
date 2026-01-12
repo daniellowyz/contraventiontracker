@@ -27,6 +27,8 @@ import {
   Search,
   ShieldCheck,
   UserCog,
+  MessageSquare,
+  Loader2,
 } from 'lucide-react';
 
 type SettingsTab = 'profile' | 'notifications' | 'security' | 'users' | 'admin';
@@ -61,6 +63,14 @@ interface UserData {
   createdAt: string;
 }
 
+interface SlackSyncResult {
+  created: number;
+  updated: number;
+  deactivated: number;
+  skipped: number;
+  errors: string[];
+}
+
 export function SettingsPage() {
   const { user, isAdmin } = useAuthStore();
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
@@ -93,6 +103,7 @@ export function SettingsPage() {
 
   // User management state
   const [userSearch, setUserSearch] = useState('');
+  const [slackSyncResult, setSlackSyncResult] = useState<SlackSyncResult | null>(null);
 
   // Admin: Email status query
   const { data: emailStatus } = useQuery({
@@ -151,6 +162,28 @@ export function SettingsPage() {
     },
     onError: (error: Error) => {
       alert(error.message || 'Failed to update user role');
+    },
+  });
+
+  // Admin: Sync users from Slack mutation
+  const slackSyncMutation = useMutation({
+    mutationFn: async () => {
+      const response = await client.post('/admin/slack/sync');
+      return response.data;
+    },
+    onSuccess: (data) => {
+      setSlackSyncResult(data.data as SlackSyncResult);
+      refetchUsers();
+    },
+    onError: (error: Error & { response?: { data?: { error?: string } } }) => {
+      const message = error.response?.data?.error || error.message || 'Failed to sync from Slack';
+      setSlackSyncResult({
+        created: 0,
+        updated: 0,
+        deactivated: 0,
+        skipped: 0,
+        errors: [message],
+      });
     },
   });
 
@@ -573,11 +606,83 @@ export function SettingsPage() {
                       <UserCog className="w-5 h-5 text-blue-500" />
                       <h2 className="text-lg font-semibold text-gray-900">User Management</h2>
                     </div>
+                    <Button
+                      variant="secondary"
+                      onClick={() => {
+                        setSlackSyncResult(null);
+                        slackSyncMutation.mutate();
+                      }}
+                      disabled={slackSyncMutation.isPending}
+                    >
+                      {slackSyncMutation.isPending ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Syncing...
+                        </>
+                      ) : (
+                        <>
+                          <MessageSquare className="w-4 h-4 mr-2" />
+                          Sync from Slack
+                        </>
+                      )}
+                    </Button>
                   </div>
 
                   <p className="text-sm text-gray-600 mb-4">
                     Manage system administrators. Admins can log contraventions, manage training, and access all admin tools.
                   </p>
+
+                  {/* Slack Sync Results */}
+                  {slackSyncResult && (
+                    <div className={`mb-4 p-4 rounded-lg border ${slackSyncResult.errors.length > 0 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
+                      <div className="flex items-start gap-3">
+                        {slackSyncResult.errors.length > 0 ? (
+                          <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                        ) : (
+                          <Check className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                        )}
+                        <div className="flex-1">
+                          <p className={`text-sm font-medium ${slackSyncResult.errors.length > 0 ? 'text-red-800' : 'text-green-800'}`}>
+                            Slack Sync Complete
+                          </p>
+                          <div className="mt-2 text-sm grid grid-cols-4 gap-2">
+                            <div>
+                              <span className="text-gray-600">Created:</span>{' '}
+                              <strong className="text-green-700">{slackSyncResult.created}</strong>
+                            </div>
+                            <div>
+                              <span className="text-gray-600">Updated:</span>{' '}
+                              <strong className="text-blue-700">{slackSyncResult.updated}</strong>
+                            </div>
+                            <div>
+                              <span className="text-gray-600">Deactivated:</span>{' '}
+                              <strong className="text-orange-700">{slackSyncResult.deactivated}</strong>
+                            </div>
+                            <div>
+                              <span className="text-gray-600">Skipped:</span>{' '}
+                              <strong className="text-gray-700">{slackSyncResult.skipped}</strong>
+                            </div>
+                          </div>
+                          {slackSyncResult.errors.length > 0 && (
+                            <div className="mt-2">
+                              <p className="text-xs text-red-700 font-medium">Errors:</p>
+                              <ul className="text-xs text-red-600 list-disc list-inside">
+                                {slackSyncResult.errors.map((err, i) => (
+                                  <li key={i}>{err}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => setSlackSyncResult(null)}
+                          className="text-gray-400 hover:text-gray-600"
+                        >
+                          &times;
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Search */}
                   <div className="mb-4">
