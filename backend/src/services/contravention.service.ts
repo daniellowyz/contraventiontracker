@@ -274,10 +274,55 @@ export class ContraventionService {
       throw new AppError('Contravention not found', 404);
     }
 
+    // Handle employee reassignment with points transfer
+    if (data.employeeId && data.employeeId !== contravention.employeeId) {
+      // Verify new employee exists
+      const newEmployee = await prisma.user.findUnique({
+        where: { id: data.employeeId },
+      });
+
+      if (!newEmployee) {
+        throw new AppError('New employee not found', 404);
+      }
+
+      // Transfer points: remove from old employee, add to new employee
+      const points = contravention.points;
+
+      // Remove points from old employee
+      const oldPointsRecord = await prisma.employeePoints.findUnique({
+        where: { employeeId: contravention.employeeId },
+      });
+
+      if (oldPointsRecord) {
+        const newOldTotal = Math.max(0, oldPointsRecord.totalPoints - points);
+        const newOldLevel = pointsService.getEscalationLevel(newOldTotal);
+
+        await prisma.employeePoints.update({
+          where: { employeeId: contravention.employeeId },
+          data: {
+            totalPoints: newOldTotal,
+            currentLevel: newOldLevel,
+          },
+        });
+      }
+
+      // Add points to new employee
+      await pointsService.addPoints(
+        data.employeeId,
+        points,
+        `Reassigned: ${contravention.referenceNo}`,
+        contravention.id
+      );
+    }
+
+    // Prepare update data (exclude employeeId from spread to handle it separately)
+    const { employeeId, ...otherData } = data;
+
     return prisma.contravention.update({
       where: { id },
       data: {
-        ...data,
+        ...otherData,
+        ...(employeeId && { employeeId }),
         valueSgd: data.valueSgd,
       },
       include: {
