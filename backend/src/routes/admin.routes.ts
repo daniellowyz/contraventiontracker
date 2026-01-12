@@ -559,4 +559,155 @@ router.post('/escalations/recalculate', authenticate, requireAdmin, async (req: 
   }
 });
 
+// ============== USER MANAGEMENT ==============
+
+// GET /api/admin/users - List all users (admin only)
+router.get('/users', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const { search, role } = req.query;
+
+    const where: Record<string, unknown> = {};
+
+    if (search) {
+      where.OR = [
+        { name: { contains: search as string, mode: 'insensitive' } },
+        { email: { contains: search as string, mode: 'insensitive' } },
+        { employeeId: { contains: search as string, mode: 'insensitive' } },
+      ];
+    }
+
+    if (role) {
+      where.role = role;
+    }
+
+    const users = await prisma.user.findMany({
+      where,
+      select: {
+        id: true,
+        employeeId: true,
+        email: true,
+        name: true,
+        role: true,
+        isActive: true,
+        department: { select: { id: true, name: true } },
+        createdAt: true,
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    res.json({ success: true, data: users });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// PATCH /api/admin/users/:id/role - Update user role (admin only)
+router.patch('/users/:id/role', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const { role } = req.body;
+
+    if (!role || !['ADMIN', 'USER'].includes(role)) {
+      throw new AppError('Invalid role. Must be ADMIN or USER', 400);
+    }
+
+    const userId = req.params.id;
+
+    // Check if user exists
+    const existingUser = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!existingUser) {
+      throw new AppError('User not found', 404);
+    }
+
+    // Prevent demoting yourself (the current admin)
+    if (userId === req.user!.userId && role === 'USER') {
+      throw new AppError('You cannot demote yourself from admin', 400);
+    }
+
+    // Update user role
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: { role },
+      select: {
+        id: true,
+        employeeId: true,
+        email: true,
+        name: true,
+        role: true,
+        isActive: true,
+        department: { select: { id: true, name: true } },
+      },
+    });
+
+    // Log the action
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user!.userId,
+        action: 'UPDATE_ROLE',
+        entityType: 'User',
+        entityId: userId,
+        oldValues: { role: existingUser.role },
+        newValues: { role },
+      },
+    });
+
+    res.json({ success: true, data: updatedUser });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============== TEMPORARY OTP LOOKUP (FOR PRODUCTION BEFORE EMAIL IS SET UP) ==============
+
+// GET /api/admin/otp/lookup - Look up OTP for a user (admin only, temporary)
+router.get('/otp/lookup', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const { email } = req.query;
+
+    if (!email) {
+      throw new AppError('Email is required', 400);
+    }
+
+    // Find the most recent valid OTP for this email
+    const otpRecord = await prisma.otpRecord.findFirst({
+      where: {
+        email: (email as string).toLowerCase(),
+        expiresAt: { gt: new Date() },
+        usedAt: null,
+        attempts: { lt: 5 },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!otpRecord) {
+      res.json({
+        success: true,
+        data: {
+          found: false,
+          message: 'No valid OTP found for this email',
+        },
+      });
+      return;
+    }
+
+    // Note: We can't recover the actual OTP since it's hashed
+    // But we can show the OTP details
+    res.json({
+      success: true,
+      data: {
+        found: true,
+        email: otpRecord.email,
+        createdAt: otpRecord.createdAt,
+        expiresAt: otpRecord.expiresAt,
+        attempts: otpRecord.attempts,
+        note: 'OTP is hashed and cannot be recovered. Check server console for development OTPs.',
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;

@@ -23,9 +23,13 @@ import {
   FileText,
   AlertTriangle,
   RefreshCw,
+  Users,
+  Search,
+  ShieldCheck,
+  UserCog,
 } from 'lucide-react';
 
-type SettingsTab = 'profile' | 'notifications' | 'security' | 'admin';
+type SettingsTab = 'profile' | 'notifications' | 'security' | 'users' | 'admin';
 
 interface FiscalYearStatus {
   currentFiscalYear: string;
@@ -44,6 +48,17 @@ interface EmailStatus {
   enabled: boolean;
   sandboxEmail: string;
   emailProviderConfigured: boolean;
+}
+
+interface UserData {
+  id: string;
+  employeeId: string;
+  email: string;
+  name: string;
+  role: 'ADMIN' | 'USER';
+  isActive: boolean;
+  department: { id: string; name: string } | null;
+  createdAt: string;
 }
 
 export function SettingsPage() {
@@ -75,6 +90,9 @@ export function SettingsPage() {
     emailTraining: true,
     browserNotifications: false,
   });
+
+  // User management state
+  const [userSearch, setUserSearch] = useState('');
 
   // Admin: Email status query
   const { data: emailStatus } = useQuery({
@@ -108,6 +126,31 @@ export function SettingsPage() {
     },
     onError: () => {
       alert('Failed to reset points');
+    },
+  });
+
+  // Admin: Users list query
+  const { data: usersData, refetch: refetchUsers } = useQuery({
+    queryKey: ['admin-users', userSearch],
+    queryFn: async () => {
+      const params = userSearch ? `?search=${encodeURIComponent(userSearch)}` : '';
+      const response = await client.get(`/admin/users${params}`);
+      return response.data.data as UserData[];
+    },
+    enabled: isAdmin && activeTab === 'users',
+  });
+
+  // Admin: Update user role mutation
+  const updateRoleMutation = useMutation({
+    mutationFn: async ({ userId, role }: { userId: string; role: 'ADMIN' | 'USER' }) => {
+      const response = await client.patch(`/admin/users/${userId}/role`, { role });
+      return response.data;
+    },
+    onSuccess: () => {
+      refetchUsers();
+    },
+    onError: (error: Error) => {
+      alert(error.message || 'Failed to update user role');
     },
   });
 
@@ -205,6 +248,7 @@ export function SettingsPage() {
     { id: 'profile' as const, label: 'Profile', icon: User },
     { id: 'notifications' as const, label: 'Notifications', icon: Bell },
     { id: 'security' as const, label: 'Security', icon: Shield },
+    ...(isAdmin ? [{ id: 'users' as const, label: 'User Management', icon: Users }] : []),
     ...(isAdmin ? [{ id: 'admin' as const, label: 'Admin Tools', icon: Settings }] : []),
   ];
 
@@ -516,6 +560,129 @@ export function SettingsPage() {
                       </div>
                     </div>
                   </div>
+                </div>
+              </Card>
+            )}
+
+            {/* User Management Tab */}
+            {activeTab === 'users' && isAdmin && (
+              <Card>
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-2">
+                      <UserCog className="w-5 h-5 text-blue-500" />
+                      <h2 className="text-lg font-semibold text-gray-900">User Management</h2>
+                    </div>
+                  </div>
+
+                  <p className="text-sm text-gray-600 mb-4">
+                    Manage system administrators. Admins can log contraventions, manage training, and access all admin tools.
+                  </p>
+
+                  {/* Search */}
+                  <div className="mb-4">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Search by name, email, or employee ID..."
+                        value={userSearch}
+                        onChange={(e) => setUserSearch(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Users Table */}
+                  {usersData && usersData.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-50 border-b border-gray-200">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">User</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Department</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                          {usersData.map((userData) => (
+                            <tr key={userData.id} className="hover:bg-gray-50">
+                              <td className="px-4 py-3">
+                                <div>
+                                  <p className="font-medium text-gray-900">{userData.name}</p>
+                                  <p className="text-xs text-gray-500">{userData.employeeId}</p>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-gray-700">{userData.email}</td>
+                              <td className="px-4 py-3 text-gray-700">{userData.department?.name || '-'}</td>
+                              <td className="px-4 py-3">
+                                {userData.role === 'ADMIN' ? (
+                                  <Badge className="bg-purple-100 text-purple-800">
+                                    <ShieldCheck className="w-3 h-3 mr-1" />
+                                    Admin
+                                  </Badge>
+                                ) : (
+                                  <Badge className="bg-gray-100 text-gray-800">User</Badge>
+                                )}
+                              </td>
+                              <td className="px-4 py-3">
+                                {userData.id === user?.userId ? (
+                                  <span className="text-xs text-gray-400">Current user</span>
+                                ) : userData.role === 'ADMIN' ? (
+                                  <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={() => {
+                                      if (confirm(`Remove admin privileges from ${userData.name}?`)) {
+                                        updateRoleMutation.mutate({ userId: userData.id, role: 'USER' });
+                                      }
+                                    }}
+                                    disabled={updateRoleMutation.isPending}
+                                  >
+                                    Remove Admin
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    variant="primary"
+                                    size="sm"
+                                    onClick={() => {
+                                      if (confirm(`Grant admin privileges to ${userData.name}?`)) {
+                                        updateRoleMutation.mutate({ userId: userData.id, role: 'ADMIN' });
+                                      }
+                                    }}
+                                    disabled={updateRoleMutation.isPending}
+                                  >
+                                    Make Admin
+                                  </Button>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="p-8 text-center text-gray-500">
+                      <Users className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                      <p>No users found</p>
+                    </div>
+                  )}
+
+                  {/* Admin Summary */}
+                  {usersData && (
+                    <div className="mt-6 pt-4 border-t border-gray-200">
+                      <div className="flex items-center gap-4 text-sm text-gray-600">
+                        <span>
+                          Total Users: <strong>{usersData.length}</strong>
+                        </span>
+                        <span>
+                          Admins: <strong>{usersData.filter(u => u.role === 'ADMIN').length}</strong>
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </Card>
             )}
