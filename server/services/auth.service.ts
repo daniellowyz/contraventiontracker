@@ -1,48 +1,10 @@
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
 import prisma from '../config/database';
-import config from '../config/env';
 import { JwtPayload, Role } from '../types';
 import { AppError } from '../middleware/errorHandler';
 
 export class AuthService {
-  async login(email: string, password: string): Promise<{ token: string; user: JwtPayload }> {
-    const user = await prisma.user.findUnique({
-      where: { email },
-    });
-
-    if (!user) {
-      throw new AppError('Invalid email or password', 401);
-    }
-
-    if (!user.isActive) {
-      throw new AppError('Account is deactivated', 401);
-    }
-
-    const isValidPassword = await bcrypt.compare(password, user.passwordHash);
-
-    if (!isValidPassword) {
-      throw new AppError('Invalid email or password', 401);
-    }
-
-    const payload: JwtPayload = {
-      userId: user.id,
-      employeeId: user.employeeId,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-    };
-
-    const token = jwt.sign(payload, config.jwtSecret, {
-      expiresIn: config.jwtExpiresIn,
-    } as jwt.SignOptions);
-
-    return { token, user: payload };
-  }
-
   async register(data: {
     email: string;
-    password: string;
     name: string;
     employeeId: string;
     departmentId?: string;
@@ -64,16 +26,14 @@ export class AuthService {
       throw new AppError('Employee ID already exists', 409);
     }
 
-    const passwordHash = await bcrypt.hash(data.password, 12);
-
     const user = await prisma.user.create({
       data: {
         email: data.email,
-        passwordHash,
         name: data.name,
         employeeId: data.employeeId,
         departmentId: data.departmentId,
         role: data.role || 'USER',
+        isActive: true,
       },
     });
 
@@ -117,29 +77,6 @@ export class AuthService {
       points: user.pointsRecord?.totalPoints || 0,
       currentLevel: user.pointsRecord?.currentLevel,
     };
-  }
-
-  async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-    });
-
-    if (!user) {
-      throw new AppError('User not found', 404);
-    }
-
-    const isValidPassword = await bcrypt.compare(currentPassword, user.passwordHash);
-
-    if (!isValidPassword) {
-      throw new AppError('Current password is incorrect', 401);
-    }
-
-    const newPasswordHash = await bcrypt.hash(newPassword, 12);
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: { passwordHash: newPasswordHash },
-    });
   }
 }
 

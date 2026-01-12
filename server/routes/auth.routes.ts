@@ -1,24 +1,88 @@
 import { Router, Response } from 'express';
+import jwt from 'jsonwebtoken';
 import authService from '../services/auth.service';
+import otpService from '../services/otp.service';
 import { authenticate, requireAdmin } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
-import { loginSchema, registerSchema, changePasswordSchema } from '../validators/auth.schema';
-import { AuthenticatedRequest } from '../types';
+import {
+  requestOtpSchema,
+  verifyOtpSchema,
+  registerSchema,
+} from '../validators/auth.schema';
+import { AuthenticatedRequest, JwtPayload } from '../types';
+import config from '../config/env';
 
 const router = Router();
 
-// POST /api/auth/login
-router.post('/login', validateBody(loginSchema), async (req, res: Response, next) => {
+// Cookie configuration
+const COOKIE_NAME = 'auth_token';
+const COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: true, // Always use HTTPS in production (Vercel)
+  sameSite: 'lax' as const,
+  maxAge: 24 * 60 * 60 * 1000, // 24 hours in milliseconds
+  path: '/',
+};
+
+// POST /api/auth/request-otp - Step 1: Request OTP
+router.post('/request-otp', validateBody(requestOtpSchema), async (req, res: Response, next) => {
   try {
-    const { email, password } = req.body;
-    const result = await authService.login(email, password);
+    const { email } = req.body;
+    const result = await otpService.requestOtp(email);
     res.json({ success: true, data: result });
   } catch (error) {
     next(error);
   }
 });
 
-// POST /api/auth/register (admin only)
+// POST /api/auth/verify-otp - Step 2: Verify OTP and get session
+router.post('/verify-otp', validateBody(verifyOtpSchema), async (req, res: Response, next) => {
+  try {
+    const { email, otp } = req.body;
+    const user = await otpService.verifyOtp(email, otp);
+
+    // Create JWT payload
+    const payload: JwtPayload = {
+      userId: user.userId,
+      employeeId: user.employeeId,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+    };
+
+    // Generate JWT token
+    const token = jwt.sign(payload, config.jwtSecret!, {
+      expiresIn: config.jwtExpiresIn,
+    } as jwt.SignOptions);
+
+    // Set JWT as HTTP-only cookie
+    res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
+
+    // Also return token in response body for clients that prefer it
+    res.json({
+      success: true,
+      data: {
+        token,
+        user: payload,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/auth/logout - Clear session cookie
+router.post('/logout', (req, res: Response) => {
+  res.clearCookie(COOKIE_NAME, {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'lax' as const,
+    path: '/',
+  });
+  res.json({ success: true, message: 'Logged out successfully' });
+});
+
+// POST /api/auth/register (admin only) - Create new user
 router.post(
   '/register',
   authenticate,
@@ -34,7 +98,7 @@ router.post(
   }
 );
 
-// GET /api/auth/me
+// GET /api/auth/me - Get current user info
 router.get('/me', authenticate, async (req: AuthenticatedRequest, res: Response, next) => {
   try {
     const user = await authService.getCurrentUser(req.user!.userId);
@@ -43,24 +107,5 @@ router.get('/me', authenticate, async (req: AuthenticatedRequest, res: Response,
     next(error);
   }
 });
-
-// POST /api/auth/change-password
-router.post(
-  '/change-password',
-  authenticate,
-  validateBody(changePasswordSchema),
-  async (req: AuthenticatedRequest, res: Response, next) => {
-    try {
-      await authService.changePassword(
-        req.user!.userId,
-        req.body.currentPassword,
-        req.body.newPassword
-      );
-      res.json({ success: true, message: 'Password changed successfully' });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
 
 export default router;

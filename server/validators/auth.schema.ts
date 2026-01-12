@@ -1,23 +1,22 @@
 import { z } from 'zod';
 
-export const loginSchema = z.object({
+// OTP-based authentication schemas
+export const requestOtpSchema = z.object({
   email: z.string().email('Invalid email address'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+});
+
+export const verifyOtpSchema = z.object({
+  email: z.string().email('Invalid email address'),
+  otp: z.string().length(6, 'OTP must be 6 digits').regex(/^\d{6}$/, 'OTP must be 6 digits'),
 });
 
 export const registerSchema = z.object({
   email: z.string().email('Invalid email address'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
   name: z.string().min(2, 'Name must be at least 2 characters'),
   employeeId: z.string().min(1, 'Employee ID is required'),
   departmentId: z.string().optional(),
 });
 
-export const changePasswordSchema = z.object({
-  currentPassword: z.string().min(6),
-  newPassword: z.string().min(6, 'New password must be at least 6 characters'),
-});
-
-export type LoginInput = z.infer<typeof loginSchema>;
+export type RequestOtpInput = z.infer<typeof requestOtpSchema>;
+export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;
-export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
