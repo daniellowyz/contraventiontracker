@@ -83,7 +83,7 @@ router.patch('/users/:id/role', authenticate, requireAdmin, async (req: Authenti
         entityId: user.id,
         action: 'ROLE_CHANGE',
         userId: req.user!.userId,
-        changes: { role },
+        newValues: { role },
       },
     });
 
@@ -127,7 +127,7 @@ router.patch('/users/:id/status', authenticate, requireAdmin, async (req: Authen
         entityId: user.id,
         action: isActive ? 'ACTIVATE' : 'DEACTIVATE',
         userId: req.user!.userId,
-        changes: { isActive },
+        newValues: { isActive },
       },
     });
 
@@ -278,7 +278,7 @@ router.post('/slack/sync', authenticate, requireAdmin, async (req: Authenticated
           entityId: 'SLACK_SYNC',
           action: 'SYNC',
           userId: req.user!.userId,
-          changes: results,
+          newValues: results,
         },
       });
     } else {
