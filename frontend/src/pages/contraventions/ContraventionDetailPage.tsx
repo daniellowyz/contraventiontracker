@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { contraventionsApi, CreateContraventionInput } from '@/api/contraventions.api';
+import { employeesApi, EmployeeListItem } from '@/api/employees.api';
 import { useAuthStore } from '@/stores/authStore';
 import { Header } from '@/components/layout/Header';
 import { Card } from '@/components/ui/Card';
@@ -23,7 +24,8 @@ import {
   Upload,
   ExternalLink,
   FileCheck,
-  Loader2
+  Loader2,
+  UserCog
 } from 'lucide-react';
 import { Severity, ContraventionStatus } from '@/types';
 import { uploadApprovalPdf } from '@/lib/supabase';
@@ -68,6 +70,8 @@ export function ContraventionDetailPage() {
   const [error, setError] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  const [isReassigning, setIsReassigning] = useState(false);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch contravention details
@@ -75,6 +79,13 @@ export function ContraventionDetailPage() {
     queryKey: ['contravention', id],
     queryFn: () => contraventionsApi.getById(id!),
     enabled: !!id,
+  });
+
+  // Fetch employees for reassignment (only for admins)
+  const { data: employeesData } = useQuery({
+    queryKey: ['employees'],
+    queryFn: () => employeesApi.getAll(),
+    enabled: isAdmin && isReassigning,
   });
 
   // Update mutation
@@ -88,6 +99,22 @@ export function ContraventionDetailPage() {
     },
     onError: (err: Error) => {
       setError(err.message || 'Failed to update contravention');
+    },
+  });
+
+  // Reassign employee mutation
+  const reassignMutation = useMutation({
+    mutationFn: (newEmployeeId: string) => contraventionsApi.update(id!, { employeeId: newEmployeeId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contravention', id] });
+      queryClient.invalidateQueries({ queryKey: ['contraventions'] });
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      setIsReassigning(false);
+      setSelectedEmployeeId('');
+      setError('');
+    },
+    onError: (err: Error) => {
+      setError(err.message || 'Failed to reassign contravention');
     },
   });
 
@@ -452,22 +479,86 @@ export function ContraventionDetailPage() {
             {/* Employee Info */}
             <Card>
               <div className="p-6">
-                <h3 className="text-sm font-semibold text-gray-900 mb-4">Employee</h3>
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <User className="w-4 h-4 text-gray-400" />
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">{contravention.employee.name}</p>
-                      <p className="text-xs text-gray-500">{contravention.employee.email}</p>
-                    </div>
-                  </div>
-                  {contravention.employee.department && (
-                    <div className="flex items-center gap-3">
-                      <Building className="w-4 h-4 text-gray-400" />
-                      <p className="text-sm text-gray-600">{contravention.employee.department.name}</p>
-                    </div>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-semibold text-gray-900">Employee</h3>
+                  {isAdmin && !isReassigning && (
+                    <button
+                      onClick={() => {
+                        setIsReassigning(true);
+                        setSelectedEmployeeId(contravention.employee.id);
+                      }}
+                      className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                    >
+                      <UserCog className="w-3 h-3" />
+                      Reassign
+                    </button>
                   )}
                 </div>
+
+                {isReassigning ? (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">
+                        Select New Employee
+                      </label>
+                      <select
+                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        value={selectedEmployeeId}
+                        onChange={(e) => setSelectedEmployeeId(e.target.value)}
+                      >
+                        {employeesData?.map((emp: EmployeeListItem) => (
+                          <option key={emp.id} value={emp.id}>
+                            {emp.name} ({emp.department?.name || 'No Department'})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => {
+                          setIsReassigning(false);
+                          setSelectedEmployeeId('');
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          if (selectedEmployeeId && selectedEmployeeId !== contravention.employee.id) {
+                            if (confirm('Are you sure you want to reassign this contravention? Points will be transferred to the new employee.')) {
+                              reassignMutation.mutate(selectedEmployeeId);
+                            }
+                          } else {
+                            setIsReassigning(false);
+                          }
+                        }}
+                        isLoading={reassignMutation.isPending}
+                        disabled={!selectedEmployeeId || selectedEmployeeId === contravention.employee.id}
+                      >
+                        Confirm
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3">
+                      <User className="w-4 h-4 text-gray-400" />
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">{contravention.employee.name}</p>
+                        <p className="text-xs text-gray-500">{contravention.employee.email}</p>
+                      </div>
+                    </div>
+                    {contravention.employee.department && (
+                      <div className="flex items-center gap-3">
+                        <Building className="w-4 h-4 text-gray-400" />
+                        <p className="text-sm text-gray-600">{contravention.employee.department.name}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </Card>
 

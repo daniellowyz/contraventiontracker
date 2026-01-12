@@ -18,6 +18,7 @@ export const createContraventionSchema = z.object({
 });
 
 export const updateContraventionSchema = z.object({
+  employeeId: z.string().optional(), // Admin can reassign to different employee
   vendor: z.string().optional(),
   valueSgd: z.number().optional(),
   description: z.string().optional(),
