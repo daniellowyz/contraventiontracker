@@ -439,18 +439,27 @@ router.delete('/users/:id', authenticate, requireAdmin, async (req: Authenticate
 
     console.log(`[DeleteUser] Deleting user ${user.email}`);
 
-    // Delete related records first
+    // Delete all related records first in a transaction
     await prisma.$transaction([
+      // Auth/session related
       prisma.otpRecord.deleteMany({ where: { userId: id } }),
       prisma.notification.deleteMany({ where: { userId: id } }),
-      prisma.auditLog.deleteMany({ where: { userId: id } }),
+      // Points
       prisma.employeePoints.deleteMany({ where: { employeeId: id } }),
+      // Escalations where they are the employee
+      prisma.escalation.deleteMany({ where: { employeeId: id } }),
+      // Training records
+      prisma.trainingRecord.deleteMany({ where: { employeeId: id } }),
+      // Disputes they submitted (if any)
+      prisma.dispute.deleteMany({ where: { submittedById: id } }),
+      // Audit logs (their own actions)
+      prisma.auditLog.deleteMany({ where: { userId: id } }),
     ]);
 
-    // Delete the user
+    // Now delete the user
     await prisma.user.delete({ where: { id } });
 
-    // Log the deletion
+    // Log the deletion (with admin's ID, not the deleted user)
     await prisma.auditLog.create({
       data: {
         entityType: 'USER',
