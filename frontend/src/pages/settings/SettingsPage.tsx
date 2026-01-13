@@ -256,6 +256,24 @@ export function SettingsPage() {
     enabled: isAdmin && activeTab === 'users',
   });
 
+  // Admin: Fetch inactive/deactivated users
+  interface InactiveUser {
+    id: string;
+    email: string;
+    name: string;
+    employeeId: string;
+    isActive: boolean;
+    contraventionCount: number;
+  }
+  const { data: inactiveUsersData, refetch: refetchInactiveUsers } = useQuery({
+    queryKey: ['inactive-users'],
+    queryFn: async () => {
+      const response = await client.get('/admin/users/inactive');
+      return response.data.data as InactiveUser[];
+    },
+    enabled: isAdmin && activeTab === 'users',
+  });
+
   // Admin: Remap contraventions mutation
   const remapContraventionsMutation = useMutation({
     mutationFn: async ({ sourceUserId, targetUserId }: { sourceUserId: string; targetUserId: string }) => {
@@ -286,6 +304,40 @@ export function SettingsPage() {
     },
     onError: (error: Error & { response?: { data?: { error?: string } } }) => {
       alert(error.response?.data?.error || error.message || 'Failed to delete user');
+    },
+  });
+
+  // Admin: Deactivate user mutation (for users who left but have contraventions)
+  const deactivateUserMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const response = await client.patch(`/admin/users/${userId}/status`, { isActive: false });
+      return response.data;
+    },
+    onSuccess: (data) => {
+      alert(`Successfully deactivated ${data.data.name}`);
+      refetchOgpUsers();
+      refetchUsers();
+      refetchInactiveUsers();
+    },
+    onError: (error: Error & { response?: { data?: { error?: string } } }) => {
+      alert(error.response?.data?.error || error.message || 'Failed to deactivate user');
+    },
+  });
+
+  // Admin: Reactivate user mutation
+  const reactivateUserMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const response = await client.patch(`/admin/users/${userId}/status`, { isActive: true });
+      return response.data;
+    },
+    onSuccess: (data) => {
+      alert(`Successfully reactivated ${data.data.name}`);
+      refetchOgpUsers();
+      refetchUsers();
+      refetchInactiveUsers();
+    },
+    onError: (error: Error & { response?: { data?: { error?: string } } }) => {
+      alert(error.response?.data?.error || error.message || 'Failed to reactivate user');
     },
   });
 
@@ -872,16 +924,31 @@ export function SettingsPage() {
                             </div>
                             <div className="flex gap-2">
                               {ogpUser.contraventionCount > 0 ? (
-                                <Button
-                                  variant="secondary"
-                                  size="sm"
-                                  onClick={() => {
-                                    setRemapModalUser(ogpUser);
-                                    setRemapTargetEmail('');
-                                  }}
-                                >
-                                  Remap
-                                </Button>
+                                <>
+                                  <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={() => {
+                                      setRemapModalUser(ogpUser);
+                                      setRemapTargetEmail('');
+                                    }}
+                                  >
+                                    Remap
+                                  </Button>
+                                  <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={() => {
+                                      if (confirm(`Deactivate ${ogpUser.email}?\n\nThis user has ${ogpUser.contraventionCount} contravention(s) that will be preserved.\nThe user will no longer be able to log in but their records remain.`)) {
+                                        deactivateUserMutation.mutate(ogpUser.id);
+                                      }
+                                    }}
+                                    disabled={deactivateUserMutation.isPending}
+                                    className="text-orange-600 hover:text-orange-700"
+                                  >
+                                    {deactivateUserMutation.isPending ? 'Deactivating...' : 'Deactivate'}
+                                  </Button>
+                                </>
                               ) : (
                                 <Button
                                   variant="secondary"
@@ -898,6 +965,48 @@ export function SettingsPage() {
                                 </Button>
                               )}
                             </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Deactivated Users Section */}
+                  {inactiveUsersData && inactiveUsersData.length > 0 && (
+                    <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Users className="w-5 h-5 text-gray-500" />
+                        <h4 className="font-medium text-gray-800">
+                          Deactivated Users ({inactiveUsersData.length})
+                        </h4>
+                      </div>
+                      <p className="text-sm text-gray-600 mb-4">
+                        These users have been deactivated but their contravention records are preserved.
+                        You can reactivate them if needed.
+                      </p>
+                      <div className="space-y-2 max-h-48 overflow-y-auto">
+                        {inactiveUsersData.map((inactiveUser) => (
+                          <div key={inactiveUser.id} className="bg-white p-3 rounded border border-gray-200 flex items-center justify-between">
+                            <div className="flex-1">
+                              <p className="font-medium text-gray-900">{inactiveUser.name}</p>
+                              <p className="text-sm text-gray-600">{inactiveUser.email}</p>
+                              <p className="text-xs text-gray-500">
+                                {inactiveUser.contraventionCount} contravention(s)
+                              </p>
+                            </div>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => {
+                                if (confirm(`Reactivate ${inactiveUser.email}?\n\nThis user will be able to log in again.`)) {
+                                  reactivateUserMutation.mutate(inactiveUser.id);
+                                }
+                              }}
+                              disabled={reactivateUserMutation.isPending}
+                              className="text-green-600 hover:text-green-700"
+                            >
+                              {reactivateUserMutation.isPending ? 'Reactivating...' : 'Reactivate'}
+                            </Button>
                           </div>
                         ))}
                       </div>

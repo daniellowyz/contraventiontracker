@@ -418,6 +418,10 @@ router.delete('/users/:id', authenticate, requireAdmin, async (req: Authenticate
           select: {
             contraventions: true,
             escalations: true,
+            loggedContras: true,
+            acknowledgedContras: true,
+            disputesSubmitted: true,
+            disputesDecided: true,
           },
         },
       },
@@ -432,9 +436,19 @@ router.delete('/users/:id', authenticate, requireAdmin, async (req: Authenticate
       throw new AppError('Can only delete @ogp.gov.sg placeholder accounts', 400);
     }
 
-    // Safety check: don't delete users with contraventions
+    // Safety check: don't delete users with contraventions (as employee)
     if (user._count.contraventions > 0) {
       throw new AppError(`Cannot delete user with ${user._count.contraventions} contravention(s). Remap them first.`, 400);
+    }
+
+    // Check for logged contraventions - need to reassign or clear
+    if (user._count.loggedContras > 0) {
+      throw new AppError(`Cannot delete user who logged ${user._count.loggedContras} contravention(s). The user has related records.`, 400);
+    }
+
+    // Check for acknowledged contraventions - need to clear
+    if (user._count.acknowledgedContras > 0) {
+      throw new AppError(`Cannot delete user who acknowledged ${user._count.acknowledgedContras} contravention(s). The user has related records.`, 400);
     }
 
     console.log(`[DeleteUser] Deleting user ${user.email}`);
@@ -452,8 +466,12 @@ router.delete('/users/:id', authenticate, requireAdmin, async (req: Authenticate
       prisma.trainingRecord.deleteMany({ where: { employeeId: id } }),
       // Disputes they submitted (if any)
       prisma.dispute.deleteMany({ where: { submittedById: id } }),
-      // Audit logs (their own actions)
-      prisma.auditLog.deleteMany({ where: { userId: id } }),
+      // Clear disputes they decided (set decidedById to null)
+      prisma.dispute.updateMany({ where: { decidedById: id }, data: { decidedById: null } }),
+      // User-team memberships
+      prisma.userTeam.deleteMany({ where: { userId: id } }),
+      // Audit logs (set userId to null instead of deleting for audit trail)
+      prisma.auditLog.updateMany({ where: { userId: id }, data: { userId: null } }),
     ]);
 
     // Now delete the user
@@ -1306,6 +1324,238 @@ router.post('/escalations/recalculate', authenticate, requireAdmin, async (req: 
     const pointsService = (await import('../services/points.service')).default;
     const result = await pointsService.recalculateAllEscalations();
     res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ==================== TEAM MANAGEMENT ====================
+
+// GET /api/admin/teams - List all teams
+router.get('/teams', authenticate, async (_req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const teams = await prisma.team.findMany({
+      where: { isActive: true },
+      include: {
+        _count: {
+          select: {
+            contraventions: true,
+            members: true,
+          },
+        },
+      },
+      orderBy: [
+        { isPersonal: 'desc' },  // Personal team first
+        { name: 'asc' },
+      ],
+    });
+
+    res.json({
+      success: true,
+      data: teams.map((t: typeof teams[number]) => ({
+        id: t.id,
+        name: t.name,
+        description: t.description,
+        isPersonal: t.isPersonal,
+        contraventionCount: t._count.contraventions,
+        memberCount: t._count.members,
+      })),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/admin/teams - Create team (admin only)
+router.post('/teams', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { name, description, isPersonal = false } = req.body as { name: string; description?: string; isPersonal?: boolean };
+
+    if (!name) {
+      throw new AppError('Team name is required', 400);
+    }
+
+    const team = await prisma.team.create({
+      data: {
+        name,
+        description,
+        isPersonal,
+      },
+    });
+
+    // Log to audit trail
+    await prisma.auditLog.create({
+      data: {
+        entityType: 'TEAM',
+        entityId: team.id,
+        action: 'CREATE',
+        userId: req.user!.userId,
+        newValues: { name, description, isPersonal },
+      },
+    });
+
+    res.status(201).json({ success: true, data: team });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// PATCH /api/admin/teams/:id - Update team (admin only)
+router.patch('/teams/:id', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { name, description, isActive } = req.body as { name?: string; description?: string; isActive?: boolean };
+
+    const team = await prisma.team.update({
+      where: { id: req.params.id },
+      data: {
+        ...(name && { name }),
+        ...(description !== undefined && { description }),
+        ...(isActive !== undefined && { isActive }),
+      },
+    });
+
+    res.json({ success: true, data: team });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/admin/teams/:id/members - Add user to team (admin only)
+router.post('/teams/:id/members', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { userId } = req.body as { userId: string };
+
+    if (!userId) {
+      throw new AppError('User ID is required', 400);
+    }
+
+    // Check if user exists
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new AppError('User not found', 404);
+    }
+
+    // Check if team exists
+    const team = await prisma.team.findUnique({ where: { id: req.params.id } });
+    if (!team) {
+      throw new AppError('Team not found', 404);
+    }
+
+    // Add user to team (upsert to handle duplicates gracefully)
+    const userTeam = await prisma.userTeam.upsert({
+      where: {
+        userId_teamId: { userId, teamId: req.params.id },
+      },
+      update: {},  // No update if exists
+      create: {
+        userId,
+        teamId: req.params.id,
+      },
+    });
+
+    res.status(201).json({
+      success: true,
+      data: userTeam,
+      message: `Added ${user.name} to ${team.name}`,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// DELETE /api/admin/teams/:id/members/:userId - Remove user from team (admin only)
+router.delete('/teams/:id/members/:userId', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id: teamId, userId } = req.params;
+
+    await prisma.userTeam.delete({
+      where: {
+        userId_teamId: { userId, teamId },
+      },
+    });
+
+    res.json({ success: true, message: 'User removed from team' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/admin/teams/:id/members - Get team members (admin only)
+router.get('/teams/:id/members', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const members = await prisma.userTeam.findMany({
+      where: { teamId: req.params.id },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            employeeId: true,
+            isActive: true,
+          },
+        },
+      },
+    });
+
+    res.json({
+      success: true,
+      data: members.map((m: typeof members[number]) => m.user),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/admin/teams/seed-personal - Create the default "Personal" team if it doesn't exist
+router.post('/teams/seed-personal', authenticate, requireAdmin, async (_req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const personalTeam = await prisma.team.upsert({
+      where: { name: 'Personal' },
+      update: {},
+      create: {
+        name: 'Personal',
+        description: 'For contraventions not associated with any team',
+        isPersonal: true,
+      },
+    });
+
+    res.json({
+      success: true,
+      data: personalTeam,
+      message: 'Personal team created/verified',
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ==================== DEACTIVATED USERS MANAGEMENT ====================
+
+// GET /api/admin/users/inactive - Get all inactive/deactivated users
+router.get('/users/inactive', authenticate, requireAdmin, async (_req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const inactiveUsers = await prisma.user.findMany({
+      where: { isActive: false },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        employeeId: true,
+        isActive: true,
+        _count: { select: { contraventions: true } },
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    res.json({
+      success: true,
+      data: inactiveUsers.map((u: typeof inactiveUsers[number]) => ({
+        ...u,
+        contraventionCount: u._count.contraventions,
+      })),
+      count: inactiveUsers.length,
+    });
   } catch (error) {
     next(error);
   }

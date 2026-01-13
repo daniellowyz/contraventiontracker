@@ -7,6 +7,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 // ============== ENUMS ==============
@@ -102,6 +103,7 @@ model User {
   auditLogs           AuditLog[]
   notifications       Notification[]
   otpRecords          OtpRecord[]
+  teams               UserTeam[]       // User can belong to multiple teams
 
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
@@ -147,6 +149,10 @@ model Contravention {
   loggedById      String
   loggedBy        User                @relation("LoggedByUser", fields: [loggedById], references: [id])
 
+  // Team (optional - for team-based metrics)
+  teamId          String?
+  team            Team?               @relation("ContraventionTeam", fields: [teamId], references: [id])
+
   // What
   typeId          String
   type            ContraventionType   @relation(fields: [typeId], references: [id])
@@ -185,6 +191,7 @@ model Contravention {
   updatedAt       DateTime            @updatedAt
 
   @@index([employeeId])
+  @@index([teamId])
   @@index([status])
   @@index([incidentDate])
 }
@@ -331,4 +338,35 @@ model SystemConfig {
   key       String   @unique
   value     Json
   updatedAt DateTime @updatedAt
+}
+
+// Team model - contraventions are tagged to teams, not users
+model Team {
+  id              String          @id @default(cuid())
+  name            String          @unique
+  description     String?
+  isPersonal      Boolean         @default(false)  // "Personal" team for non-team contraventions
+  isActive        Boolean         @default(true)
+
+  // Relations
+  contraventions  Contravention[] @relation("ContraventionTeam")
+  members         UserTeam[]      // Many-to-many: users can belong to multiple teams
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
+// Junction table for User-Team many-to-many relationship
+model UserTeam {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teamId    String
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, teamId])
+  @@index([userId])
+  @@index([teamId])
 }
