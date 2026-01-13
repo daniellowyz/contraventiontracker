@@ -2,12 +2,13 @@ import crypto from 'crypto';
 import validator from 'validator';
 import prisma from '../config/database';
 import { AppError } from '../middleware/errorHandler';
+import emailService from './email.service';
 
 // Constants
 const OTP_LENGTH = 6;
 const OTP_EXPIRY_MINUTES = 15;
 const MAX_ATTEMPTS = 5;
-const ALLOWED_DOMAINS = ['@open.gov.sg', '@tech.gov.sg', '@ogp.gov.sg', '@hack2026.gov.sg'];
+const ALLOWED_DOMAINS = ['@open.gov.sg', '@tech.gov.sg', '@ogp.gov.sg'];
 
 export class OtpService {
   /**
@@ -128,11 +129,26 @@ export class OtpService {
       },
     });
 
-    // Log OTP to console for development (as per requirement #6)
+    // Always log OTP to console for debugging/development
     console.log('========================================');
     console.log(`OTP for ${normalizedEmail}: ${otp}`);
     console.log(`Expires at: ${expiresAt.toISOString()}`);
     console.log('========================================');
+
+    // Send OTP via email
+    const emailResult = await emailService.sendOtpEmail({
+      email: normalizedEmail,
+      otp,
+      expiresAt,
+    });
+
+    if (!emailResult.success) {
+      console.error('[OTP] Failed to send OTP email:', emailResult.error);
+      // Don't throw error - OTP is still valid and logged to console
+      // This allows development to continue even if email fails
+    } else {
+      console.log(`[OTP] Email sent successfully to ${normalizedEmail}`);
+    }
 
     return {
       success: true,

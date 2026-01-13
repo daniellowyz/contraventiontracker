@@ -141,7 +141,7 @@ export class SlackService {
 
     // Only include users with allowed domains
     const email = user.profile.email.toLowerCase();
-    const allowedDomains = ['@open.gov.sg', '@tech.gov.sg', '@ogp.gov.sg', '@hack2026.gov.sg'];
+    const allowedDomains = ['@open.gov.sg', '@tech.gov.sg', '@ogp.gov.sg'];
     const hasAllowedDomain = allowedDomains.some(domain => email.endsWith(domain));
 
     return hasAllowedDomain;

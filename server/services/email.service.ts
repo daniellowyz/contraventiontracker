@@ -9,7 +9,7 @@ const EMAIL_CONFIG = {
 
   // Postmark API (fallback if GAS not configured)
   POSTMARK_API_KEY: process.env.POSTMARK_API_KEY,
-  FROM_EMAIL: process.env.EMAIL_FROM || 'noreply@contraventiontracker.gov.sg',
+  FROM_EMAIL: process.env.EMAIL_FROM || 'contraventiontracker@hack2026.gov.sg',
   FROM_NAME: process.env.EMAIL_FROM_NAME || 'Contravention Tracker',
 
   // App URL for links in emails
@@ -531,6 +531,85 @@ export const emailService = {
           </p>
         </div>
       `,
+    });
+  },
+
+  /**
+   * Send OTP email for authentication
+   * Uses dedicated GAS OTP handler for cleaner delivery (no CC)
+   */
+  async sendOtpEmail(params: {
+    email: string;
+    otp: string;
+    expiresAt: Date;
+  }): Promise<EmailResult> {
+    const expiryMinutes = Math.round((params.expiresAt.getTime() - Date.now()) / 60000);
+
+    // If GAS webhook is configured, use dedicated OTP handler
+    if (EMAIL_CONFIG.GAS_WEBHOOK_URL) {
+      try {
+        console.log(`[Email] Sending OTP via GAS webhook to: ${params.email}`);
+
+        const response = await fetch(EMAIL_CONFIG.GAS_WEBHOOK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'OTP',
+            email: params.email,
+            otp: params.otp,
+            expiryMinutes,
+          }),
+        });
+
+        const result = await response.json() as { success: boolean; error?: string };
+
+        if (!result.success) {
+          throw new Error(result.error || 'GAS webhook failed');
+        }
+
+        return {
+          success: true,
+          sandboxMode: EMAIL_CONFIG.SANDBOX_MODE,
+        };
+      } catch (error) {
+        console.error('[Email] GAS OTP webhook failed:', error);
+        return {
+          success: false,
+          error: (error as Error).message,
+        };
+      }
+    }
+
+    // Fallback to generic send method (Postmark or console log)
+    return this.send({
+      to: params.email,
+      subject: `Your login code: ${params.otp}`,
+      htmlBody: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #1e40af;">Contravention Tracker Login</h2>
+
+          <p>Your one-time password (OTP) is:</p>
+
+          <div style="background-color: #f3f4f6; border-radius: 8px; padding: 24px; text-align: center; margin: 24px 0;">
+            <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #1e40af;">${params.otp}</span>
+          </div>
+
+          <p style="color: #6b7280; font-size: 14px;">
+            This code will expire in <strong>${expiryMinutes} minutes</strong>.
+          </p>
+
+          <p style="color: #6b7280; font-size: 14px;">
+            If you did not request this code, please ignore this email.
+          </p>
+
+          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+
+          <p style="color: #9ca3af; font-size: 12px;">
+            This is an automated message from the Contravention Tracker system.
+          </p>
+        </div>
+      `,
+      textBody: `Your Contravention Tracker login code is: ${params.otp}\n\nThis code will expire in ${expiryMinutes} minutes.\n\nIf you did not request this code, please ignore this email.`,
     });
   },
 

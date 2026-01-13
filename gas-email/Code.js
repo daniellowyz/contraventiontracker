@@ -2,7 +2,8 @@
 // Deploy this as a Web App (Execute as: Me, Who has access: Anyone)
 
 // Configuration
-const SENDER_EMAIL = 'finance@open.gov.sg';  // Send from this email (must be configured in Gmail settings)
+const SENDER_EMAIL = 'contraventiontracker@hack2026.gov.sg';  // Send from this email (Google Group)
+const SENDER_NAME = 'Contravention Tracker';
 const ALWAYS_CC = 'adriel@open.gov.sg';      // Always CC this email on all contravention emails
 const APP_URL = 'https://contraventiontracker.vercel.app';
 
@@ -47,6 +48,9 @@ function doPost(e) {
         break;
       case 'TRAINING_OVERDUE':
         result = sendTrainingOverdueEmail(data);
+        break;
+      case 'OTP':
+        result = sendOtpEmail(data);
         break;
       default:
         // Legacy: approval request email (when no type specified)
@@ -170,7 +174,7 @@ function sendContraventionLoggedEmail(data) {
 
   const emailOptions = {
     htmlBody: htmlBody,
-    name: 'OGP Finance',
+    name: SENDER_NAME,
     from: SENDER_EMAIL,
     cc: ALWAYS_CC
   };
@@ -242,7 +246,7 @@ function sendEscalationEmail(data) {
 
   const emailOptions = {
     htmlBody: htmlBody,
-    name: 'OGP Finance',
+    name: SENDER_NAME,
     from: SENDER_EMAIL,
     cc: ALWAYS_CC
   };
@@ -317,7 +321,7 @@ function sendTrainingAssignedEmail(data) {
 
   const emailOptions = {
     htmlBody: htmlBody,
-    name: 'OGP Finance',
+    name: SENDER_NAME,
     from: SENDER_EMAIL,
     cc: ALWAYS_CC
   };
@@ -368,7 +372,7 @@ function sendAcknowledgmentReminderEmail(data) {
 
   const emailOptions = {
     htmlBody: htmlBody,
-    name: 'OGP Finance',
+    name: SENDER_NAME,
     from: SENDER_EMAIL,
     cc: ALWAYS_CC
   };
@@ -440,7 +444,7 @@ function sendTrainingOverdueEmail(data) {
 
   const emailOptions = {
     htmlBody: htmlBody,
-    name: 'OGP Finance',
+    name: SENDER_NAME,
     from: SENDER_EMAIL,
     cc: ALWAYS_CC
   };
@@ -528,13 +532,80 @@ function sendApprovalEmail(data) {
 
   const emailOptions = {
     htmlBody: htmlBody,
-    name: 'OGP Finance',
+    name: SENDER_NAME,
     from: SENDER_EMAIL,
     cc: ccList.join(',')
   };
 
   GmailApp.sendEmail(recipient, `${subjectPrefix}[Action Required] Contravention Approval Request - ${referenceNo}`, '', emailOptions);
   return { sent: true, to: recipient, sandbox: SANDBOX_MODE };
+}
+
+/**
+ * Send OTP email for authentication (no CC for security)
+ */
+function sendOtpEmail(data) {
+  const {
+    email,
+    otp,
+    expiryMinutes = 15
+  } = data;
+
+  const recipient = getRecipient(email);
+  const subjectPrefix = SANDBOX_MODE ? '[SANDBOX] ' : '';
+
+  const htmlBody = `
+    ${getSandboxBanner(email)}
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #1e40af;">Contravention Tracker Login</h2>
+
+      <p>Your one-time password (OTP) is:</p>
+
+      <div style="background-color: #f3f4f6; border-radius: 8px; padding: 24px; text-align: center; margin: 24px 0;">
+        <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #1e40af;">${otp}</span>
+      </div>
+
+      <p style="color: #6b7280; font-size: 14px;">
+        This code will expire in <strong>${expiryMinutes} minutes</strong>.
+      </p>
+
+      <p style="color: #6b7280; font-size: 14px;">
+        If you did not request this code, please ignore this email.
+      </p>
+
+      <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+
+      <p style="color: #9ca3af; font-size: 12px;">
+        This is an automated message from the Contravention Tracker system.
+      </p>
+    </div>
+  `;
+
+  // OTP emails should NOT be CC'd for security reasons
+  const emailOptions = {
+    htmlBody: htmlBody,
+    name: SENDER_NAME,
+    from: SENDER_EMAIL
+    // No CC for OTP - security sensitive
+  };
+
+  GmailApp.sendEmail(recipient, `${subjectPrefix}Your login code: ${otp}`, '', emailOptions);
+  return { sent: true, to: recipient, sandbox: SANDBOX_MODE };
+}
+
+/**
+ * Test OTP email
+ */
+function testOtpEmail() {
+  const testData = {
+    type: 'OTP',
+    email: 'daniellow@open.gov.sg',
+    otp: '123456',
+    expiryMinutes: 15
+  };
+
+  const result = sendOtpEmail(testData);
+  Logger.log('Result: ' + JSON.stringify(result));
 }
 
 // ============ TEST FUNCTIONS ============
