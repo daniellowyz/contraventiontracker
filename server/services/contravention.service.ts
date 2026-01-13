@@ -58,6 +58,7 @@ export class ContraventionService {
         employeeId: data.employeeId,
         loggedById,
         typeId: data.typeId,
+        teamId: data.teamId,  // Optional team for tracking
         vendor: data.vendor,
         valueSgd: data.valueSgd,
         description: data.description,
@@ -78,6 +79,9 @@ export class ContraventionService {
           select: { id: true, name: true, email: true, department: true },
         },
         type: true,
+        team: {
+          select: { id: true, name: true, isPersonal: true },
+        },
         loggedBy: {
           select: { id: true, name: true },
         },
@@ -172,7 +176,7 @@ export class ContraventionService {
    * Get all contraventions with filters and pagination
    */
   async findAll(filters: ContraventionFiltersInput) {
-    const { page, limit, status, severity, typeId, departmentId, employeeId, dateFrom, dateTo, search } = filters;
+    const { page, limit, status, severity, typeId, departmentId, employeeId, teamId, dateFrom, dateTo, search } = filters;
 
     const where: Record<string, unknown> = {};
 
@@ -180,6 +184,7 @@ export class ContraventionService {
     if (severity) where.severity = severity;
     if (typeId) where.typeId = typeId;
     if (employeeId) where.employeeId = employeeId;
+    if (teamId) where.teamId = teamId;
 
     if (departmentId) {
       where.employee = { departmentId };
@@ -218,6 +223,9 @@ export class ContraventionService {
           type: {
             select: { id: true, name: true, category: true },
           },
+          team: {
+            select: { id: true, name: true, isPersonal: true },
+          },
           loggedBy: {
             select: { id: true, name: true },
           },
@@ -251,6 +259,9 @@ export class ContraventionService {
           select: { id: true, name: true, email: true, department: true },
         },
         type: true,
+        team: {
+          select: { id: true, name: true, isPersonal: true },
+        },
         loggedBy: {
           select: { id: true, name: true },
         },

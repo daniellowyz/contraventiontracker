@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { contraventionsApi, CreateContraventionInput } from '@/api/contraventions.api';
 import { employeesApi } from '@/api/employees.api';
+import { teamsApi } from '@/api/teams.api';
 import { Header } from '@/components/layout/Header';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -39,6 +40,7 @@ export function ContraventionFormPage() {
   const [formData, setFormData] = useState<{
     employeeId: string;
     typeId: string;
+    teamId: string;
     vendor: string;
     valueSgd: string;
     description: string;
@@ -52,6 +54,7 @@ export function ContraventionFormPage() {
   }>({
     employeeId: '',
     typeId: '',
+    teamId: '',
     vendor: '',
     valueSgd: '',
     description: '',
@@ -78,6 +81,12 @@ export function ContraventionFormPage() {
   const { data: types, isLoading: typesLoading } = useQuery({
     queryKey: ['contraventionTypes'],
     queryFn: contraventionsApi.getTypes,
+  });
+
+  // Fetch teams
+  const { data: teams, isLoading: teamsLoading } = useQuery({
+    queryKey: ['teams'],
+    queryFn: teamsApi.getAll,
   });
 
   // Create mutation
@@ -157,6 +166,11 @@ export function ContraventionFormPage() {
       incidentDate: formData.incidentDate,
     };
 
+    // Add team if selected
+    if (formData.teamId) {
+      submitData.teamId = formData.teamId;
+    }
+
     if (formData.vendor.trim()) {
       submitData.vendor = formData.vendor.trim();
     }
@@ -208,6 +222,14 @@ export function ContraventionFormPage() {
     })) || []),
   ];
 
+  const teamOptions = [
+    { value: '', label: 'No team (optional)' },
+    ...(teams?.map((team) => ({
+      value: team.id,
+      label: team.isPersonal ? `${team.name} (for personal contraventions)` : team.name,
+    })) || []),
+  ];
+
   return (
     <div>
       <Header
@@ -255,6 +277,22 @@ export function ContraventionFormPage() {
                   onChange={(e) => handleChange('typeId', e.target.value)}
                   disabled={typesLoading}
                 />
+              </div>
+
+              {/* Team (optional) */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Team
+                </label>
+                <Select
+                  options={teamOptions}
+                  value={formData.teamId}
+                  onChange={(e) => handleChange('teamId', e.target.value)}
+                  disabled={teamsLoading}
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Optionally tag this contravention to a team for tracking purposes.
+                </p>
               </div>
 
               {/* Incident Date */}

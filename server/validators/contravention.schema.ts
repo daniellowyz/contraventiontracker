@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const createContraventionSchema = z.object({
   employeeId: z.string().min(1, 'Employee ID is required'),
   typeId: z.string().min(1, 'Contravention type is required'),
+  teamId: z.string().optional(),  // Optional team for tracking
   vendor: z.string().optional(),
   valueSgd: z.number().optional(),
   description: z.string().min(1, 'Description is required'),
@@ -19,6 +20,7 @@ export const createContraventionSchema = z.object({
 
 export const updateContraventionSchema = z.object({
   employeeId: z.string().optional(), // Admin can reassign to different employee
+  teamId: z.string().nullable().optional(), // Admin can reassign to different team (null to remove)
   vendor: z.string().optional(),
   valueSgd: z.number().optional(),
   description: z.string().optional(),
@@ -44,6 +46,7 @@ export const contraventionFiltersSchema = z.object({
   typeId: z.string().optional(),
   departmentId: z.string().optional(),
   employeeId: z.string().optional(),
+  teamId: z.string().optional(),  // Filter by team
   dateFrom: z.string().optional(),
   dateTo: z.string().optional(),
   search: z.string().optional(),
