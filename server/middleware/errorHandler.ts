@@ -21,13 +21,17 @@ export function errorHandler(
   res: Response,
   _next: NextFunction
 ): void {
-  console.error('Error:', err);
+  console.error('Error name:', err.name);
+  console.error('Error message:', err.message);
+  console.error('Error stack:', err.stack);
 
   // Zod validation errors
   if (err instanceof ZodError) {
+    console.error('Zod validation error:', JSON.stringify(err.issues));
     res.status(400).json({
       success: false,
       error: 'Validation error',
+      errorType: 'ZodError',
       details: err.issues.map((e) => ({
         field: e.path.join('.'),
         message: e.message,
@@ -44,18 +48,21 @@ export function errorHandler(
         res.status(409).json({
           success: false,
           error: 'A record with this value already exists',
+          errorType: 'PrismaUniqueConstraint',
         });
         return;
       case 'P2025':
         res.status(404).json({
           success: false,
           error: 'Record not found',
+          errorType: 'PrismaNotFound',
         });
         return;
       default:
         res.status(400).json({
           success: false,
           error: 'Database error',
+          errorType: 'PrismaKnownError',
           code: err.code,
         });
         return;
@@ -70,7 +77,8 @@ export function errorHandler(
     res.status(500).json({
       success: false,
       error: 'Database connection error',
-      details: process.env.NODE_ENV === 'development' ? err.message : undefined,
+      errorType: err.name,
+      details: err.message,
     });
     return;
   }
@@ -80,6 +88,7 @@ export function errorHandler(
     res.status(err.statusCode).json({
       success: false,
       error: err.message,
+      errorType: 'AppError',
     });
     return;
   }
@@ -87,9 +96,8 @@ export function errorHandler(
   // Default error
   res.status(500).json({
     success: false,
-    error: process.env.NODE_ENV === 'production'
-      ? 'Internal server error'
-      : err.message,
+    error: err.message || 'Internal server error',
+    errorType: err.name || 'UnknownError',
   });
 }
 
