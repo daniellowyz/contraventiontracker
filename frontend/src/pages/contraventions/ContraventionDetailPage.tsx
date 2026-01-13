@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { contraventionsApi, CreateContraventionInput } from '@/api/contraventions.api';
 import { employeesApi, EmployeeListItem } from '@/api/employees.api';
+import { teamsApi, Team } from '@/api/teams.api';
 import { useAuthStore } from '@/stores/authStore';
 import { Header } from '@/components/layout/Header';
 import { Card } from '@/components/ui/Card';
@@ -25,7 +26,10 @@ import {
   ExternalLink,
   FileCheck,
   Loader2,
-  Trash2
+  Trash2,
+  Users,
+  RefreshCw,
+  Plus
 } from 'lucide-react';
 import { Severity, ContraventionStatus } from '@/types';
 import { uploadApprovalPdf } from '@/lib/supabase';
@@ -72,11 +76,13 @@ export function ContraventionDetailPage() {
   const isAdmin = user?.role === 'ADMIN';
 
   const [isEditing, setIsEditing] = useState(false);
-  const [editData, setEditData] = useState<Partial<CreateContraventionInput> & { severity?: Severity; employeeId?: string; status?: ContraventionStatus }>({});
+  const [editData, setEditData] = useState<Partial<CreateContraventionInput> & { severity?: Severity; employeeId?: string; teamId?: string; status?: ContraventionStatus }>({});
   const [error, setError] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showNewTeamInput, setShowNewTeamInput] = useState(false);
+  const [newTeamName, setNewTeamName] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch contravention details
@@ -86,11 +92,18 @@ export function ContraventionDetailPage() {
     enabled: !!id,
   });
 
-  // Fetch employees for reassignment (only for admins when editing)
+  // Fetch employees for reassignment (only for admins)
   const { data: employeesData } = useQuery({
     queryKey: ['employees'],
     queryFn: () => employeesApi.getAll(),
-    enabled: isAdmin && isEditing,
+    enabled: isAdmin,
+  });
+
+  // Fetch teams for team reassignment (only for admins)
+  const { data: teamsData } = useQuery({
+    queryKey: ['teams'],
+    queryFn: () => teamsApi.getAll(),
+    enabled: isAdmin,
   });
 
   // Update mutation
@@ -121,6 +134,20 @@ export function ContraventionDetailPage() {
     },
   });
 
+  // Create team mutation (for "Other: Specify" option)
+  const createTeamMutation = useMutation({
+    mutationFn: (name: string) => teamsApi.create({ name, isPersonal: false }),
+    onSuccess: (newTeam: Team) => {
+      queryClient.invalidateQueries({ queryKey: ['teams'] });
+      setEditData((prev) => ({ ...prev, teamId: newTeam.id }));
+      setShowNewTeamInput(false);
+      setNewTeamName('');
+    },
+    onError: (err: Error) => {
+      setError(err.message || 'Failed to create team');
+    },
+  });
+
   const handleEdit = () => {
     if (contravention) {
       setEditData({
@@ -131,6 +158,7 @@ export function ContraventionDetailPage() {
         incidentDate: contravention.incidentDate.split('T')[0],
         severity: contravention.severity,
         employeeId: contravention.employee.id,
+        teamId: contravention.team?.id || '',
         status: contravention.status,
       });
       setIsEditing(true);
@@ -166,6 +194,10 @@ export function ContraventionDetailPage() {
     // Include employee reassignment if changed
     if (editData.employeeId && editData.employeeId !== contravention.employee.id) {
       changes.employeeId = editData.employeeId;
+    }
+    // Include team change if changed
+    if (editData.teamId !== (contravention.team?.id || '')) {
+      changes.teamId = editData.teamId || undefined;
     }
     // Include status change if changed (admin only)
     if (editData.status && editData.status !== contravention.status) {
@@ -435,56 +467,6 @@ export function ContraventionDetailPage() {
                     </div>
                   ) : null}
 
-                  {/* Severity (Admin only when editing) */}
-                  {isEditing && isAdmin && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Severity</label>
-                      <Select
-                        options={SEVERITY_OPTIONS}
-                        value={editData.severity || ''}
-                        onChange={(e) => setEditData({ ...editData, severity: e.target.value as Severity })}
-                      />
-                    </div>
-                  )}
-
-                  {/* Employee Reassignment (Admin only when editing) */}
-                  {isEditing && isAdmin && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Assigned Employee</label>
-                      <select
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        value={editData.employeeId || ''}
-                        onChange={(e) => setEditData({ ...editData, employeeId: e.target.value })}
-                      >
-                        {employeesData?.map((emp: EmployeeListItem) => (
-                          <option key={emp.id} value={emp.id}>
-                            {emp.name} ({emp.department?.name || 'No Department'})
-                          </option>
-                        ))}
-                      </select>
-                      {editData.employeeId !== contravention.employee.id && (
-                        <p className="text-xs text-amber-600 mt-1">
-                          Points will be transferred to the new employee when saved.
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Status Override (Admin only when editing) */}
-                  {isEditing && isAdmin && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                      <Select
-                        options={STATUS_OPTIONS}
-                        value={editData.status || ''}
-                        onChange={(e) => setEditData({ ...editData, status: e.target.value as ContraventionStatus })}
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        Override status manually if needed.
-                      </p>
-                    </div>
-                  )}
-
                   {/* Incident Date */}
                   {isEditing ? (
                     <div>
@@ -561,27 +543,189 @@ export function ContraventionDetailPage() {
 
           {/* Sidebar */}
           <div className="space-y-6">
-            {/* Employee Info */}
+            {/* Employee & Admin Controls */}
             <Card>
               <div className="p-6">
-                <h3 className="text-sm font-semibold text-gray-900 mb-4">Employee</h3>
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <User className="w-4 h-4 text-gray-400" />
+                <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                  <User className="w-4 h-4" />
+                  Employee
+                </h3>
+
+                {/* Employee Reassignment (Admin only when editing) */}
+                {isEditing && isAdmin ? (
+                  <div className="space-y-3">
                     <div>
-                      <p className="text-sm font-medium text-gray-900">{contravention.employee.name}</p>
-                      <p className="text-xs text-gray-500">{contravention.employee.email}</p>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Assigned To</label>
+                      <select
+                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        value={editData.employeeId || ''}
+                        onChange={(e) => setEditData({ ...editData, employeeId: e.target.value })}
+                      >
+                        {employeesData?.map((emp: EmployeeListItem) => (
+                          <option key={emp.id} value={emp.id}>
+                            {emp.name} ({emp.department?.name || 'No Dept'})
+                          </option>
+                        ))}
+                      </select>
+                      {editData.employeeId !== contravention.employee.id && (
+                        <p className="text-xs text-amber-600 mt-1">
+                          Points will be transferred when saved.
+                        </p>
+                      )}
                     </div>
                   </div>
-                  {contravention.employee.department && (
+                ) : (
+                  <div className="space-y-3">
                     <div className="flex items-center gap-3">
-                      <Building className="w-4 h-4 text-gray-400" />
-                      <p className="text-sm text-gray-600">{contravention.employee.department.name}</p>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">{contravention.employee.name}</p>
+                        <p className="text-xs text-gray-500">{contravention.employee.email}</p>
+                      </div>
+                    </div>
+                    {contravention.employee.department && (
+                      <div className="flex items-center gap-3">
+                        <Building className="w-4 h-4 text-gray-400" />
+                        <p className="text-sm text-gray-600">{contravention.employee.department.name}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </Card>
+
+            {/* Team */}
+            <Card>
+              <div className="p-6">
+                <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                  <Users className="w-4 h-4" />
+                  Team
+                </h3>
+
+                {isEditing && isAdmin ? (
+                  <div>
+                    {!showNewTeamInput ? (
+                      <>
+                        <select
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          value={editData.teamId || ''}
+                          onChange={(e) => {
+                            if (e.target.value === '__OTHER__') {
+                              setShowNewTeamInput(true);
+                              setEditData({ ...editData, teamId: '' });
+                            } else {
+                              setEditData({ ...editData, teamId: e.target.value });
+                            }
+                          }}
+                        >
+                          <option value="">No team assigned</option>
+                          {teamsData?.map((team: Team) => (
+                            <option key={team.id} value={team.id}>
+                              {team.isPersonal ? `${team.name} (Personal)` : team.name}
+                            </option>
+                          ))}
+                          <option value="__OTHER__">+ Other: Specify new team...</option>
+                        </select>
+                      </>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="flex gap-2">
+                          <Input
+                            type="text"
+                            value={newTeamName}
+                            onChange={(e) => setNewTeamName(e.target.value)}
+                            placeholder="New team name"
+                            className="flex-1 text-sm"
+                          />
+                          <Button
+                            type="button"
+                            onClick={() => {
+                              if (newTeamName.trim()) {
+                                createTeamMutation.mutate(newTeamName.trim());
+                              } else {
+                                setError('Please enter a team name');
+                              }
+                            }}
+                            isLoading={createTeamMutation.isPending}
+                            disabled={createTeamMutation.isPending}
+                            className="text-sm px-3"
+                          >
+                            <Plus className="w-3 h-3 mr-1" />
+                            Add
+                          </Button>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowNewTeamInput(false);
+                            setNewTeamName('');
+                          }}
+                          className="text-xs text-blue-600 hover:text-blue-800"
+                        >
+                          ← Back to team list
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    {contravention.team ? (
+                      <div className="flex items-center gap-2">
+                        <Badge variant={contravention.team.isPersonal ? 'warning' : 'info'}>
+                          {contravention.team.name}
+                        </Badge>
+                        {contravention.team.isPersonal && (
+                          <span className="text-xs text-gray-500">(Personal)</span>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500">No team assigned</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </Card>
+
+            {/* Status (Admin only when editing) */}
+            {isAdmin && (
+              <Card>
+                <div className="p-6">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                    <RefreshCw className="w-4 h-4" />
+                    Status
+                  </h3>
+
+                  {isEditing ? (
+                    <div className="space-y-3">
+                      <Select
+                        options={STATUS_OPTIONS}
+                        value={editData.status || ''}
+                        onChange={(e) => setEditData({ ...editData, status: e.target.value as ContraventionStatus })}
+                      />
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1 mt-3">Severity</label>
+                        <Select
+                          options={SEVERITY_OPTIONS}
+                          value={editData.severity || ''}
+                          onChange={(e) => setEditData({ ...editData, severity: e.target.value as Severity })}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <Badge variant={statusColors[contravention.status]}>
+                        {statusLabels[contravention.status]}
+                      </Badge>
+                      <div className="flex items-center gap-2 mt-2">
+                        <Badge variant={severityColors[contravention.severity]}>
+                          {contravention.severity}
+                        </Badge>
+                        <span className="text-xs text-gray-500">severity</span>
+                      </div>
                     </div>
                   )}
                 </div>
-              </div>
-            </Card>
+              </Card>
+            )}
 
             {/* Timeline */}
             <Card>

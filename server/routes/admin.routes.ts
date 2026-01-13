@@ -1530,6 +1530,105 @@ router.post('/teams/seed-personal', authenticate, requireAdmin, async (_req: Aut
   }
 });
 
+// POST /api/admin/teams/seed-all - Seed all OGP teams from master list
+router.post('/teams/seed-all', authenticate, requireAdmin, async (_req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    // Master list of 59 OGP teams from Teams list.xlsx
+    const OGP_TEAMS = [
+      'ActiveSG', 'AI Aunty', 'Armoury', 'AskGov', 'AttendPA', 'Bright',
+      'Build For Good', 'BYOS', 'CalSG', 'Care360', 'CareersGovSG', 'CrackDown',
+      'Data', 'FormSG', 'GatherSG', 'GCC 2.0', 'Go.Gov.SG', 'GoGovSG & Pinpoint',
+      'GoWhere Suite', 'Health Appointment System', 'Infra', 'Isomer', 'Isomer CMS',
+      'Jumpstart', 'Launchpad', 'LetterSG', 'LetsGetChecked', 'Link@HDB', 'ListSG',
+      'Media Lab', 'OGP', 'PairSG', 'PaySG', 'People Team', 'Pinpoint', 'Plumber',
+      'Postman', 'PostmanSG', 'RedeemSG', 'Redeem@SG', 'Roster Monster', 'ScamShield',
+      'Scribe', 'SHIP', 'Sidequest', 'SPARTA', 'SPOT', 'Starter Kit', 'Stratcon',
+      'SupplyAlly', 'SupplySG', 'Tech Hiring', 'Tech Interview', 'Tooling',
+      'TS Carina', 'TSx', 'VAULT', 'WhatIsThis',
+    ];
+
+    const results = {
+      created: 0,
+      existing: 0,
+      teams: [] as string[],
+    };
+
+    for (const teamName of OGP_TEAMS) {
+      const team = await prisma.team.upsert({
+        where: { name: teamName },
+        update: {},
+        create: {
+          name: teamName,
+          isPersonal: false,
+        },
+      });
+
+      if (team.createdAt.getTime() === team.updatedAt.getTime()) {
+        results.created++;
+      } else {
+        results.existing++;
+      }
+      results.teams.push(teamName);
+    }
+
+    // Also ensure Personal team exists
+    await prisma.team.upsert({
+      where: { name: 'Personal' },
+      update: {},
+      create: {
+        name: 'Personal',
+        description: 'For contraventions not associated with any team',
+        isPersonal: true,
+      },
+    });
+
+    res.json({
+      success: true,
+      data: results,
+      message: `Seeded ${results.created} new teams, ${results.existing} already existed. Total: ${OGP_TEAMS.length} teams.`,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/admin/teams/with-contraventions - Get only teams that have contraventions (for reports)
+router.get('/teams/with-contraventions', authenticate, async (_req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const teamsWithContraventions = await prisma.team.findMany({
+      where: {
+        isActive: true,
+        contraventions: {
+          some: {}, // Has at least one contravention
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        isPersonal: true,
+        _count: {
+          select: { contraventions: true },
+        },
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    res.json({
+      success: true,
+      data: teamsWithContraventions.map((t: typeof teamsWithContraventions[number]) => ({
+        id: t.id,
+        name: t.name,
+        description: t.description,
+        isPersonal: t.isPersonal,
+        contraventionCount: t._count.contraventions,
+      })),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // ==================== DEACTIVATED USERS MANAGEMENT ====================
 
 // GET /api/admin/users/inactive - Get all inactive/deactivated users

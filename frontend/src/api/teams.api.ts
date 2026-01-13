@@ -16,6 +16,12 @@ export const teamsApi = {
     return response.data.data!;
   },
 
+  // Get only teams that have contraventions (for reports/filters)
+  getWithContraventions: async () => {
+    const response = await client.get<ApiResponse<Team[]>>('/admin/teams/with-contraventions');
+    return response.data.data!;
+  },
+
   create: async (data: { name: string; description?: string; isPersonal?: boolean }) => {
     const response = await client.post<ApiResponse<Team>>('/admin/teams', data);
     return response.data.data!;
@@ -29,5 +35,11 @@ export const teamsApi = {
   seedPersonalTeam: async () => {
     const response = await client.post<ApiResponse<Team>>('/admin/teams/seed-personal');
     return response.data.data!;
+  },
+
+  // Seed all 59 OGP teams from master list
+  seedAllTeams: async () => {
+    const response = await client.post<ApiResponse<{ created: number; existing: number; teams: string[] }>>('/admin/teams/seed-all');
+    return response.data;
   },
 };

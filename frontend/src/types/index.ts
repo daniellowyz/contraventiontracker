@@ -43,6 +43,11 @@ export interface Contravention {
     department?: { name: string };
   };
   type: ContraventionType;
+  team?: {
+    id: string;
+    name: string;
+    isPersonal: boolean;
+  };
   vendor?: string;
   valueSgd?: number;
   description: string;

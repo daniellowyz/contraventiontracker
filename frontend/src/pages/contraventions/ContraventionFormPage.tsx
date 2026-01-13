@@ -3,13 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { contraventionsApi, CreateContraventionInput } from '@/api/contraventions.api';
 import { employeesApi } from '@/api/employees.api';
-import { teamsApi } from '@/api/teams.api';
+import { teamsApi, Team } from '@/api/teams.api';
 import { Header } from '@/components/layout/Header';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { ArrowLeft, Save, Upload, Loader2 } from 'lucide-react';
+import { ArrowLeft, Save, Upload, Loader2, Plus } from 'lucide-react';
 import { Severity } from '@/types';
 import { uploadApprovalPdf, supabase } from '@/lib/supabase';
 
@@ -70,6 +70,8 @@ export function ContraventionFormPage() {
   const [approvalFile, setApprovalFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState('');
+  const [showNewTeamInput, setShowNewTeamInput] = useState(false);
+  const [newTeamName, setNewTeamName] = useState('');
 
   // Fetch employees
   const { data: employees, isLoading: employeesLoading } = useQuery({
@@ -98,6 +100,20 @@ export function ContraventionFormPage() {
     },
     onError: (err: Error) => {
       setError(err.message || 'Failed to create contravention');
+    },
+  });
+
+  // Create team mutation (for "Other: Specify" option)
+  const createTeamMutation = useMutation({
+    mutationFn: (name: string) => teamsApi.create({ name, isPersonal: false }),
+    onSuccess: (newTeam: Team) => {
+      queryClient.invalidateQueries({ queryKey: ['teams'] });
+      setFormData((prev) => ({ ...prev, teamId: newTeam.id }));
+      setShowNewTeamInput(false);
+      setNewTeamName('');
+    },
+    onError: (err: Error) => {
+      setError(err.message || 'Failed to create team');
     },
   });
 
@@ -142,6 +158,10 @@ export function ContraventionFormPage() {
       setError('Please enter mitigation measures');
       return;
     }
+    if (!formData.teamId) {
+      setError('Please select a team');
+      return;
+    }
 
     // Validate approval status
     if (!formData.approvalStatus) {
@@ -160,16 +180,12 @@ export function ContraventionFormPage() {
     const submitData: CreateContraventionInput = {
       employeeId: formData.employeeId,
       typeId: formData.typeId,
+      teamId: formData.teamId,
       description: formData.description.trim(),
       justification: formData.justification.trim(),
       mitigation: formData.mitigation.trim(),
       incidentDate: formData.incidentDate,
     };
-
-    // Add team if selected
-    if (formData.teamId) {
-      submitData.teamId = formData.teamId;
-    }
 
     if (formData.vendor.trim()) {
       submitData.vendor = formData.vendor.trim();
@@ -223,12 +239,33 @@ export function ContraventionFormPage() {
   ];
 
   const teamOptions = [
-    { value: '', label: 'No team (optional)' },
+    { value: '', label: 'Select a team...' },
     ...(teams?.map((team) => ({
       value: team.id,
       label: team.isPersonal ? `${team.name} (for personal contraventions)` : team.name,
     })) || []),
+    { value: '__OTHER__', label: '+ Other: Specify new team...' },
   ];
+
+  const handleTeamChange = (value: string) => {
+    if (value === '__OTHER__') {
+      setShowNewTeamInput(true);
+      setFormData((prev) => ({ ...prev, teamId: '' }));
+    } else {
+      setShowNewTeamInput(false);
+      setNewTeamName('');
+      setFormData((prev) => ({ ...prev, teamId: value }));
+    }
+    setError('');
+  };
+
+  const handleCreateNewTeam = () => {
+    if (!newTeamName.trim()) {
+      setError('Please enter a team name');
+      return;
+    }
+    createTeamMutation.mutate(newTeamName.trim());
+  };
 
   return (
     <div>
@@ -279,19 +316,52 @@ export function ContraventionFormPage() {
                 />
               </div>
 
-              {/* Team (optional) */}
+              {/* Team (required) */}
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Team
+                  Team <span className="text-red-500">*</span>
                 </label>
-                <Select
-                  options={teamOptions}
-                  value={formData.teamId}
-                  onChange={(e) => handleChange('teamId', e.target.value)}
-                  disabled={teamsLoading}
-                />
+                {!showNewTeamInput ? (
+                  <Select
+                    options={teamOptions}
+                    value={formData.teamId}
+                    onChange={(e) => handleTeamChange(e.target.value)}
+                    disabled={teamsLoading}
+                  />
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <Input
+                        type="text"
+                        value={newTeamName}
+                        onChange={(e) => setNewTeamName(e.target.value)}
+                        placeholder="Enter new team name"
+                        className="flex-1"
+                      />
+                      <Button
+                        type="button"
+                        onClick={handleCreateNewTeam}
+                        isLoading={createTeamMutation.isPending}
+                        disabled={createTeamMutation.isPending}
+                      >
+                        <Plus className="w-4 h-4 mr-1" />
+                        Create
+                      </Button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowNewTeamInput(false);
+                        setNewTeamName('');
+                      }}
+                      className="text-sm text-blue-600 hover:text-blue-800"
+                    >
+                      ← Back to team list
+                    </button>
+                  </div>
+                )}
                 <p className="mt-1 text-xs text-gray-500">
-                  Optionally tag this contravention to a team for tracking purposes.
+                  Tag this contravention to a team for tracking purposes. Select "Other: Specify" to create a new team.
                 </p>
               </div>
 

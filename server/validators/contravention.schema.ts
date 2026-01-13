@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const createContraventionSchema = z.object({
   employeeId: z.string().min(1, 'Employee ID is required'),
   typeId: z.string().min(1, 'Contravention type is required'),
-  teamId: z.string().optional(),  // Optional team for tracking
+  teamId: z.string().min(1, 'Team is required'),  // Required team for tracking
   vendor: z.string().optional(),
   valueSgd: z.number().optional(),
   description: z.string().min(1, 'Description is required'),

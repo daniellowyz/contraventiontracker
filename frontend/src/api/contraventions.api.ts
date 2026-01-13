@@ -18,7 +18,7 @@ export interface ContraventionFilters {
 export interface CreateContraventionInput {
   employeeId: string;
   typeId: string;
-  teamId?: string;  // Optional team for tracking
+  teamId: string;  // Required team for tracking
   vendor?: string;
   valueSgd?: number;
   description: string;
