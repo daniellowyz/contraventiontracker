@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { contraventionsApi, CreateContraventionInput } from '@/api/contraventions.api';
 import { employeesApi, EmployeeListItem } from '@/api/employees.api';
@@ -693,12 +693,12 @@ export function ContraventionDetailPage() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    <div className="flex items-center gap-3">
+                    <Link to={`/employees/${contravention.employee.id}`} className="flex items-center gap-3 hover:bg-gray-50 -mx-2 px-2 py-1 rounded-lg transition-colors">
                       <div>
-                        <p className="text-sm font-medium text-gray-900">{contravention.employee.name}</p>
+                        <p className="text-sm font-medium text-blue-600 hover:text-blue-800">{contravention.employee.name}</p>
                         <p className="text-xs text-gray-500">{contravention.employee.email}</p>
                       </div>
-                    </div>
+                    </Link>
                     {contravention.employee.department && (
                       <div className="flex items-center gap-3">
                         <Building className="w-4 h-4 text-gray-400" />
