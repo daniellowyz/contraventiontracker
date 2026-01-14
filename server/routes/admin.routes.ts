@@ -9,13 +9,13 @@ const router = Router();
 
 // ==================== APPROVERS LIST ====================
 
-// GET /api/admin/approvers - List all users who can approve (ADMIN or APPROVER role)
+// GET /api/admin/approvers - List all users who can approve (APPROVER role only)
 router.get('/approvers', authenticate, async (_req: AuthenticatedRequest, res: Response, next) => {
   try {
     const approvers = await prisma.user.findMany({
       where: {
         isActive: true,
-        role: { in: ['ADMIN', 'APPROVER'] },
+        role: 'APPROVER',
       },
       select: {
         id: true,
@@ -26,10 +26,7 @@ router.get('/approvers', authenticate, async (_req: AuthenticatedRequest, res: R
         role: true,
         department: { select: { id: true, name: true } },
       },
-      orderBy: [
-        { role: 'asc' }, // ADMIN first, then APPROVER
-        { name: 'asc' },
-      ],
+      orderBy: { name: 'asc' },
     });
 
     res.json({ success: true, data: approvers });
