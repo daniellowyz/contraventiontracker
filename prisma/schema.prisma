@@ -14,7 +14,14 @@ datasource db {
 
 enum Role {
   ADMIN
+  APPROVER
   USER
+}
+
+enum ApprovalRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 enum Severity {
@@ -84,11 +91,18 @@ model User {
   email            String   @unique
   passwordHash     String?  // Optional - migrating to OTP auth
   name             String
+  position         String?  // Position in organization
   departmentId     String?
   department       Department?      @relation("DepartmentEmployees", fields: [departmentId], references: [id])
   role             Role             @default(USER)
   slackId          String?
   isActive         Boolean          @default(true)
+
+  // New user registration - needs to complete profile before access
+  isProfileComplete    Boolean      @default(false)
+  // Approver role request - pending admin approval
+  requestedApprover    Boolean      @default(false)
+  approverRequestStatus ApprovalRequestStatus?
 
   // Relations
   departmentHeadOf    Department[]     @relation("DepartmentHead")
@@ -104,6 +118,10 @@ model User {
   notifications       Notification[]
   otpRecords          OtpRecord[]
   teams               UserTeam[]       // User can belong to multiple teams
+
+  // Approval relationships - for contravention approval workflow
+  approvalRequestsReceived  ContraventionApproval[] @relation("ApprovalApprover")
+  approvalRequestsReviewed  ContraventionApproval[] @relation("ApprovalReviewer")
 
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
@@ -186,6 +204,7 @@ model Contravention {
 
   // Relations
   disputes        Dispute[]
+  approvalRequests ContraventionApproval[]
 
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
@@ -369,4 +388,31 @@ model UserTeam {
   @@unique([userId, teamId])
   @@index([userId])
   @@index([teamId])
+}
+
+// Contravention Approval - tracks approval requests sent to approvers
+model ContraventionApproval {
+  id                String              @id @default(cuid())
+  contraventionId   String
+  contravention     Contravention       @relation(fields: [contraventionId], references: [id], onDelete: Cascade)
+
+  // The approver who needs to approve this
+  approverId        String
+  approver          User                @relation("ApprovalApprover", fields: [approverId], references: [id])
+
+  // Status tracking
+  status            ApprovalRequestStatus @default(PENDING)
+
+  // If approved/rejected, who reviewed it (could be the approver or an admin)
+  reviewedById      String?
+  reviewedBy        User?               @relation("ApprovalReviewer", fields: [reviewedById], references: [id])
+  reviewedAt        DateTime?
+  reviewNotes       String?             @db.Text
+
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  @@unique([contraventionId, approverId])
+  @@index([approverId])
+  @@index([status])
 }

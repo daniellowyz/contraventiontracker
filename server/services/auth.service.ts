@@ -76,7 +76,40 @@ export class AuthService {
       department: user.department,
       points: user.pointsRecord?.totalPoints || 0,
       currentLevel: user.pointsRecord?.currentLevel,
+      isProfileComplete: user.isProfileComplete,
+      position: user.position,
     };
+  }
+
+  /**
+   * Complete profile for new users
+   */
+  async completeProfile(userId: string, data: {
+    name: string;
+    position: string;
+    requestApprover: boolean;
+  }) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new AppError('User not found', 404);
+    }
+
+    // Update the user profile
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        name: data.name,
+        position: data.position,
+        isProfileComplete: true,
+        requestedApprover: data.requestApprover,
+        approverRequestStatus: data.requestApprover ? 'PENDING' : null,
+      },
+    });
+
+    return updatedUser;
   }
 }
 

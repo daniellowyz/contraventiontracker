@@ -41,13 +41,15 @@ router.post('/verify-otp', validateBody(verifyOtpSchema), async (req, res: Respo
     const { email, otp } = req.body;
     const user = await otpService.verifyOtp(email, otp);
 
-    // Create JWT payload
+    // Create JWT payload with new fields
     const payload: JwtPayload = {
       userId: user.userId,
       employeeId: user.employeeId,
       email: user.email,
       name: user.name,
       role: user.role,
+      isProfileComplete: user.isProfileComplete,
+      position: user.position,
     };
 
     // Generate JWT token
@@ -103,6 +105,57 @@ router.get('/me', authenticate, async (req: AuthenticatedRequest, res: Response,
   try {
     const user = await authService.getCurrentUser(req.user!.userId);
     res.json({ success: true, data: user });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/auth/complete-profile - Complete profile for new users
+router.post('/complete-profile', authenticate, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const { name, position, requestApprover } = req.body;
+    const userId = req.user!.userId;
+
+    // Validate inputs
+    if (!name || typeof name !== 'string' || name.trim().length === 0) {
+      return res.status(400).json({ success: false, error: 'Name is required' });
+    }
+    if (!position || typeof position !== 'string' || position.trim().length === 0) {
+      return res.status(400).json({ success: false, error: 'Position is required' });
+    }
+
+    // Update user profile
+    const updatedUser = await authService.completeProfile(userId, {
+      name: name.trim(),
+      position: position.trim(),
+      requestApprover: Boolean(requestApprover),
+    });
+
+    // Create new JWT with updated info
+    const payload: JwtPayload = {
+      userId: updatedUser.id,
+      employeeId: updatedUser.employeeId,
+      email: updatedUser.email,
+      name: updatedUser.name,
+      role: updatedUser.role,
+      isProfileComplete: updatedUser.isProfileComplete,
+      position: updatedUser.position || undefined,
+    };
+
+    const token = jwt.sign(payload, config.jwtSecret!, {
+      expiresIn: config.jwtExpiresIn,
+    } as jwt.SignOptions);
+
+    // Set new cookie
+    res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
+
+    res.json({
+      success: true,
+      data: {
+        token,
+        user: payload,
+      },
+    });
   } catch (error) {
     next(error);
   }

@@ -606,8 +606,8 @@ router.patch('/users/:id/role', authenticate, requireAdmin, async (req: Authenti
   try {
     const { role } = req.body;
 
-    if (!role || !['ADMIN', 'USER'].includes(role)) {
-      throw new AppError('Invalid role. Must be ADMIN or USER', 400);
+    if (!role || !['ADMIN', 'APPROVER', 'USER'].includes(role)) {
+      throw new AppError('Invalid role. Must be ADMIN, APPROVER, or USER', 400);
     }
 
     const userId = req.params.id;
@@ -654,6 +654,303 @@ router.patch('/users/:id/role', authenticate, requireAdmin, async (req: Authenti
     });
 
     res.json({ success: true, data: updatedUser });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/admin/approver-requests - Get users with pending approver requests (admin only)
+router.get('/approver-requests', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const requests = await prisma.user.findMany({
+      where: {
+        requestedApprover: true,
+        approverRequestStatus: 'PENDING',
+      },
+      select: {
+        id: true,
+        employeeId: true,
+        email: true,
+        name: true,
+        position: true,
+        role: true,
+        requestedApprover: true,
+        approverRequestStatus: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    res.json({ success: true, data: requests });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/admin/approver-requests/:id/approve - Approve approver request (admin only)
+router.post('/approver-requests/:id/approve', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const userId = req.params.id;
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new AppError('User not found', 404);
+    }
+
+    if (!user.requestedApprover || user.approverRequestStatus !== 'PENDING') {
+      throw new AppError('No pending approver request for this user', 400);
+    }
+
+    // Update user to APPROVER role and mark request as approved
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        role: 'APPROVER',
+        approverRequestStatus: 'APPROVED',
+      },
+      select: {
+        id: true,
+        employeeId: true,
+        email: true,
+        name: true,
+        position: true,
+        role: true,
+        requestedApprover: true,
+        approverRequestStatus: true,
+      },
+    });
+
+    // Log the action
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user!.userId,
+        action: 'APPROVE_APPROVER_REQUEST',
+        entityType: 'User',
+        entityId: userId,
+        oldValues: { role: user.role, approverRequestStatus: 'PENDING' },
+        newValues: { role: 'APPROVER', approverRequestStatus: 'APPROVED' },
+      },
+    });
+
+    res.json({ success: true, data: updatedUser });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/admin/approver-requests/:id/reject - Reject approver request (admin only)
+router.post('/approver-requests/:id/reject', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const userId = req.params.id;
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new AppError('User not found', 404);
+    }
+
+    if (!user.requestedApprover || user.approverRequestStatus !== 'PENDING') {
+      throw new AppError('No pending approver request for this user', 400);
+    }
+
+    // Mark request as rejected (keep role as USER)
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        approverRequestStatus: 'REJECTED',
+      },
+      select: {
+        id: true,
+        employeeId: true,
+        email: true,
+        name: true,
+        position: true,
+        role: true,
+        requestedApprover: true,
+        approverRequestStatus: true,
+      },
+    });
+
+    // Log the action
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user!.userId,
+        action: 'REJECT_APPROVER_REQUEST',
+        entityType: 'User',
+        entityId: userId,
+        oldValues: { approverRequestStatus: 'PENDING' },
+        newValues: { approverRequestStatus: 'REJECTED' },
+      },
+    });
+
+    res.json({ success: true, data: updatedUser });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============== TEAMS ==============
+
+// GET /api/admin/teams - List all teams
+router.get('/teams', authenticate, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const teams = await prisma.team.findMany({
+      where: { isActive: true },
+      include: {
+        _count: {
+          select: {
+            contraventions: true,
+            members: true,
+          },
+        },
+      },
+      orderBy: [
+        { isPersonal: 'desc' },
+        { name: 'asc' },
+      ],
+    });
+    res.json({
+      success: true,
+      data: teams.map((t) => ({
+        id: t.id,
+        name: t.name,
+        description: t.description,
+        isPersonal: t.isPersonal,
+        contraventionCount: t._count.contraventions,
+        memberCount: t._count.members,
+      })),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/admin/teams - Create a new team (admin only)
+router.post('/teams', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const { name, description } = req.body;
+
+    if (!name) {
+      throw new AppError('Team name is required', 400);
+    }
+
+    // Check if team already exists
+    const existingTeam = await prisma.team.findUnique({
+      where: { name },
+    });
+
+    if (existingTeam) {
+      throw new AppError('A team with this name already exists', 400);
+    }
+
+    const team = await prisma.team.create({
+      data: {
+        name,
+        description: description || null,
+      },
+    });
+
+    res.status(201).json({
+      success: true,
+      data: {
+        id: team.id,
+        name: team.name,
+        description: team.description,
+        isPersonal: team.isPersonal,
+        contraventionCount: 0,
+        memberCount: 0,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// PATCH /api/admin/teams/:id - Update a team (admin only)
+router.patch('/teams/:id', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const { name, description, isActive } = req.body;
+
+    const team = await prisma.team.findUnique({
+      where: { id: req.params.id },
+    });
+
+    if (!team) {
+      throw new AppError('Team not found', 404);
+    }
+
+    // If changing name, check for duplicates
+    if (name && name !== team.name) {
+      const existingTeam = await prisma.team.findUnique({
+        where: { name },
+      });
+      if (existingTeam) {
+        throw new AppError('A team with this name already exists', 400);
+      }
+    }
+
+    const updated = await prisma.team.update({
+      where: { id: req.params.id },
+      data: {
+        ...(name && { name }),
+        ...(description !== undefined && { description }),
+        ...(isActive !== undefined && { isActive }),
+      },
+      include: {
+        _count: {
+          select: {
+            contraventions: true,
+            members: true,
+          },
+        },
+      },
+    });
+
+    res.json({
+      success: true,
+      data: {
+        id: updated.id,
+        name: updated.name,
+        description: updated.description,
+        isPersonal: updated.isPersonal,
+        isActive: updated.isActive,
+        contraventionCount: updated._count.contraventions,
+        memberCount: updated._count.members,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============== APPROVERS ==============
+
+// GET /api/admin/approvers - List all users with APPROVER role
+router.get('/approvers', authenticate, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const approvers = await prisma.user.findMany({
+      where: {
+        role: 'APPROVER',
+        isActive: true,
+      },
+      select: {
+        id: true,
+        employeeId: true,
+        email: true,
+        name: true,
+        position: true,
+        role: true,
+        department: { select: { id: true, name: true } },
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    res.json({ success: true, data: approvers });
   } catch (error) {
     next(error);
   }

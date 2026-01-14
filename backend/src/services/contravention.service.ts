@@ -87,8 +87,28 @@ export class ContraventionService {
       contravention.id
     );
 
-    // Send webhook to Google Apps Script if approver email is provided
+    // If approver email is provided, create ContraventionApproval record
     if (data.authorizerEmail) {
+      // Look up the approver by email
+      const approver = await prisma.user.findUnique({
+        where: { email: data.authorizerEmail.toLowerCase() },
+      });
+
+      if (approver) {
+        // Create the approval request record
+        await prisma.contraventionApproval.create({
+          data: {
+            contraventionId: contravention.id,
+            approverId: approver.id,
+            status: 'PENDING',
+          },
+        });
+        console.log(`Created approval request for ${data.authorizerEmail} on ${referenceNo}`);
+      } else {
+        console.warn(`Approver not found with email: ${data.authorizerEmail}`);
+      }
+
+      // Send webhook to Google Apps Script for email notification
       this.sendApprovalWebhook(contravention, data).catch((err) => {
         console.error('Failed to send approval webhook:', err);
       });

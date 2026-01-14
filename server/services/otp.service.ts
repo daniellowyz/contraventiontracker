@@ -164,7 +164,9 @@ export class OtpService {
     employeeId: string;
     email: string;
     name: string;
-    role: 'ADMIN' | 'USER';
+    role: 'ADMIN' | 'APPROVER' | 'USER';
+    isProfileComplete: boolean;
+    position?: string;
   }> {
     // Validate email format
     const validation = this.validateEmail(email);
@@ -241,13 +243,15 @@ export class OtpService {
       const count = await prisma.user.count();
       const employeeId = `EMP${String(count + 1).padStart(4, '0')}`;
 
-      // Extract name from email (before @)
+      // Extract name from email (before @) - placeholder name
       const namePart = normalizedEmail.split('@')[0];
       const name = namePart
         .split(/[._-]/)
         .map(part => part.charAt(0).toUpperCase() + part.slice(1))
         .join(' ');
 
+      // New users from tech.gov.sg or ogp.gov.sg need to complete their profile
+      // Only open.gov.sg users who are synced from Slack are pre-populated
       user = await prisma.user.create({
         data: {
           email: normalizedEmail,
@@ -255,6 +259,7 @@ export class OtpService {
           name,
           role: 'USER',
           isActive: true,
+          isProfileComplete: false, // New users need to complete profile
         },
       });
 
@@ -278,6 +283,8 @@ export class OtpService {
       email: user.email,
       name: user.name,
       role: user.role,
+      isProfileComplete: user.isProfileComplete,
+      position: user.position || undefined,
     };
   }
 

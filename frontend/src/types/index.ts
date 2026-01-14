@@ -1,9 +1,10 @@
 // Enums
-export type Role = 'ADMIN' | 'USER';
+export type Role = 'ADMIN' | 'APPROVER' | 'USER';
 export type Severity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 export type ContraventionStatus = 'PENDING_UPLOAD' | 'PENDING_REVIEW' | 'COMPLETED';
 export type EscalationLevel = 'LEVEL_1' | 'LEVEL_2' | 'LEVEL_3' | 'LEVEL_4' | 'LEVEL_5';
 export type TrainingStatus = 'ASSIGNED' | 'IN_PROGRESS' | 'COMPLETED' | 'OVERDUE' | 'WAIVED';
+export type ApprovalRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
 // User
 export interface User {
@@ -11,10 +12,14 @@ export interface User {
   employeeId: string;
   email: string;
   name: string;
+  position?: string;
   role: Role;
   department?: Department;
   points?: number;
   currentLevel?: EscalationLevel;
+  isProfileComplete?: boolean;
+  requestedApprover?: boolean;
+  approverRequestStatus?: ApprovalRequestStatus;
 }
 
 // Department
@@ -175,4 +180,20 @@ export interface PaginatedResponse<T> {
     total: number;
     totalPages: number;
   };
+}
+
+// Contravention Approval Request
+export interface ContraventionApproval {
+  id: string;
+  contraventionId: string;
+  contravention?: Contravention;
+  approverId: string;
+  approver?: { id: string; name: string; email: string };
+  status: ApprovalRequestStatus;
+  reviewedById?: string;
+  reviewedBy?: { id: string; name: string };
+  reviewedAt?: string;
+  reviewNotes?: string;
+  createdAt: string;
+  updatedAt: string;
 }

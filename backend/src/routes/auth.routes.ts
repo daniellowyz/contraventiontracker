@@ -63,7 +63,11 @@ router.post('/verify-otp', validateBody(verifyOtpSchema), async (req, res: Respo
       success: true,
       data: {
         token,
-        user: payload,
+        user: {
+          ...payload,
+          isProfileComplete: user.isProfileComplete,
+          position: user.position,
+        },
       },
     });
   } catch (error) {
@@ -103,6 +107,63 @@ router.get('/me', authenticate, async (req: AuthenticatedRequest, res: Response,
   try {
     const user = await authService.getCurrentUser(req.user!.userId);
     res.json({ success: true, data: user });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/auth/complete-profile - Complete profile for new users
+router.post('/complete-profile', authenticate, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const { name, position, requestApprover } = req.body;
+    const userId = req.user!.userId;
+
+    if (!name || !position) {
+      res.status(400).json({
+        success: false,
+        error: 'Name and position are required',
+      });
+      return;
+    }
+
+    // Update user profile
+    const updatedUser = await authService.completeProfile(userId, {
+      name,
+      position,
+      requestApprover: requestApprover || false,
+    });
+
+    // Create new JWT with updated info
+    const payload: JwtPayload = {
+      userId: updatedUser.id,
+      employeeId: updatedUser.employeeId,
+      email: updatedUser.email,
+      name: updatedUser.name,
+      role: updatedUser.role,
+    };
+
+    const token = jwt.sign(payload, config.jwtSecret, {
+      expiresIn: config.jwtExpiresIn,
+    } as jwt.SignOptions);
+
+    // Set updated JWT as HTTP-only cookie
+    res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
+
+    res.json({
+      success: true,
+      data: {
+        user: {
+          userId: updatedUser.id,
+          employeeId: updatedUser.employeeId,
+          email: updatedUser.email,
+          name: updatedUser.name,
+          role: updatedUser.role,
+          isProfileComplete: updatedUser.isProfileComplete,
+          position: updatedUser.position,
+        },
+        token,
+      },
+    });
   } catch (error) {
     next(error);
   }

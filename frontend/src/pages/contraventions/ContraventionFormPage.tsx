@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { contraventionsApi, CreateContraventionInput } from '@/api/contraventions.api';
 import { employeesApi } from '@/api/employees.api';
 import { teamsApi, Team } from '@/api/teams.api';
+import { approversApi } from '@/api/approvers.api';
 import { Header } from '@/components/layout/Header';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -24,13 +25,6 @@ const APPROVAL_STATUS_OPTIONS = [
   { value: '', label: 'Select approval status...' },
   { value: 'has_approval', label: 'I already have approval' },
   { value: 'needs_approval', label: 'I need to request approval' },
-];
-
-const APPROVER_OPTIONS = [
-  { value: '', label: 'Select an approver...' },
-  { value: 'Aaron_ma@ogp.gov.sg', label: 'GT Procurement Director - Aaron Ma' },
-  { value: 'Hygin@ogp.gov.sg', label: 'OGP Deputy Director - Hygin' },
-  { value: 'daniellow@open.gov.sg', label: 'For Sandbox - Daniel Low' },
 ];
 
 export function ContraventionFormPage() {
@@ -72,6 +66,7 @@ export function ContraventionFormPage() {
   const [error, setError] = useState('');
   const [showNewTeamInput, setShowNewTeamInput] = useState(false);
   const [newTeamName, setNewTeamName] = useState('');
+  const [isPersonal, setIsPersonal] = useState(false);
 
   // Fetch employees
   const { data: employees, isLoading: employeesLoading } = useQuery({
@@ -89,6 +84,12 @@ export function ContraventionFormPage() {
   const { data: teams, isLoading: teamsLoading } = useQuery({
     queryKey: ['teams'],
     queryFn: teamsApi.getAll,
+  });
+
+  // Fetch approvers
+  const { data: approvers, isLoading: approversLoading } = useQuery({
+    queryKey: ['approvers'],
+    queryFn: approversApi.getAll,
   });
 
   // Create mutation
@@ -158,8 +159,12 @@ export function ContraventionFormPage() {
       setError('Please enter mitigation measures');
       return;
     }
-    if (!formData.teamId) {
-      setError('Please select a team');
+    // Get the personal team ID if isPersonal is checked
+    const personalTeam = teams?.find((t) => t.isPersonal);
+    const effectiveTeamId = isPersonal ? personalTeam?.id : formData.teamId;
+
+    if (!effectiveTeamId) {
+      setError(isPersonal ? 'Personal team not found. Please contact admin.' : 'Please select a team');
       return;
     }
 
@@ -180,7 +185,7 @@ export function ContraventionFormPage() {
     const submitData: CreateContraventionInput = {
       employeeId: formData.employeeId,
       typeId: formData.typeId,
-      teamId: formData.teamId,
+      teamId: effectiveTeamId,
       description: formData.description.trim(),
       justification: formData.justification.trim(),
       mitigation: formData.mitigation.trim(),
@@ -321,48 +326,70 @@ export function ContraventionFormPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Team <span className="text-red-500">*</span>
                 </label>
-                {!showNewTeamInput ? (
-                  <Select
-                    options={teamOptions}
-                    value={formData.teamId}
-                    onChange={(e) => handleTeamChange(e.target.value)}
-                    disabled={teamsLoading}
-                  />
-                ) : (
-                  <div className="space-y-2">
-                    <div className="flex gap-2">
-                      <Input
-                        type="text"
-                        value={newTeamName}
-                        onChange={(e) => setNewTeamName(e.target.value)}
-                        placeholder="Enter new team name"
-                        className="flex-1"
-                      />
-                      <Button
-                        type="button"
-                        onClick={handleCreateNewTeam}
-                        isLoading={createTeamMutation.isPending}
-                        disabled={createTeamMutation.isPending}
-                      >
-                        <Plus className="w-4 h-4 mr-1" />
-                        Create
-                      </Button>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
+
+                {/* Personal contravention checkbox */}
+                <label className="flex items-center gap-2 mb-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isPersonal}
+                    onChange={(e) => {
+                      setIsPersonal(e.target.checked);
+                      if (e.target.checked) {
                         setShowNewTeamInput(false);
                         setNewTeamName('');
-                      }}
-                      className="text-sm text-blue-600 hover:text-blue-800"
-                    >
-                      ← Back to team list
-                    </button>
-                  </div>
+                      }
+                    }}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-700">This is a personal contravention (not associated with a team)</span>
+                </label>
+
+                {!isPersonal && (
+                  <>
+                    {!showNewTeamInput ? (
+                      <Select
+                        options={teamOptions}
+                        value={formData.teamId}
+                        onChange={(e) => handleTeamChange(e.target.value)}
+                        disabled={teamsLoading}
+                      />
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="flex gap-2">
+                          <Input
+                            type="text"
+                            value={newTeamName}
+                            onChange={(e) => setNewTeamName(e.target.value)}
+                            placeholder="Enter new team name"
+                            className="flex-1"
+                          />
+                          <Button
+                            type="button"
+                            onClick={handleCreateNewTeam}
+                            isLoading={createTeamMutation.isPending}
+                            disabled={createTeamMutation.isPending}
+                          >
+                            <Plus className="w-4 h-4 mr-1" />
+                            Create
+                          </Button>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowNewTeamInput(false);
+                            setNewTeamName('');
+                          }}
+                          className="text-sm text-blue-600 hover:text-blue-800"
+                        >
+                          ← Back to team list
+                        </button>
+                      </div>
+                    )}
+                    <p className="mt-1 text-xs text-gray-500">
+                      Tag this contravention to a team for tracking purposes. Select "Other: Specify" to create a new team.
+                    </p>
+                  </>
                 )}
-                <p className="mt-1 text-xs text-gray-500">
-                  Tag this contravention to a team for tracking purposes. Select "Other: Specify" to create a new team.
-                </p>
               </div>
 
               {/* Incident Date */}
@@ -495,9 +522,16 @@ export function ContraventionFormPage() {
                     Select Approver <span className="text-red-500">*</span>
                   </label>
                   <Select
-                    options={APPROVER_OPTIONS}
+                    options={[
+                      { value: '', label: 'Select an approver...' },
+                      ...(approvers?.map((approver) => ({
+                        value: approver.email,
+                        label: `${approver.name}${approver.position ? ` - ${approver.position}` : ''} (${approver.role})`,
+                      })) || []),
+                    ]}
                     value={formData.approverEmail}
                     onChange={(e) => handleChange('approverEmail', e.target.value)}
+                    disabled={approversLoading}
                   />
                   <p className="mt-1 text-xs text-gray-500">
                     An email will be sent to the selected approver requesting approval for this contravention.

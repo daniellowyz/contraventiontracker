@@ -134,10 +134,53 @@ export class OtpService {
     console.log(`Expires at: ${expiresAt.toISOString()}`);
     console.log('========================================');
 
+    // Send OTP email via webhook (non-blocking)
+    this.sendOtpWebhook(normalizedEmail, otp, expiresAt).catch((err) => {
+      console.error('Failed to send OTP webhook:', err);
+    });
+
     return {
       success: true,
       message: 'OTP sent to your email address',
     };
+  }
+
+  /**
+   * Send OTP email via Google Apps Script webhook
+   */
+  private async sendOtpWebhook(email: string, otp: string, expiresAt: Date): Promise<void> {
+    const webhookUrl = process.env.OTP_WEBHOOK_URL;
+    if (!webhookUrl) {
+      console.log('OTP_WEBHOOK_URL not configured, skipping webhook');
+      return;
+    }
+
+    // Calculate expiry minutes dynamically (matching production format)
+    const expiryMinutes = Math.round((expiresAt.getTime() - Date.now()) / 60000);
+
+    const payload = {
+      type: 'OTP',  // Must be uppercase to match Google Apps Script
+      email,
+      otp,
+      expiryMinutes,
+    };
+
+    try {
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Webhook failed with status: ${response.status}`);
+      }
+
+      console.log('OTP webhook sent successfully for:', email);
+    } catch (error) {
+      console.error('Error sending OTP webhook:', error);
+      throw error;
+    }
   }
 
   /**
@@ -148,7 +191,9 @@ export class OtpService {
     employeeId: string;
     email: string;
     name: string;
-    role: 'ADMIN' | 'USER';
+    role: 'ADMIN' | 'APPROVER' | 'USER';
+    isProfileComplete: boolean;
+    position?: string | null;
   }> {
     // Validate email format
     const validation = this.validateEmail(email);
@@ -221,9 +266,10 @@ export class OtpService {
 
     if (!user) {
       // Auto-create user for allowed domains
-      // Generate unique employee ID
-      const count = await prisma.user.count();
-      const employeeId = `EMP${String(count + 1).padStart(4, '0')}`;
+      // Generate unique employee ID using timestamp + random to avoid collisions
+      const timestamp = Date.now().toString(36).toUpperCase();
+      const random = Math.random().toString(36).substring(2, 6).toUpperCase();
+      const employeeId = `EMP${timestamp}${random}`;
 
       // Extract name from email (before @)
       const namePart = normalizedEmail.split('@')[0];
@@ -262,6 +308,8 @@ export class OtpService {
       email: user.email,
       name: user.name,
       role: user.role,
+      isProfileComplete: user.isProfileComplete,
+      position: user.position,
     };
   }
 

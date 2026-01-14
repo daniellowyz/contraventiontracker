@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
 import { LoginPage } from '@/pages/auth/LoginPage';
+import { CompleteProfilePage } from '@/pages/auth/CompleteProfilePage';
 import { DashboardPage } from '@/pages/dashboard/DashboardPage';
 import { ContraventionsListPage } from '@/pages/contraventions/ContraventionsListPage';
 import { ContraventionFormPage } from '@/pages/contraventions/ContraventionFormPage';
@@ -12,10 +13,11 @@ import { ReportsPage } from '@/pages/reports/ReportsPage';
 import { SettingsPage } from '@/pages/settings/SettingsPage';
 import { TrainingPage } from '@/pages/training/TrainingPage';
 import { EscalationsPage } from '@/pages/escalations/EscalationsPage';
+import { ApprovalPendingPage } from '@/pages/approvals/ApprovalPendingPage';
 import { useAuthStore } from '@/stores/authStore';
 
 function App() {
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const { isAuthenticated, needsProfileCompletion } = useAuthStore();
 
   return (
     <BrowserRouter>
@@ -24,6 +26,20 @@ function App() {
         <Route
           path="/login"
           element={isAuthenticated ? <Navigate to="/" replace /> : <LoginPage />}
+        />
+
+        {/* Profile completion route - accessible when authenticated but profile incomplete */}
+        <Route
+          path="/complete-profile"
+          element={
+            !isAuthenticated ? (
+              <Navigate to="/login" replace />
+            ) : !needsProfileCompletion ? (
+              <Navigate to="/" replace />
+            ) : (
+              <CompleteProfilePage />
+            )
+          }
         />
 
         {/* Protected routes */}
@@ -44,6 +60,7 @@ function App() {
           <Route path="/training" element={<TrainingPage />} />
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/approvals" element={<ApprovalPendingPage />} />
         </Route>
 
         {/* Catch all */}

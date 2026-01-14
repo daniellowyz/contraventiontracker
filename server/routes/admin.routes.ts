@@ -54,12 +54,12 @@ router.patch('/users/:id/role', authenticate, requireAdmin, async (req: Authenti
   try {
     const { role } = req.body;
 
-    if (!role || !['ADMIN', 'USER'].includes(role)) {
-      throw new AppError('Invalid role. Must be ADMIN or USER.', 400);
+    if (!role || !['ADMIN', 'APPROVER', 'USER'].includes(role)) {
+      throw new AppError('Invalid role. Must be ADMIN, APPROVER, or USER.', 400);
     }
 
     // Prevent self-demotion
-    if (req.params.id === req.user!.userId && role === 'USER') {
+    if (req.params.id === req.user!.userId && role !== 'ADMIN') {
       throw new AppError('Cannot demote yourself from admin.', 400);
     }
 
@@ -132,6 +132,137 @@ router.patch('/users/:id/status', authenticate, requireAdmin, async (req: Authen
     });
 
     res.json({ success: true, data: user });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ==================== APPROVER ROLE REQUESTS ====================
+
+// GET /api/admin/approver-requests - Get all pending approver role requests
+router.get('/approver-requests', authenticate, requireAdmin, async (_req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const requests = await prisma.user.findMany({
+      where: {
+        requestedApprover: true,
+        approverRequestStatus: 'PENDING',
+      },
+      select: {
+        id: true,
+        employeeId: true,
+        email: true,
+        name: true,
+        position: true,
+        role: true,
+        createdAt: true,
+        isProfileComplete: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    res.json({ success: true, data: requests });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/admin/approver-requests/:id/approve - Approve an approver role request
+router.post('/approver-requests/:id/approve', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const { id } = req.params;
+
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (!user) {
+      throw new AppError('User not found', 404);
+    }
+
+    if (!user.requestedApprover || user.approverRequestStatus !== 'PENDING') {
+      throw new AppError('No pending approver request for this user', 400);
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id },
+      data: {
+        role: 'APPROVER',
+        approverRequestStatus: 'APPROVED',
+      },
+      select: {
+        id: true,
+        employeeId: true,
+        email: true,
+        name: true,
+        role: true,
+        position: true,
+      },
+    });
+
+    // Log to audit trail
+    await prisma.auditLog.create({
+      data: {
+        entityType: 'USER',
+        entityId: id,
+        action: 'APPROVER_REQUEST_APPROVED',
+        userId: req.user!.userId,
+        newValues: { role: 'APPROVER' },
+      },
+    });
+
+    res.json({
+      success: true,
+      data: updatedUser,
+      message: `${updatedUser.name} has been promoted to Approver`,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/admin/approver-requests/:id/reject - Reject an approver role request
+router.post('/approver-requests/:id/reject', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (!user) {
+      throw new AppError('User not found', 404);
+    }
+
+    if (!user.requestedApprover || user.approverRequestStatus !== 'PENDING') {
+      throw new AppError('No pending approver request for this user', 400);
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id },
+      data: {
+        approverRequestStatus: 'REJECTED',
+      },
+      select: {
+        id: true,
+        employeeId: true,
+        email: true,
+        name: true,
+        role: true,
+        position: true,
+      },
+    });
+
+    // Log to audit trail
+    await prisma.auditLog.create({
+      data: {
+        entityType: 'USER',
+        entityId: id,
+        action: 'APPROVER_REQUEST_REJECTED',
+        userId: req.user!.userId,
+        newValues: { reason: reason || 'No reason provided' },
+      },
+    });
+
+    res.json({
+      success: true,
+      data: updatedUser,
+      message: `Approver request for ${updatedUser.name} has been rejected`,
+    });
   } catch (error) {
     next(error);
   }

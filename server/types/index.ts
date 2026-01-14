@@ -1,8 +1,8 @@
 import { Request } from 'express';
-import { Role, Severity, ContraventionStatus, DisputeStatus, EscalationLevel, TrainingStatus } from '@prisma/client';
+import { Role, Severity, ContraventionStatus, DisputeStatus, EscalationLevel, TrainingStatus, ApprovalRequestStatus } from '@prisma/client';
 
 // Re-export Prisma enums
-export { Role, Severity, ContraventionStatus, DisputeStatus, EscalationLevel, TrainingStatus };
+export { Role, Severity, ContraventionStatus, DisputeStatus, EscalationLevel, TrainingStatus, ApprovalRequestStatus };
 
 // User in JWT payload
 export interface JwtPayload {
@@ -11,6 +11,8 @@ export interface JwtPayload {
   email: string;
   name: string;
   role: Role;
+  isProfileComplete: boolean;
+  position?: string;
 }
 
 // Extended Express Request with user

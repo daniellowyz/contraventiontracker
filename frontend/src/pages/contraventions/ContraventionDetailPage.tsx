@@ -83,6 +83,7 @@ export function ContraventionDetailPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showNewTeamInput, setShowNewTeamInput] = useState(false);
   const [newTeamName, setNewTeamName] = useState('');
+  const [isPersonalEdit, setIsPersonalEdit] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch contravention details
@@ -161,6 +162,8 @@ export function ContraventionDetailPage() {
         teamId: contravention.team?.id || '',
         status: contravention.status,
       });
+      // Check if current team is the "Personal" team
+      setIsPersonalEdit(contravention.team?.isPersonal || false);
       setIsEditing(true);
     }
   };
@@ -603,67 +606,96 @@ export function ContraventionDetailPage() {
 
                 {isEditing && isAdmin ? (
                   <div>
-                    {!showNewTeamInput ? (
-                      <>
-                        <select
-                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          value={editData.teamId || ''}
-                          onChange={(e) => {
-                            if (e.target.value === '__OTHER__') {
-                              setShowNewTeamInput(true);
-                              setEditData({ ...editData, teamId: '' });
-                            } else {
-                              setEditData({ ...editData, teamId: e.target.value });
+                    {/* Personal contravention checkbox */}
+                    <label className="flex items-center gap-2 mb-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={isPersonalEdit}
+                        onChange={(e) => {
+                          setIsPersonalEdit(e.target.checked);
+                          if (e.target.checked) {
+                            // Find the Personal team and set it
+                            const personalTeam = teamsData?.find((t: Team) => t.isPersonal);
+                            if (personalTeam) {
+                              setEditData({ ...editData, teamId: personalTeam.id });
                             }
-                          }}
-                        >
-                          <option value="">No team assigned</option>
-                          {teamsData?.map((team: Team) => (
-                            <option key={team.id} value={team.id}>
-                              {team.isPersonal ? `${team.name} (Personal)` : team.name}
-                            </option>
-                          ))}
-                          <option value="__OTHER__">+ Other: Specify new team...</option>
-                        </select>
-                      </>
-                    ) : (
-                      <div className="space-y-2">
-                        <div className="flex gap-2">
-                          <Input
-                            type="text"
-                            value={newTeamName}
-                            onChange={(e) => setNewTeamName(e.target.value)}
-                            placeholder="New team name"
-                            className="flex-1 text-sm"
-                          />
-                          <Button
-                            type="button"
-                            onClick={() => {
-                              if (newTeamName.trim()) {
-                                createTeamMutation.mutate(newTeamName.trim());
-                              } else {
-                                setError('Please enter a team name');
-                              }
-                            }}
-                            isLoading={createTeamMutation.isPending}
-                            disabled={createTeamMutation.isPending}
-                            className="text-sm px-3"
-                          >
-                            <Plus className="w-3 h-3 mr-1" />
-                            Add
-                          </Button>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
                             setShowNewTeamInput(false);
                             setNewTeamName('');
-                          }}
-                          className="text-xs text-blue-600 hover:text-blue-800"
-                        >
-                          ← Back to team list
-                        </button>
-                      </div>
+                          } else {
+                            // Clear team selection when unchecked
+                            setEditData({ ...editData, teamId: '' });
+                          }
+                        }}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-700">This is a personal contravention (not associated with a team)</span>
+                    </label>
+
+                    {!isPersonalEdit && (
+                      <>
+                        {!showNewTeamInput ? (
+                          <>
+                            <select
+                              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              value={editData.teamId || ''}
+                              onChange={(e) => {
+                                if (e.target.value === '__OTHER__') {
+                                  setShowNewTeamInput(true);
+                                  setEditData({ ...editData, teamId: '' });
+                                } else {
+                                  setEditData({ ...editData, teamId: e.target.value });
+                                }
+                              }}
+                            >
+                              <option value="">No team assigned</option>
+                              {teamsData?.filter((team: Team) => !team.isPersonal).map((team: Team) => (
+                                <option key={team.id} value={team.id}>
+                                  {team.name}
+                                </option>
+                              ))}
+                              <option value="__OTHER__">+ Other: Specify new team...</option>
+                            </select>
+                          </>
+                        ) : (
+                          <div className="space-y-2">
+                            <div className="flex gap-2">
+                              <Input
+                                type="text"
+                                value={newTeamName}
+                                onChange={(e) => setNewTeamName(e.target.value)}
+                                placeholder="New team name"
+                                className="flex-1 text-sm"
+                              />
+                              <Button
+                                type="button"
+                                onClick={() => {
+                                  if (newTeamName.trim()) {
+                                    createTeamMutation.mutate(newTeamName.trim());
+                                  } else {
+                                    setError('Please enter a team name');
+                                  }
+                                }}
+                                isLoading={createTeamMutation.isPending}
+                                disabled={createTeamMutation.isPending}
+                                className="text-sm px-3"
+                              >
+                                <Plus className="w-3 h-3 mr-1" />
+                                Add
+                              </Button>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowNewTeamInput(false);
+                                setNewTeamName('');
+                              }}
+                              className="text-xs text-blue-600 hover:text-blue-800"
+                            >
+                              ← Back to team list
+                            </button>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 ) : (

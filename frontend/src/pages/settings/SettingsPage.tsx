@@ -26,6 +26,7 @@ import {
   Users,
   Search,
   ShieldCheck,
+  UserCheck,
   UserCog,
   MessageSquare,
   Loader2,
@@ -57,9 +58,21 @@ interface UserData {
   employeeId: string;
   email: string;
   name: string;
-  role: 'ADMIN' | 'USER';
+  role: 'ADMIN' | 'APPROVER' | 'USER';
   isActive: boolean;
   department: { id: string; name: string } | null;
+  createdAt: string;
+}
+
+interface ApproverRequest {
+  id: string;
+  employeeId: string;
+  email: string;
+  name: string;
+  position: string | null;
+  role: string;
+  requestedApprover: boolean;
+  approverRequestStatus: string;
   createdAt: string;
 }
 
@@ -170,15 +183,55 @@ export function SettingsPage() {
 
   // Admin: Update user role mutation
   const updateRoleMutation = useMutation({
-    mutationFn: async ({ userId, role }: { userId: string; role: 'ADMIN' | 'USER' }) => {
+    mutationFn: async ({ userId, role }: { userId: string; role: 'ADMIN' | 'APPROVER' | 'USER' }) => {
       const response = await client.patch(`/admin/users/${userId}/role`, { role });
       return response.data;
     },
     onSuccess: () => {
       refetchUsers();
+      refetchApproverRequests();
     },
     onError: (error: Error) => {
       alert(error.message || 'Failed to update user role');
+    },
+  });
+
+  // Admin: Fetch pending approver requests
+  const { data: approverRequestsData, refetch: refetchApproverRequests } = useQuery({
+    queryKey: ['approver-requests'],
+    queryFn: async () => {
+      const response = await client.get('/admin/approver-requests');
+      return response.data.data as ApproverRequest[];
+    },
+    enabled: isAdmin && activeTab === 'users',
+  });
+
+  // Admin: Approve approver request mutation
+  const approveApproverMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const response = await client.post(`/admin/approver-requests/${userId}/approve`);
+      return response.data;
+    },
+    onSuccess: () => {
+      refetchUsers();
+      refetchApproverRequests();
+    },
+    onError: (error: Error) => {
+      alert(error.message || 'Failed to approve request');
+    },
+  });
+
+  // Admin: Reject approver request mutation
+  const rejectApproverMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const response = await client.post(`/admin/approver-requests/${userId}/reject`);
+      return response.data;
+    },
+    onSuccess: () => {
+      refetchApproverRequests();
+    },
+    onError: (error: Error) => {
+      alert(error.message || 'Failed to reject request');
     },
   });
 
@@ -1072,6 +1125,61 @@ export function SettingsPage() {
                     </div>
                   )}
 
+                  {/* Pending Approver Requests */}
+                  {approverRequestsData && approverRequestsData.length > 0 && (
+                    <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <div className="flex items-center gap-2 mb-3">
+                        <AlertTriangle className="w-5 h-5 text-yellow-600" />
+                        <h3 className="text-sm font-semibold text-yellow-800">
+                          Pending Approver Requests ({approverRequestsData.length})
+                        </h3>
+                      </div>
+                      <div className="space-y-3">
+                        {approverRequestsData.map((request) => (
+                          <div
+                            key={request.id}
+                            className="flex items-center justify-between bg-white p-3 rounded-lg border border-yellow-200"
+                          >
+                            <div>
+                              <p className="font-medium text-gray-900">{request.name}</p>
+                              <p className="text-sm text-gray-600">{request.email}</p>
+                              {request.position && (
+                                <p className="text-xs text-gray-500">{request.position}</p>
+                              )}
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="primary"
+                                size="sm"
+                                onClick={() => {
+                                  if (confirm(`Approve ${request.name} as an Approver?`)) {
+                                    approveApproverMutation.mutate(request.id);
+                                  }
+                                }}
+                                disabled={approveApproverMutation.isPending || rejectApproverMutation.isPending}
+                              >
+                                <Check className="w-4 h-4 mr-1" />
+                                Approve
+                              </Button>
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => {
+                                  if (confirm(`Reject ${request.name}'s approver request?`)) {
+                                    rejectApproverMutation.mutate(request.id);
+                                  }
+                                }}
+                                disabled={approveApproverMutation.isPending || rejectApproverMutation.isPending}
+                              >
+                                Reject
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Search */}
                   <div className="mb-4">
                     <div className="relative">
@@ -1116,6 +1224,11 @@ export function SettingsPage() {
                                     <ShieldCheck className="w-3 h-3 mr-1" />
                                     Admin
                                   </Badge>
+                                ) : userData.role === 'APPROVER' ? (
+                                  <Badge className="bg-blue-100 text-blue-800">
+                                    <UserCheck className="w-3 h-3 mr-1" />
+                                    Approver
+                                  </Badge>
                                 ) : (
                                   <Badge className="bg-gray-100 text-gray-800">User</Badge>
                                 )}
@@ -1124,31 +1237,74 @@ export function SettingsPage() {
                                 {userData.id === user?.userId ? (
                                   <span className="text-xs text-gray-400">Current user</span>
                                 ) : userData.role === 'ADMIN' ? (
-                                  <Button
-                                    variant="secondary"
-                                    size="sm"
-                                    onClick={() => {
-                                      if (confirm(`Remove admin privileges from ${userData.name}?`)) {
-                                        updateRoleMutation.mutate({ userId: userData.id, role: 'USER' });
-                                      }
-                                    }}
-                                    disabled={updateRoleMutation.isPending}
-                                  >
-                                    Remove Admin
-                                  </Button>
+                                  <div className="flex gap-2">
+                                    <Button
+                                      variant="secondary"
+                                      size="sm"
+                                      onClick={() => {
+                                        if (confirm(`Demote ${userData.name} to Approver?`)) {
+                                          updateRoleMutation.mutate({ userId: userData.id, role: 'APPROVER' });
+                                        }
+                                      }}
+                                      disabled={updateRoleMutation.isPending}
+                                    >
+                                      Demote to Approver
+                                    </Button>
+                                  </div>
+                                ) : userData.role === 'APPROVER' ? (
+                                  <div className="flex gap-2">
+                                    <Button
+                                      variant="primary"
+                                      size="sm"
+                                      onClick={() => {
+                                        if (confirm(`Promote ${userData.name} to Admin?`)) {
+                                          updateRoleMutation.mutate({ userId: userData.id, role: 'ADMIN' });
+                                        }
+                                      }}
+                                      disabled={updateRoleMutation.isPending}
+                                    >
+                                      Make Admin
+                                    </Button>
+                                    <Button
+                                      variant="secondary"
+                                      size="sm"
+                                      onClick={() => {
+                                        if (confirm(`Remove approver privileges from ${userData.name}?`)) {
+                                          updateRoleMutation.mutate({ userId: userData.id, role: 'USER' });
+                                        }
+                                      }}
+                                      disabled={updateRoleMutation.isPending}
+                                    >
+                                      Remove Approver
+                                    </Button>
+                                  </div>
                                 ) : (
-                                  <Button
-                                    variant="primary"
-                                    size="sm"
-                                    onClick={() => {
-                                      if (confirm(`Grant admin privileges to ${userData.name}?`)) {
-                                        updateRoleMutation.mutate({ userId: userData.id, role: 'ADMIN' });
-                                      }
-                                    }}
-                                    disabled={updateRoleMutation.isPending}
-                                  >
-                                    Make Admin
-                                  </Button>
+                                  <div className="flex gap-2">
+                                    <Button
+                                      variant="primary"
+                                      size="sm"
+                                      onClick={() => {
+                                        if (confirm(`Grant approver privileges to ${userData.name}?`)) {
+                                          updateRoleMutation.mutate({ userId: userData.id, role: 'APPROVER' });
+                                        }
+                                      }}
+                                      disabled={updateRoleMutation.isPending}
+                                    >
+                                      Make Approver
+                                    </Button>
+                                    <Button
+                                      variant="secondary"
+                                      size="sm"
+                                      onClick={() => {
+                                        if (confirm(`Grant admin privileges to ${userData.name}?`)) {
+                                          updateRoleMutation.mutate({ userId: userData.id, role: 'ADMIN' });
+                                        }
+                                      }}
+                                      disabled={updateRoleMutation.isPending}
+                                    >
+                                      Make Admin
+                                    </Button>
+                                  </div>
                                 )}
                               </td>
                             </tr>
@@ -1172,6 +1328,9 @@ export function SettingsPage() {
                         </span>
                         <span>
                           Admins: <strong>{usersData.filter(u => u.role === 'ADMIN').length}</strong>
+                        </span>
+                        <span>
+                          Approvers: <strong>{usersData.filter(u => u.role === 'APPROVER').length}</strong>
                         </span>
                       </div>
                     </div>

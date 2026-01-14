@@ -85,6 +85,31 @@ export function requireAdmin(
   next();
 }
 
+export function requireApprover(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): void {
+  if (!req.user) {
+    res.status(401).json({
+      success: false,
+      error: 'Not authenticated',
+    });
+    return;
+  }
+
+  // Admins and Approvers both have approver access
+  if (req.user.role !== 'ADMIN' && req.user.role !== 'APPROVER') {
+    res.status(403).json({
+      success: false,
+      error: 'Approver access required',
+    });
+    return;
+  }
+
+  next();
+}
+
 export function optionalAuth(
   req: AuthenticatedRequest,
   _res: Response,
