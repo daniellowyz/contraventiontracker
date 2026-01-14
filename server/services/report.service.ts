@@ -89,25 +89,34 @@ export class ReportService {
       take: 10,
     });
 
-    // Get monthly trend (last 12 months)
+    // Get monthly trend (last 12 months) - single query instead of 12
+    const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+    const contraventionsByMonth = await prisma.contravention.findMany({
+      where: {
+        incidentDate: {
+          gte: twelveMonthsAgo,
+        },
+      },
+      select: {
+        incidentDate: true,
+      },
+    });
+
+    // Build month counts map
+    const monthCounts: Record<string, number> = {};
+    contraventionsByMonth.forEach((c) => {
+      const month = formatDate(c.incidentDate).substring(0, 7); // YYYY-MM
+      monthCounts[month] = (monthCounts[month] || 0) + 1;
+    });
+
+    // Generate all 12 months (including zeros)
     const monthlyTrend: { month: string; count: number }[] = [];
     for (let i = 11; i >= 0; i--) {
       const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const start = startOfMonth(date);
-      const end = endOfMonth(date);
-
-      const count = await prisma.contravention.count({
-        where: {
-          incidentDate: {
-            gte: start,
-            lte: end,
-          },
-        },
-      });
-
+      const month = formatDate(startOfMonth(date)).substring(0, 7);
       monthlyTrend.push({
-        month: formatDate(start).substring(0, 7), // YYYY-MM
-        count,
+        month,
+        count: monthCounts[month] || 0,
       });
     }
 

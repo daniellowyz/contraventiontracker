@@ -11,8 +11,6 @@ import {
   User,
   Bell,
   Shield,
-  Eye,
-  EyeOff,
   Save,
   Check,
   Settings,
@@ -104,8 +102,6 @@ interface DuplicateUser {
 export function SettingsPage() {
   const { user, isAdmin } = useAuthStore();
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
-  const [showPassword, setShowPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
   const [saved, setSaved] = useState(false);
 
   // Profile form state
@@ -115,12 +111,6 @@ export function SettingsPage() {
     employeeId: user?.employeeId || '',
   });
 
-  // Password form state
-  const [passwordData, setPasswordData] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: '',
-  });
 
   // Notification preferences state
   const [notifications, setNotifications] = useState({
@@ -135,24 +125,24 @@ export function SettingsPage() {
   const [userSearch, setUserSearch] = useState('');
   const [slackSyncResult, setSlackSyncResult] = useState<SlackSyncResult | null>(null);
 
-  // Admin: Email status query
+  // Admin: Email status query - only load on admin tab
   const { data: emailStatus } = useQuery({
     queryKey: ['email-status'],
     queryFn: async () => {
       const response = await client.get('/admin/email-status');
       return response.data.data as EmailStatus;
     },
-    enabled: isAdmin,
+    enabled: isAdmin && activeTab === 'admin',
   });
 
-  // Admin: Fiscal year status query
+  // Admin: Fiscal year status query - only load on admin tab
   const { data: fiscalYearStatus, refetch: refetchFiscalYear } = useQuery({
     queryKey: ['fiscal-year-status'],
     queryFn: async () => {
       const response = await client.get('/admin/points/fiscal-year-status');
       return response.data.data as FiscalYearStatus;
     },
-    enabled: isAdmin,
+    enabled: isAdmin && activeTab === 'admin',
   });
 
   // Admin: Reset points for new fiscal year mutation
@@ -305,7 +295,6 @@ export function SettingsPage() {
       alert(data.message);
       refetchUsers();
       refetchDuplicates();
-      refetchUsers();
     },
     onError: (error: Error & { response?: { data?: { error?: string } } }) => {
       alert(error.response?.data?.error || error.message || 'Failed to merge users');
@@ -339,7 +328,6 @@ export function SettingsPage() {
     onSuccess: (data) => {
       alert(`Successfully reactivated ${data.data.name}`);
       refetchUsers();
-      refetchUsers();
       refetchInactiveUsers();
     },
     onError: (error: Error & { response?: { data?: { error?: string } } }) => {
@@ -350,17 +338,6 @@ export function SettingsPage() {
 
   const handleProfileSave = () => {
     // In a real app, this would call an API
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  };
-
-  const handlePasswordSave = () => {
-    if (passwordData.newPassword !== passwordData.confirmPassword) {
-      alert('New passwords do not match');
-      return;
-    }
-    // In a real app, this would call an API
-    setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
@@ -668,81 +645,12 @@ export function SettingsPage() {
             {activeTab === 'security' && (
               <Card>
                 <div className="p-6">
-                  <h2 className="text-lg font-semibold text-gray-900 mb-6">Change Password</h2>
+                  <h2 className="text-lg font-semibold text-gray-900 mb-6">Security</h2>
+                  <p className="text-sm text-gray-600 mb-6">
+                    Authentication is handled via OTP (One-Time Password) sent to your email.
+                  </p>
 
-                  <div className="space-y-4 max-w-md">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Current Password
-                      </label>
-                      <div className="relative">
-                        <Input
-                          type={showPassword ? 'text' : 'password'}
-                          value={passwordData.currentPassword}
-                          onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
-                          placeholder="Enter current password"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                        >
-                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        New Password
-                      </label>
-                      <div className="relative">
-                        <Input
-                          type={showNewPassword ? 'text' : 'password'}
-                          value={passwordData.newPassword}
-                          onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                          placeholder="Enter new password"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowNewPassword(!showNewPassword)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                        >
-                          {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Confirm New Password
-                      </label>
-                      <Input
-                        type="password"
-                        value={passwordData.confirmPassword}
-                        onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-                        placeholder="Confirm new password"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="mt-6 pt-4 border-t border-gray-200">
-                    <Button onClick={handlePasswordSave}>
-                      {saved ? (
-                        <>
-                          <Check className="w-4 h-4 mr-2" />
-                          Password Updated
-                        </>
-                      ) : (
-                        <>
-                          <Save className="w-4 h-4 mr-2" />
-                          Update Password
-                        </>
-                      )}
-                    </Button>
-                  </div>
-
-                  <div className="mt-8 pt-6 border-t border-gray-200">
+                  <div className="pt-4 border-t border-gray-200">
                     <h3 className="text-sm font-medium text-gray-700 mb-4">Session Information</h3>
                     <div className="bg-gray-50 rounded-lg p-4">
                       <div className="flex justify-between items-center">
