@@ -48,8 +48,13 @@ export function Sidebar() {
     <div className="w-64 bg-white border-r border-gray-200 flex flex-col h-screen">
       {/* Logo */}
       <div className="p-6 border-b border-gray-100">
-        <h1 className="text-xl font-bold text-gray-900">Contravention</h1>
-        <p className="text-sm text-gray-500">Tracker</p>
+        <div className="flex items-center gap-3">
+          <img src="/logo.png" alt="Logo" className="w-10 h-10 rounded-lg" />
+          <div>
+            <h1 className="text-lg font-bold text-gray-900">Contravention</h1>
+            <p className="text-xs text-gray-500">Tracker</p>
+          </div>
+        </div>
       </div>
 
       {/* Navigation */}
