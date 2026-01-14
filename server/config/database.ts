@@ -1,52 +1,33 @@
 import { PrismaClient } from '@prisma/client';
-import { PrismaPg } from '@prisma/adapter-pg';
-import { Pool } from 'pg';
 
-// Lazy initialization for Vercel serverless
-let prismaInstance: PrismaClient | null = null;
+// Global variable to prevent multiple instances in development
+declare global {
+  // eslint-disable-next-line no-var
+  var prisma: PrismaClient | undefined;
+}
 
+// Create Prisma client - use standard connection (Prisma handles pooling)
 function createPrismaClient(): PrismaClient {
-  const connectionString = process.env.DATABASE_URL;
+  const databaseUrl = process.env.DATABASE_URL;
 
-  if (!connectionString) {
+  if (!databaseUrl) {
     throw new Error('DATABASE_URL environment variable is not set');
   }
 
-  // Check if using Supabase pooler (recommended for serverless)
-  const isPoolerUrl = connectionString.includes('pooler.supabase.com');
-  console.log(`[Database] Connecting to ${isPoolerUrl ? 'Supabase pooler' : 'direct connection'}`);
-
-  const pool = new Pool({
-    connectionString,
-    ssl: {
-      rejectUnauthorized: false,
-    },
-    // Optimize for serverless - minimal connections, fast timeout
-    max: isPoolerUrl ? 1 : 3, // Single connection when using external pooler
-    idleTimeoutMillis: 5000, // Close idle connections quickly
-    connectionTimeoutMillis: 4000, // Fail fast - need to leave time for retry
-  });
-
-  const adapter = new PrismaPg(pool);
+  console.log(`[Database] Initializing Prisma client`);
+  console.log(`[Database] URL contains pooler: ${databaseUrl.includes('pooler.supabase.com')}`);
 
   return new PrismaClient({
-    adapter,
-    log: ['error'],
+    log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
   });
 }
 
-export function getPrisma(): PrismaClient {
-  if (!prismaInstance) {
-    prismaInstance = createPrismaClient();
-  }
-  return prismaInstance;
-}
+// Use global instance in development to prevent hot-reload issues
+// In production, create a new instance
+export const prisma = global.prisma || createPrismaClient();
 
-// For backwards compatibility
-export const prisma = new Proxy({} as PrismaClient, {
-  get(_target, prop) {
-    return (getPrisma() as any)[prop];
-  },
-});
+if (process.env.NODE_ENV !== 'production') {
+  global.prisma = prisma;
+}
 
 export default prisma;
