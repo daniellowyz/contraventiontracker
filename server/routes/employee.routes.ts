@@ -123,6 +123,67 @@ router.get('/:id/training', authenticate, async (req: AuthenticatedRequest, res:
   }
 });
 
+// POST /api/employees/departed - Create a departed member (admin only)
+router.post('/departed', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const { email, name } = req.body;
+
+    if (!email || !name) {
+      throw new AppError('Email and name are required', 400);
+    }
+
+    // Check if email already exists
+    const existing = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (existing) {
+      // Return existing user if found
+      return res.json({
+        success: true,
+        data: {
+          id: existing.id,
+          employeeId: existing.employeeId,
+          name: existing.name,
+          email: existing.email,
+          isActive: existing.isActive,
+          isExisting: true,
+        },
+      });
+    }
+
+    // Generate a unique employeeId for departed members
+    const timestamp = Date.now().toString(36).toUpperCase();
+    const employeeId = `DEP-${timestamp}`;
+
+    // Create departed member with isActive = false
+    const departedMember = await prisma.user.create({
+      data: {
+        email,
+        name,
+        employeeId,
+        isActive: false,
+        isProfileComplete: true, // Departed members don't need to complete profile
+        role: 'USER',
+      },
+    });
+
+    res.status(201).json({
+      success: true,
+      data: {
+        id: departedMember.id,
+        employeeId: departedMember.employeeId,
+        name: departedMember.name,
+        email: departedMember.email,
+        isActive: departedMember.isActive,
+        isExisting: false,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // PATCH /api/employees/:id - Update employee (admin only)
 router.patch('/:id', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
   try {

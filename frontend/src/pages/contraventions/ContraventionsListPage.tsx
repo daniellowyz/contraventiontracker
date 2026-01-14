@@ -164,14 +164,12 @@ export function ContraventionsListPage() {
         title="Contraventions"
         subtitle="Manage procurement contraventions"
         actions={
-          isAdmin && (
-            <Link to="/contraventions/new">
-              <Button>
-                <Plus className="w-4 h-4 mr-2" />
-                Add Contravention
-              </Button>
-            </Link>
-          )
+          <Link to="/contraventions/new">
+            <Button>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Contravention
+            </Button>
+          </Link>
         }
       />
 

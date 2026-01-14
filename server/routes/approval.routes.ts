@@ -2,8 +2,28 @@ import { Router, Response } from 'express';
 import approvalService from '../services/approval.service';
 import { authenticate, requireAdmin, requireApprover } from '../middleware/auth';
 import { AuthenticatedRequest } from '../types';
+import prisma from '../config/database';
 
 const router = Router();
+
+// GET /api/approvals/pending-count - Get count of pending approvals for current user
+router.get('/pending-count', authenticate, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const count = await prisma.contraventionApproval.count({
+      where: {
+        approverId: req.user!.userId,
+        status: 'PENDING',
+      },
+    });
+
+    res.json({
+      success: true,
+      data: { count },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 
 // GET /api/approvals/pending - Get pending approvals for current user (approver)
 router.get('/pending', authenticate, requireApprover, async (req: AuthenticatedRequest, res: Response, next) => {

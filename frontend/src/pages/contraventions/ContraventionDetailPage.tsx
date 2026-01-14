@@ -29,7 +29,8 @@ import {
   Trash2,
   Users,
   RefreshCw,
-  Plus
+  Plus,
+  UserX
 } from 'lucide-react';
 import { Severity, ContraventionStatus } from '@/types';
 import { uploadApprovalPdf } from '@/lib/supabase';
@@ -85,6 +86,12 @@ export function ContraventionDetailPage() {
   const [newTeamName, setNewTeamName] = useState('');
   const [isPersonalEdit, setIsPersonalEdit] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Departed member handling for reassignment
+  const [isDepartedMember, setIsDepartedMember] = useState(false);
+  const [departedEmail, setDepartedEmail] = useState('');
+  const [departedName, setDepartedName] = useState('');
+  const [isCreatingDeparted, setIsCreatingDeparted] = useState(false);
 
   // Fetch contravention details
   const { data: contravention, isLoading, isError } = useQuery({
@@ -228,6 +235,40 @@ export function ContraventionDetailPage() {
     setIsEditing(false);
     setEditData({});
     setError('');
+    setIsDepartedMember(false);
+    setDepartedEmail('');
+    setDepartedName('');
+  };
+
+  // Handler for creating departed member during reassignment
+  const handleCreateDepartedMember = async () => {
+    if (!departedEmail.trim() || !departedName.trim()) {
+      setError('Please enter both email and name for the departed member');
+      return;
+    }
+
+    try {
+      setIsCreatingDeparted(true);
+      const result = await employeesApi.createDeparted({
+        email: departedEmail.trim(),
+        name: departedName.trim(),
+      });
+
+      // Set the employee ID to the newly created (or existing) departed member
+      setEditData((prev) => ({ ...prev, employeeId: result.id }));
+      setIsDepartedMember(false);
+      setDepartedEmail('');
+      setDepartedName('');
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+
+      if (result.isExisting) {
+        setError('');
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to create departed member');
+    } finally {
+      setIsCreatingDeparted(false);
+    }
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -557,25 +598,98 @@ export function ContraventionDetailPage() {
                 {/* Employee Reassignment (Admin only when editing) */}
                 {isEditing && isAdmin ? (
                   <div className="space-y-3">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">Assigned To</label>
-                      <select
-                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        value={editData.employeeId || ''}
-                        onChange={(e) => setEditData({ ...editData, employeeId: e.target.value })}
-                      >
-                        {employeesData?.map((emp: EmployeeListItem) => (
-                          <option key={emp.id} value={emp.id}>
-                            {emp.name} ({emp.department?.name || 'No Dept'})
-                          </option>
-                        ))}
-                      </select>
-                      {editData.employeeId !== contravention.employee.id && (
-                        <p className="text-xs text-amber-600 mt-1">
-                          Points will be transferred when saved.
-                        </p>
-                      )}
-                    </div>
+                    {/* Standard employee dropdown */}
+                    {!isDepartedMember && (
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Assigned To</label>
+                        <select
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          value={editData.employeeId || ''}
+                          onChange={(e) => setEditData({ ...editData, employeeId: e.target.value })}
+                        >
+                          {employeesData?.map((emp: EmployeeListItem) => (
+                            <option key={emp.id} value={emp.id}>
+                              {emp.name} ({emp.department?.name || 'No Dept'}){!emp.isActive ? ' [Deactivated]' : ''}
+                            </option>
+                          ))}
+                        </select>
+                        {editData.employeeId !== contravention.employee.id && (
+                          <p className="text-xs text-amber-600 mt-1">
+                            Points will be transferred when saved.
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Departed member form */}
+                    {isDepartedMember && (
+                      <div className="space-y-3 p-3 border border-amber-200 bg-amber-50 rounded-lg">
+                        <div className="flex items-center gap-2 text-amber-700 text-sm font-medium">
+                          <UserX className="w-4 h-4" />
+                          <span>Add Departed Member</span>
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-700 mb-1">Email</label>
+                          <Input
+                            type="email"
+                            value={departedEmail}
+                            onChange={(e) => setDepartedEmail(e.target.value)}
+                            placeholder="former.employee@example.com"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-700 mb-1">Name</label>
+                          <Input
+                            type="text"
+                            value={departedName}
+                            onChange={(e) => setDepartedName(e.target.value)}
+                            placeholder="Full name"
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={handleCreateDepartedMember}
+                            isLoading={isCreatingDeparted}
+                            disabled={isCreatingDeparted}
+                          >
+                            <Plus className="w-3 h-3 mr-1" />
+                            Add
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => {
+                              setIsDepartedMember(false);
+                              setDepartedEmail('');
+                              setDepartedName('');
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Toggle for departed member */}
+                    {!isDepartedMember && (
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={isDepartedMember}
+                          onChange={(e) => {
+                            setIsDepartedMember(e.target.checked);
+                            if (e.target.checked) {
+                              setEditData((prev) => ({ ...prev, employeeId: '' }));
+                            }
+                          }}
+                          className="w-4 h-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500"
+                        />
+                        <span className="text-xs text-gray-700">Member has already left the organisation</span>
+                      </label>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-3">

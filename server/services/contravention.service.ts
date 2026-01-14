@@ -118,6 +118,46 @@ export class ContraventionService {
 
     // Send webhook to Google Apps Script if approver email is provided
     if (data.authorizerEmail) {
+      // Look up the approver by email and send notification
+      const approver = await prisma.user.findUnique({
+        where: { email: data.authorizerEmail.toLowerCase() },
+      });
+
+      if (approver) {
+        // Create the approval request record
+        await prisma.contraventionApproval.create({
+          data: {
+            contraventionId: contravention.id,
+            approverId: approver.id,
+            status: 'PENDING',
+          },
+        });
+        console.log(`Created approval request for ${data.authorizerEmail} on ${referenceNo}`);
+
+        // Send in-app notification and email to the approver
+        getNotificationService().then((notificationSvc) => {
+          if (notificationSvc) {
+            notificationSvc.notifyApprovalRequested({
+              approverUserId: approver.id,
+              approverEmail: approver.email,
+              approverName: approver.name,
+              contraventionId: contravention.id,
+              referenceNo,
+              employeeName: employee.name,
+              typeName: contraventionType.name,
+              severity,
+            }).catch((err: Error) => {
+              console.error('Failed to send approval notification:', err);
+            });
+          }
+        }).catch((err: Error) => {
+          console.error('Failed to load notification service:', err);
+        });
+      } else {
+        console.warn(`Approver not found with email: ${data.authorizerEmail}`);
+      }
+
+      // Send webhook to Google Apps Script for email notification (legacy)
       this.sendApprovalWebhook(contravention, data).catch((err) => {
         console.error('Failed to send approval webhook:', err);
       });

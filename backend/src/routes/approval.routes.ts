@@ -6,6 +6,25 @@ import { AppError } from '../middleware/errorHandler';
 
 const router = Router();
 
+// GET /api/approvals/pending-count - Get count of pending approvals for current user
+router.get('/pending-count', authenticate, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const count = await prisma.contraventionApproval.count({
+      where: {
+        approverId: req.user!.userId,
+        status: 'PENDING',
+      },
+    });
+
+    res.json({
+      success: true,
+      data: { count },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // GET /api/approvals/pending - Get pending approvals for current user (approver)
 router.get('/pending', authenticate, requireApprover, async (req: AuthenticatedRequest, res: Response, next) => {
   try {

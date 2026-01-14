@@ -1,16 +1,17 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { contraventionsApi, CreateContraventionInput } from '@/api/contraventions.api';
 import { employeesApi } from '@/api/employees.api';
 import { teamsApi, Team } from '@/api/teams.api';
 import { approversApi } from '@/api/approvers.api';
+import { useAuthStore } from '@/stores/authStore';
 import { Header } from '@/components/layout/Header';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { ArrowLeft, Save, Upload, Loader2, Plus } from 'lucide-react';
+import { ArrowLeft, Save, Upload, Loader2, Plus, UserX } from 'lucide-react';
 import { Severity } from '@/types';
 import { uploadApprovalPdf, supabase } from '@/lib/supabase';
 
@@ -30,6 +31,7 @@ const APPROVAL_STATUS_OPTIONS = [
 export function ContraventionFormPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user, isAdmin } = useAuthStore();
 
   const [formData, setFormData] = useState<{
     employeeId: string;
@@ -68,6 +70,12 @@ export function ContraventionFormPage() {
   const [newTeamName, setNewTeamName] = useState('');
   const [isPersonal, setIsPersonal] = useState(false);
 
+  // Admin-only: departed member handling
+  const [isDepartedMember, setIsDepartedMember] = useState(false);
+  const [departedEmail, setDepartedEmail] = useState('');
+  const [departedName, setDepartedName] = useState('');
+  const [isCreatingDeparted, setIsCreatingDeparted] = useState(false);
+
   // Fetch employees
   const { data: employees, isLoading: employeesLoading } = useQuery({
     queryKey: ['employees'],
@@ -91,6 +99,17 @@ export function ContraventionFormPage() {
     queryKey: ['approvers'],
     queryFn: approversApi.getAll,
   });
+
+  // For non-admins: auto-set employeeId to current user
+  useEffect(() => {
+    if (!isAdmin && user && employees) {
+      // Find current user in employees list
+      const currentEmployee = employees.find((emp) => emp.email === user.email);
+      if (currentEmployee) {
+        setFormData((prev) => ({ ...prev, employeeId: currentEmployee.id }));
+      }
+    }
+  }, [isAdmin, user, employees]);
 
   // Create mutation
   const createMutation = useMutation({
@@ -227,13 +246,55 @@ export function ContraventionFormPage() {
     createMutation.mutate(submitData);
   };
 
-  const employeeOptions = [
-    { value: '', label: 'Select an employee...' },
-    ...(employees?.map((emp) => ({
-      value: emp.id,
-      label: `${emp.name} (${emp.employeeId}) - ${emp.department?.name || 'No Department'}`,
-    })) || []),
-  ];
+  // For non-admins: only show their own name
+  // For admins: show all employees with inactive status indicator
+  const employeeOptions = isAdmin
+    ? [
+        { value: '', label: 'Select an employee...' },
+        ...(employees?.map((emp) => ({
+          value: emp.id,
+          label: `${emp.name} (${emp.employeeId})${!emp.isActive ? ' [Deactivated]' : ''} - ${emp.department?.name || 'No Department'}`,
+        })) || []),
+      ]
+    : employees
+      ? employees
+          .filter((emp) => emp.email === user?.email)
+          .map((emp) => ({
+            value: emp.id,
+            label: `${emp.name} (${emp.employeeId}) - ${emp.department?.name || 'No Department'}`,
+          }))
+      : [];
+
+  // Handler for creating departed member
+  const handleCreateDepartedMember = async () => {
+    if (!departedEmail.trim() || !departedName.trim()) {
+      setError('Please enter both email and name for the departed member');
+      return;
+    }
+
+    try {
+      setIsCreatingDeparted(true);
+      const result = await employeesApi.createDeparted({
+        email: departedEmail.trim(),
+        name: departedName.trim(),
+      });
+
+      // Set the employee ID to the newly created (or existing) departed member
+      setFormData((prev) => ({ ...prev, employeeId: result.id }));
+      setIsDepartedMember(false);
+      setDepartedEmail('');
+      setDepartedName('');
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+
+      if (result.isExisting) {
+        setError('');
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to create departed member');
+    } finally {
+      setIsCreatingDeparted(false);
+    }
+  };
 
   const typeOptions = [
     { value: '', label: 'Select a type...' },
@@ -300,12 +361,105 @@ export function ContraventionFormPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Employee <span className="text-red-500">*</span>
                 </label>
-                <Select
-                  options={employeeOptions}
-                  value={formData.employeeId}
-                  onChange={(e) => handleChange('employeeId', e.target.value)}
-                  disabled={employeesLoading}
-                />
+
+                {/* Non-admin: Show locked field with their name */}
+                {!isAdmin && (
+                  <div className="px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700">
+                    {employeesLoading ? (
+                      <span className="text-gray-500">Loading...</span>
+                    ) : employeeOptions.length > 0 ? (
+                      employeeOptions[0].label
+                    ) : (
+                      <span className="text-gray-500">Your account</span>
+                    )}
+                    <p className="text-xs text-gray-500 mt-1">
+                      You can only create contraventions for yourself.
+                    </p>
+                  </div>
+                )}
+
+                {/* Admin: Show dropdown with all employees */}
+                {isAdmin && !isDepartedMember && (
+                  <>
+                    <Select
+                      options={employeeOptions}
+                      value={formData.employeeId}
+                      onChange={(e) => handleChange('employeeId', e.target.value)}
+                      disabled={employeesLoading}
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      As an admin, you can create contraventions for any employee.
+                    </p>
+                  </>
+                )}
+
+                {/* Admin: Departed member form */}
+                {isAdmin && isDepartedMember && (
+                  <div className="space-y-3 p-4 border border-amber-200 bg-amber-50 rounded-lg">
+                    <div className="flex items-center gap-2 text-amber-700 text-sm font-medium">
+                      <UserX className="w-4 h-4" />
+                      <span>Add Departed Member</span>
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-700 mb-1">Email</label>
+                      <Input
+                        type="email"
+                        value={departedEmail}
+                        onChange={(e) => setDepartedEmail(e.target.value)}
+                        placeholder="former.employee@example.com"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-700 mb-1">Name</label>
+                      <Input
+                        type="text"
+                        value={departedName}
+                        onChange={(e) => setDepartedName(e.target.value)}
+                        placeholder="Full name"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        onClick={handleCreateDepartedMember}
+                        isLoading={isCreatingDeparted}
+                        disabled={isCreatingDeparted}
+                      >
+                        <Plus className="w-4 h-4 mr-1" />
+                        Add Member
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => {
+                          setIsDepartedMember(false);
+                          setDepartedEmail('');
+                          setDepartedName('');
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Admin: Toggle for departed member */}
+                {isAdmin && !isDepartedMember && (
+                  <label className="flex items-center gap-2 mt-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isDepartedMember}
+                      onChange={(e) => {
+                        setIsDepartedMember(e.target.checked);
+                        if (e.target.checked) {
+                          setFormData((prev) => ({ ...prev, employeeId: '' }));
+                        }
+                      }}
+                      className="w-4 h-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500"
+                    />
+                    <span className="text-sm text-gray-700">Member has already left the organisation</span>
+                  </label>
+                )}
               </div>
 
               {/* Contravention Type */}

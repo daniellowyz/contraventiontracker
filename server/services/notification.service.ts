@@ -12,7 +12,8 @@ export type NotificationType =
   | 'TRAINING_DUE'
   | 'TRAINING_OVERDUE'
   | 'POINTS_UPDATED'
-  | 'ACKNOWLEDGMENT_REMINDER';
+  | 'ACKNOWLEDGMENT_REMINDER'
+  | 'APPROVAL_REQUESTED';
 
 interface CreateNotificationParams {
   userId: string;
@@ -292,6 +293,43 @@ export const notificationService = {
       courseName: params.courseName,
       dueDate: params.dueDate,
       daysOverdue: params.daysOverdue,
+    });
+
+    return notification;
+  },
+
+  /**
+   * Notify approver when an approval is requested
+   * Sends both in-app notification and email
+   */
+  async notifyApprovalRequested(params: {
+    approverUserId: string;
+    approverEmail: string;
+    approverName: string;
+    contraventionId: string;
+    referenceNo: string;
+    employeeName: string;
+    typeName: string;
+    severity: string;
+  }) {
+    // Create in-app notification
+    const notification = await this.create({
+      userId: params.approverUserId,
+      type: 'APPROVAL_REQUESTED',
+      title: 'Approval Request',
+      message: `${params.employeeName} has requested your approval for contravention ${params.referenceNo} (${params.typeName}).`,
+      link: `/approvals`,
+    });
+
+    // Send email notification
+    await emailService.sendApprovalRequestEmail({
+      approverEmail: params.approverEmail,
+      approverName: params.approverName,
+      referenceNo: params.referenceNo,
+      employeeName: params.employeeName,
+      typeName: params.typeName,
+      severity: params.severity,
+      contraventionId: params.contraventionId,
     });
 
     return notification;

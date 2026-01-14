@@ -11,6 +11,7 @@ import {
 } from '../validators/auth.schema';
 import { AuthenticatedRequest, JwtPayload } from '../types';
 import config from '../config/env';
+import prisma from '../config/database';
 
 const router = Router();
 
@@ -59,6 +60,107 @@ router.post('/verify-otp', validateBody(verifyOtpSchema), async (req, res: Respo
     res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
 
     // Also return token in response body for clients that prefer it
+    res.json({
+      success: true,
+      data: {
+        token,
+        user: {
+          ...payload,
+          isProfileComplete: user.isProfileComplete,
+          position: user.position,
+        },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/auth/demo-login - Demo login for testing (bypasses OTP)
+// Demo users: DemoUser@open.gov.sg, DemoAdmin@open.gov.sg, DemoApprover@open.gov.sg
+router.post('/demo-login', async (req, res: Response, next) => {
+  try {
+    const { email } = req.body;
+
+    // Only allow specific demo emails
+    const demoEmails = [
+      'demouser@open.gov.sg',
+      'demoadmin@open.gov.sg',
+      'demoapprover@open.gov.sg',
+    ];
+
+    const normalizedEmail = email?.toLowerCase().trim();
+    if (!normalizedEmail || !demoEmails.includes(normalizedEmail)) {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid demo account',
+      });
+      return;
+    }
+
+    // Find or create the demo user
+    let user = await prisma.user.findUnique({
+      where: { email: normalizedEmail },
+    });
+
+    if (!user) {
+      // Create the demo user
+      const roleMap: Record<string, 'USER' | 'ADMIN' | 'APPROVER'> = {
+        'demouser@open.gov.sg': 'USER',
+        'demoadmin@open.gov.sg': 'ADMIN',
+        'demoapprover@open.gov.sg': 'APPROVER',
+      };
+
+      const nameMap: Record<string, string> = {
+        'demouser@open.gov.sg': 'Demo User',
+        'demoadmin@open.gov.sg': 'Demo Admin',
+        'demoapprover@open.gov.sg': 'Demo Approver',
+      };
+
+      const employeeIdMap: Record<string, string> = {
+        'demouser@open.gov.sg': 'DEMO-USER',
+        'demoadmin@open.gov.sg': 'DEMO-ADMIN',
+        'demoapprover@open.gov.sg': 'DEMO-APPROVER',
+      };
+
+      user = await prisma.user.create({
+        data: {
+          email: normalizedEmail,
+          employeeId: employeeIdMap[normalizedEmail],
+          name: nameMap[normalizedEmail],
+          role: roleMap[normalizedEmail],
+          isActive: true,
+          isProfileComplete: true,
+          position: `Demo ${roleMap[normalizedEmail]}`,
+        },
+      });
+
+      // Create points record for new demo user
+      await prisma.employeePoints.create({
+        data: {
+          employeeId: user.id,
+          totalPoints: 0,
+        },
+      });
+    }
+
+    // Create JWT payload
+    const payload: JwtPayload = {
+      userId: user.id,
+      employeeId: user.employeeId,
+      email: user.email,
+      name: user.name,
+      role: user.role as 'USER' | 'ADMIN' | 'APPROVER',
+    };
+
+    // Generate JWT token
+    const token = jwt.sign(payload, config.jwtSecret, {
+      expiresIn: config.jwtExpiresIn,
+    } as jwt.SignOptions);
+
+    // Set JWT as HTTP-only cookie
+    res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
+
     res.json({
       success: true,
       data: {

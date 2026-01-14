@@ -49,4 +49,16 @@ export const employeesApi = {
     const response = await client.patch<ApiResponse<User>>(`/employees/${id}`, data);
     return response.data.data!;
   },
+
+  createDeparted: async (data: { email: string; name: string }) => {
+    const response = await client.post<ApiResponse<{
+      id: string;
+      employeeId: string;
+      name: string;
+      email: string;
+      isActive: boolean;
+      isExisting: boolean;
+    }>>('/employees/departed', data);
+    return response.data.data!;
+  },
 };

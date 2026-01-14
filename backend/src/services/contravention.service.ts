@@ -104,11 +104,25 @@ export class ContraventionService {
           },
         });
         console.log(`Created approval request for ${data.authorizerEmail} on ${referenceNo}`);
+
+        // Send in-app notification and email to the approver
+        notificationService.notifyApprovalRequested({
+          approverUserId: approver.id,
+          approverEmail: approver.email,
+          approverName: approver.name,
+          contraventionId: contravention.id,
+          referenceNo: contravention.referenceNo,
+          employeeName: employee.name,
+          typeName: contraventionType.name,
+          severity: severity,
+        }).catch((err) => {
+          console.error('Failed to send approval notification:', err);
+        });
       } else {
         console.warn(`Approver not found with email: ${data.authorizerEmail}`);
       }
 
-      // Send webhook to Google Apps Script for email notification
+      // Send webhook to Google Apps Script for email notification (legacy)
       this.sendApprovalWebhook(contravention, data).catch((err) => {
         console.error('Failed to send approval webhook:', err);
       });

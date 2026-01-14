@@ -535,6 +535,99 @@ export const emailService = {
   },
 
   /**
+   * Send approval request email to approver
+   */
+  async sendApprovalRequestEmail(params: {
+    approverEmail: string;
+    approverName: string;
+    referenceNo: string;
+    employeeName: string;
+    typeName: string;
+    severity: string;
+    contraventionId: string;
+  }): Promise<EmailResult> {
+    // Try to send via Google Apps Script webhook first
+    if (EMAIL_CONFIG.GAS_WEBHOOK_URL) {
+      return this.sendViaWebhook({
+        type: 'APPROVAL_REQUESTED',
+        approverEmail: params.approverEmail,
+        approverName: params.approverName,
+        referenceNo: params.referenceNo,
+        employeeName: params.employeeName,
+        typeName: params.typeName,
+        severity: params.severity,
+        contraventionId: params.contraventionId,
+        appUrl: EMAIL_CONFIG.APP_URL,
+      });
+    }
+
+    const approvalUrl = `${EMAIL_CONFIG.APP_URL}/approvals`;
+
+    const severityColors: Record<string, string> = {
+      LOW: '#22c55e',
+      MEDIUM: '#eab308',
+      HIGH: '#f97316',
+      CRITICAL: '#dc2626',
+    };
+    const severityColor = severityColors[params.severity] || '#6b7280';
+
+    return this.send({
+      to: params.approverEmail,
+      toName: params.approverName,
+      subject: `Action Required: Approval Request for ${params.referenceNo}`,
+      htmlBody: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #1e40af;">Approval Request</h2>
+
+          <p>Dear ${params.approverName},</p>
+
+          <p><strong>${params.employeeName}</strong> has requested your approval for a procurement contravention.</p>
+
+          <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+            <tr>
+              <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: bold;">Reference No</td>
+              <td style="padding: 8px; border: 1px solid #e5e7eb;">${params.referenceNo}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: bold;">Employee</td>
+              <td style="padding: 8px; border: 1px solid #e5e7eb;">${params.employeeName}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: bold;">Type</td>
+              <td style="padding: 8px; border: 1px solid #e5e7eb;">${params.typeName}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: bold;">Severity</td>
+              <td style="padding: 8px; border: 1px solid #e5e7eb;">
+                <span style="background-color: ${severityColor}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;">
+                  ${params.severity}
+                </span>
+              </td>
+            </tr>
+          </table>
+
+          <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; padding: 16px; border-radius: 8px; margin: 20px 0;">
+            <p style="margin: 0 0 12px 0; font-weight: bold; color: #1e40af;">Action Required</p>
+            <p style="margin: 0; color: #1e3a8a;">Please log in to the Contravention Tracker to review and approve or reject this request.</p>
+          </div>
+
+          <p style="margin: 24px 0; text-align: center;">
+            <a href="${approvalUrl}" style="background-color: #1e40af; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">
+              Review & Approve
+            </a>
+          </p>
+
+          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+
+          <p style="color: #9ca3af; font-size: 12px;">
+            This is an automated message from the Contravention Tracker system.
+          </p>
+        </div>
+      `,
+    });
+  },
+
+  /**
    * Get current sandbox status
    */
   getSandboxStatus() {

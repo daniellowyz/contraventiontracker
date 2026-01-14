@@ -1,6 +1,8 @@
 import { Link, useLocation } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
+import { approvalsApi } from '@/api/approvals.api';
 import {
   LayoutDashboard,
   FileWarning,
@@ -33,6 +35,14 @@ const adminItems = [
 export function Sidebar() {
   const location = useLocation();
   const { user, isAdmin, isApprover, logout } = useAuthStore();
+
+  // Fetch pending approvals count for approvers
+  const { data: pendingCount = 0 } = useQuery({
+    queryKey: ['pendingApprovalsCount'],
+    queryFn: approvalsApi.getPendingCount,
+    enabled: isApprover,
+    refetchInterval: 30000, // Refresh every 30 seconds
+  });
 
   return (
     <div className="w-64 bg-white border-r border-gray-200 flex flex-col h-screen">
@@ -85,7 +95,12 @@ export function Sidebar() {
                   )}
                 >
                   <item.icon className="w-5 h-5" />
-                  {item.label}
+                  <span className="flex-1">{item.label}</span>
+                  {pendingCount > 0 && (
+                    <span className="bg-red-500 text-white text-xs font-medium px-2 py-0.5 rounded-full min-w-[20px] text-center">
+                      {pendingCount > 99 ? '99+' : pendingCount}
+                    </span>
+                  )}
                 </Link>
               );
             })}
