@@ -6,7 +6,9 @@ interface AuthUser {
   employeeId: string;
   email: string;
   name: string;
-  role: 'ADMIN' | 'USER';
+  role: 'ADMIN' | 'APPROVER' | 'USER';
+  isProfileComplete: boolean;
+  position?: string;
 }
 
 interface VerifyOtpResponse {

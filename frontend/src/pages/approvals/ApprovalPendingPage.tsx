@@ -59,11 +59,11 @@ interface ApproverRequest {
   createdAt: string;
 }
 
-const severityColors: Record<Severity, 'gray' | 'yellow' | 'red' | 'purple'> = {
-  LOW: 'gray',
-  MEDIUM: 'yellow',
-  HIGH: 'red',
-  CRITICAL: 'purple',
+const severityColors: Record<Severity, 'default' | 'warning' | 'danger' | 'info'> = {
+  LOW: 'default',
+  MEDIUM: 'warning',
+  HIGH: 'danger',
+  CRITICAL: 'info',
 };
 
 export function ApprovalPendingPage() {
@@ -175,7 +175,7 @@ export function ApprovalPendingPage() {
               : 'Contraventions waiting for your approval'}
           </p>
         </div>
-        <Badge variant={pendingApprovals.length > 0 ? 'yellow' : 'gray'}>
+        <Badge variant={pendingApprovals.length > 0 ? 'warning' : 'default'}>
           {pendingApprovals.length} pending
         </Badge>
       </div>
@@ -223,7 +223,7 @@ export function ApprovalPendingPage() {
                     Approve
                   </Button>
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     onClick={() => {
                       if (confirm(`Reject ${request.name}'s approver request?`)) {
@@ -265,7 +265,7 @@ export function ApprovalPendingPage() {
                       <Badge variant={severityColors[approval.contravention.severity]}>
                         {approval.contravention.severity}
                       </Badge>
-                      <Badge variant="gray">{approval.contravention.points} pts</Badge>
+                      <Badge variant="default">{approval.contravention.points} pts</Badge>
                     </div>
                     <p className="text-gray-700 mb-2">{approval.contravention.description}</p>
                     <div className="text-sm text-gray-500 space-y-1">
@@ -295,7 +295,7 @@ export function ApprovalPendingPage() {
                   </div>
                   <div className="flex gap-2">
                     <Button
-                      variant="outline"
+                      variant="secondary"
                       size="sm"
                       onClick={() => {
                         setSelectedApproval(approval);
@@ -328,7 +328,7 @@ export function ApprovalPendingPage() {
                       >
                         {approval.contravention.referenceNo}
                       </Link>
-                      <Badge variant={approval.status === 'APPROVED' ? 'green' : 'red'}>
+                      <Badge variant={approval.status === 'APPROVED' ? 'success' : 'danger'}>
                         {approval.status}
                       </Badge>
                     </div>
@@ -380,7 +380,7 @@ export function ApprovalPendingPage() {
             </div>
             <div className="flex justify-end gap-3">
               <Button
-                variant="outline"
+                variant="secondary"
                 onClick={() => setSelectedApproval(null)}
               >
                 Cancel
