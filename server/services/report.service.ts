@@ -10,44 +10,85 @@ export class ReportService {
     const now = new Date();
     const startOfCurrentMonth = startOfMonth(now);
     const endOfCurrentMonth = endOfMonth(now);
+    const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1);
 
-    // Get total contraventions
-    const totalContraventions = await prisma.contravention.count();
-
-    // Get pending approval uploads
-    const pendingAcknowledgment = await prisma.contravention.count({
-      where: { status: 'PENDING_UPLOAD' },
-    });
-
-    // Get this month's contraventions
-    const thisMonth = await prisma.contravention.count({
-      where: {
-        createdAt: {
-          gte: startOfCurrentMonth,
-          lte: endOfCurrentMonth,
+    // Run ALL queries in parallel for maximum speed
+    const [
+      totalContraventions,
+      pendingAcknowledgment,
+      thisMonth,
+      criticalIssues,
+      valueSum,
+      statusCounts,
+      severityCounts,
+      employeesAtRisk,
+      contraventionsByMonth,
+    ] = await Promise.all([
+      // Total contraventions
+      prisma.contravention.count(),
+      // Pending approval uploads
+      prisma.contravention.count({
+        where: { status: 'PENDING_UPLOAD' },
+      }),
+      // This month's contraventions
+      prisma.contravention.count({
+        where: {
+          createdAt: {
+            gte: startOfCurrentMonth,
+            lte: endOfCurrentMonth,
+          },
         },
-      },
-    });
+      }),
+      // Critical issues (not completed)
+      prisma.contravention.count({
+        where: {
+          severity: 'CRITICAL',
+          status: { not: 'COMPLETED' },
+        },
+      }),
+      // Total value affected
+      prisma.contravention.aggregate({
+        _sum: { valueSgd: true },
+      }),
+      // Status breakdown
+      prisma.contravention.groupBy({
+        by: ['status'],
+        _count: true,
+      }),
+      // Severity breakdown
+      prisma.contravention.groupBy({
+        by: ['severity'],
+        _count: true,
+      }),
+      // Employees at risk (Level 3+)
+      prisma.employeePoints.findMany({
+        where: {
+          currentLevel: {
+            in: ['LEVEL_3', 'LEVEL_4', 'LEVEL_5'],
+          },
+        },
+        include: {
+          employee: {
+            select: { id: true, name: true },
+          },
+        },
+        orderBy: { totalPoints: 'desc' },
+        take: 10,
+      }),
+      // Monthly trend (last 12 months)
+      prisma.contravention.findMany({
+        where: {
+          incidentDate: {
+            gte: twelveMonthsAgo,
+          },
+        },
+        select: {
+          incidentDate: true,
+        },
+      }),
+    ]);
 
-    // Get critical issues (not completed)
-    const criticalIssues = await prisma.contravention.count({
-      where: {
-        severity: 'CRITICAL',
-        status: { not: 'COMPLETED' },
-      },
-    });
-
-    // Get total value affected
-    const valueSum = await prisma.contravention.aggregate({
-      _sum: { valueSgd: true },
-    });
-
-    // Get status breakdown
-    const statusCounts = await prisma.contravention.groupBy({
-      by: ['status'],
-      _count: true,
-    });
-
+    // Process status counts
     const byStatus: Record<string, number> = {
       PENDING_UPLOAD: 0,
       PENDING_REVIEW: 0,
@@ -57,12 +98,7 @@ export class ReportService {
       byStatus[s.status] = s._count;
     });
 
-    // Get severity breakdown
-    const severityCounts = await prisma.contravention.groupBy({
-      by: ['severity'],
-      _count: true,
-    });
-
+    // Process severity counts
     const bySeverity: Record<string, number> = {
       LOW: 0,
       MEDIUM: 0,
@@ -71,35 +107,6 @@ export class ReportService {
     };
     severityCounts.forEach((s) => {
       bySeverity[s.severity] = s._count;
-    });
-
-    // Get employees at risk (Level 3+)
-    const employeesAtRisk = await prisma.employeePoints.findMany({
-      where: {
-        currentLevel: {
-          in: ['LEVEL_3', 'LEVEL_4', 'LEVEL_5'],
-        },
-      },
-      include: {
-        employee: {
-          select: { id: true, name: true },
-        },
-      },
-      orderBy: { totalPoints: 'desc' },
-      take: 10,
-    });
-
-    // Get monthly trend (last 12 months) - single query instead of 12
-    const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1);
-    const contraventionsByMonth = await prisma.contravention.findMany({
-      where: {
-        incidentDate: {
-          gte: twelveMonthsAgo,
-        },
-      },
-      select: {
-        incidentDate: true,
-      },
     });
 
     // Build month counts map
