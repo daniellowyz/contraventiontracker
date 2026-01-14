@@ -285,28 +285,11 @@ export function SettingsPage() {
       alert(data.message);
       refetchUsers();
       refetchDuplicates();
-      refetchOgpUsers();
+      refetchUsers();
     },
     onError: (error: Error & { response?: { data?: { error?: string } } }) => {
       alert(error.response?.data?.error || error.message || 'Failed to merge users');
     },
-  });
-
-  // Admin: Fetch OGP users (for manual remap/delete)
-  interface OgpUser {
-    id: string;
-    email: string;
-    name: string;
-    employeeId: string;
-    contraventionCount: number;
-  }
-  const { data: ogpUsersData, refetch: refetchOgpUsers } = useQuery({
-    queryKey: ['ogp-users'],
-    queryFn: async () => {
-      const response = await client.get('/admin/users/ogp');
-      return response.data.data as OgpUser[];
-    },
-    enabled: isAdmin && activeTab === 'users',
   });
 
   // Admin: Fetch inactive/deactivated users
@@ -327,56 +310,6 @@ export function SettingsPage() {
     enabled: isAdmin && activeTab === 'users',
   });
 
-  // Admin: Remap contraventions mutation
-  const remapContraventionsMutation = useMutation({
-    mutationFn: async ({ sourceUserId, targetUserId }: { sourceUserId: string; targetUserId: string }) => {
-      const response = await client.post('/admin/users/remap-contraventions', { sourceUserId, targetUserId });
-      return response.data;
-    },
-    onSuccess: (data) => {
-      alert(data.message);
-      refetchOgpUsers();
-      refetchUsers();
-    },
-    onError: (error: Error & { response?: { data?: { error?: string } } }) => {
-      alert(error.response?.data?.error || error.message || 'Failed to remap contraventions');
-    },
-  });
-
-  // Admin: Delete user mutation
-  const deleteUserMutation = useMutation({
-    mutationFn: async (userId: string) => {
-      const response = await client.delete(`/admin/users/${userId}`);
-      return response.data;
-    },
-    onSuccess: (data) => {
-      alert(data.message);
-      refetchOgpUsers();
-      refetchUsers();
-      refetchDuplicates();
-    },
-    onError: (error: Error & { response?: { data?: { error?: string } } }) => {
-      alert(error.response?.data?.error || error.message || 'Failed to delete user');
-    },
-  });
-
-  // Admin: Deactivate user mutation (for users who left but have contraventions)
-  const deactivateUserMutation = useMutation({
-    mutationFn: async (userId: string) => {
-      const response = await client.patch(`/admin/users/${userId}/status`, { isActive: false });
-      return response.data;
-    },
-    onSuccess: (data) => {
-      alert(`Successfully deactivated ${data.data.name}`);
-      refetchOgpUsers();
-      refetchUsers();
-      refetchInactiveUsers();
-    },
-    onError: (error: Error & { response?: { data?: { error?: string } } }) => {
-      alert(error.response?.data?.error || error.message || 'Failed to deactivate user');
-    },
-  });
-
   // Admin: Reactivate user mutation
   const reactivateUserMutation = useMutation({
     mutationFn: async (userId: string) => {
@@ -385,7 +318,7 @@ export function SettingsPage() {
     },
     onSuccess: (data) => {
       alert(`Successfully reactivated ${data.data.name}`);
-      refetchOgpUsers();
+      refetchUsers();
       refetchUsers();
       refetchInactiveUsers();
     },
@@ -394,9 +327,6 @@ export function SettingsPage() {
     },
   });
 
-  // State for remap modal
-  const [remapModalUser, setRemapModalUser] = useState<OgpUser | null>(null);
-  const [remapTargetEmail, setRemapTargetEmail] = useState('');
 
   const handleProfileSave = () => {
     // In a real app, this would call an API
@@ -992,65 +922,6 @@ export function SettingsPage() {
                             </Button>
                           </div>
                         ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Remap Modal */}
-                  {remapModalUser && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                      <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-                        <h3 className="text-lg font-semibold mb-4">Remap Contraventions</h3>
-                        <p className="text-sm text-gray-600 mb-4">
-                          Transfer {remapModalUser.contraventionCount} contravention(s) from <strong>{remapModalUser.email}</strong> to another user.
-                        </p>
-                        <div className="mb-4">
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Target User Email
-                          </label>
-                          <input
-                            type="email"
-                            value={remapTargetEmail}
-                            onChange={(e) => setRemapTargetEmail(e.target.value)}
-                            placeholder="user@open.gov.sg"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          />
-                          <p className="text-xs text-gray-500 mt-1">
-                            Enter the email of the user to transfer contraventions to
-                          </p>
-                        </div>
-                        <div className="flex gap-3 justify-end">
-                          <Button
-                            variant="secondary"
-                            onClick={() => {
-                              setRemapModalUser(null);
-                              setRemapTargetEmail('');
-                            }}
-                          >
-                            Cancel
-                          </Button>
-                          <Button
-                            variant="primary"
-                            onClick={() => {
-                              const targetUser = usersData?.find(u => u.email.toLowerCase() === remapTargetEmail.toLowerCase());
-                              if (!targetUser) {
-                                alert('User not found. Please enter a valid email address.');
-                                return;
-                              }
-                              if (confirm(`Remap ${remapModalUser.contraventionCount} contravention(s) from ${remapModalUser.email} to ${targetUser.email}?`)) {
-                                remapContraventionsMutation.mutate({
-                                  sourceUserId: remapModalUser.id,
-                                  targetUserId: targetUser.id,
-                                });
-                                setRemapModalUser(null);
-                                setRemapTargetEmail('');
-                              }
-                            }}
-                            disabled={!remapTargetEmail || remapContraventionsMutation.isPending}
-                          >
-                            {remapContraventionsMutation.isPending ? 'Remapping...' : 'Remap'}
-                          </Button>
-                        </div>
                       </div>
                     </div>
                   )}
