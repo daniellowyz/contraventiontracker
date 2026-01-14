@@ -1,3 +1,4 @@
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { employeesApi } from '@/api/employees.api';
@@ -6,13 +7,76 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { getLevelName, getLevelColor } from '@/lib/utils';
-import { Eye, User } from 'lucide-react';
+import { Eye, User, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
+
+type SortField = 'points' | 'contraventions' | 'level' | null;
+type SortDirection = 'asc' | 'desc';
+
+// Level order for sorting (higher level = more severe)
+const LEVEL_ORDER: Record<string, number> = {
+  'LEVEL_0': 0,
+  'LEVEL_1': 1,
+  'LEVEL_2': 2,
+  'LEVEL_3': 3,
+  'LEVEL_4': 4,
+  'LEVEL_5': 5,
+};
 
 export function EmployeesListPage() {
+  const [sortField, setSortField] = useState<SortField>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+
   const { data: employees, isLoading } = useQuery({
     queryKey: ['employees'],
     queryFn: employeesApi.getAll,
   });
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      // Toggle direction or clear sort
+      if (sortDirection === 'desc') {
+        setSortDirection('asc');
+      } else {
+        setSortField(null);
+      }
+    } else {
+      setSortField(field);
+      setSortDirection('desc');
+    }
+  };
+
+  const sortedEmployees = useMemo(() => {
+    if (!employees || !sortField) return employees;
+
+    return [...employees].sort((a, b) => {
+      let comparison = 0;
+
+      switch (sortField) {
+        case 'points':
+          comparison = a.points - b.points;
+          break;
+        case 'contraventions':
+          comparison = a.contraventionCount - b.contraventionCount;
+          break;
+        case 'level':
+          const levelA = LEVEL_ORDER[a.currentLevel || 'LEVEL_0'] || 0;
+          const levelB = LEVEL_ORDER[b.currentLevel || 'LEVEL_0'] || 0;
+          comparison = levelA - levelB;
+          break;
+      }
+
+      return sortDirection === 'desc' ? -comparison : comparison;
+    });
+  }, [employees, sortField, sortDirection]);
+
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (sortField !== field) {
+      return <ChevronsUpDown className="w-4 h-4 text-gray-400" />;
+    }
+    return sortDirection === 'desc'
+      ? <ChevronDown className="w-4 h-4 text-blue-600" />
+      : <ChevronUp className="w-4 h-4 text-blue-600" />;
+  };
 
   return (
     <div>
@@ -22,7 +86,7 @@ export function EmployeesListPage() {
         <Card padding="none">
           {isLoading ? (
             <div className="p-8 text-center text-gray-500">Loading...</div>
-          ) : !employees?.length ? (
+          ) : !sortedEmployees?.length ? (
             <div className="p-8 text-center text-gray-500">No employees found</div>
           ) : (
             <div className="overflow-x-auto">
@@ -31,15 +95,38 @@ export function EmployeesListPage() {
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Employee</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Department</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Points</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Level</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contraventions</th>
+                    <th
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"
+                      onClick={() => handleSort('points')}
+                    >
+                      <div className="flex items-center gap-1">
+                        Points
+                        <SortIcon field="points" />
+                      </div>
+                    </th>
+                    <th
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"
+                      onClick={() => handleSort('level')}
+                    >
+                      <div className="flex items-center gap-1">
+                        Level
+                        <SortIcon field="level" />
+                      </div>
+                    </th>
+                    <th
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"
+                      onClick={() => handleSort('contraventions')}
+                    >
+                      <div className="flex items-center gap-1">
+                        Contraventions
+                        <SortIcon field="contraventions" />
+                      </div>
+                    </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {employees.map((employee) => (
+                  {sortedEmployees.map((employee) => (
                     <tr key={employee.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
@@ -54,11 +141,6 @@ export function EmployeesListPage() {
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-500">
                         {employee.department?.name || '-'}
-                      </td>
-                      <td className="px-6 py-4">
-                        <Badge variant={employee.role === 'ADMIN' ? 'info' : 'default'}>
-                          {employee.role}
-                        </Badge>
                       </td>
                       <td className="px-6 py-4">
                         <span className={`text-sm font-medium ${employee.points >= 5 ? 'text-red-600' : 'text-gray-900'}`}>

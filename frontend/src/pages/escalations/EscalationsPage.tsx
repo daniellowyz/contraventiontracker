@@ -39,8 +39,8 @@ interface Escalation {
 const LEVEL_OPTIONS = [
   { value: '', label: 'All Levels' },
   { value: 'LEVEL_1', label: 'Level 1 - Verbal Advisory (1-2 pts)' },
-  { value: 'LEVEL_2', label: 'Level 2 - Mandatory Training (3+ pts)' },
-  { value: 'LEVEL_3', label: 'Level 3 - Performance Impact' },
+  { value: 'LEVEL_2', label: 'Level 2 - Mandatory Training (3-4 pts)' },
+  { value: 'LEVEL_3', label: 'Level 3 - Performance Impact (5+ pts)' },
 ];
 
 const COMPLETION_OPTIONS = [
@@ -63,14 +63,14 @@ const getLevelConfig = (level: string) => {
       color: 'text-orange-700',
       bgColor: 'bg-orange-100',
       icon: <FileWarning className="w-5 h-5 text-orange-600" />,
-      description: '3+ points: Complete training within 30 days',
+      description: '3-4 points: Complete training within 30 days',
     },
     LEVEL_3: {
       name: 'Level 3 - Performance Impact',
       color: 'text-red-700',
       bgColor: 'bg-red-100',
       icon: <AlertTriangle className="w-5 h-5 text-red-600" />,
-      description: 'Post-training offense or >3pt single offense',
+      description: '5+ points: Affects performance review',
     },
   };
   return configs[level] || configs.LEVEL_1;

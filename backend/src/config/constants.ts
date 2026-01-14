@@ -1,12 +1,11 @@
 // Escalation Matrix Configuration
 // Level 1: 1-2 points - Finance verbal advisory
-// Level 2: 3+ points - Mandatory training required
-// Level 3: Post-training offense OR single offense >3 points - Performance impact
+// Level 2: 3-4 points - Mandatory training required
+// Level 3: 5+ points - Performance impact
 export const ESCALATION_MATRIX = {
   LEVEL_1: { min: 1, max: 2, name: 'Verbal Advisory', actions: ['Finance verbal advisory on contravention and prevention'] },
-  LEVEL_2: { min: 3, max: Infinity, name: 'Mandatory Training', actions: ['Complete Procurement Compliance Training within 30 days'] },
-  // Level 3 is triggered when: employee commits offense after completing training, OR single offense with >3 points
-  LEVEL_3: { min: 0, max: Infinity, name: 'Performance Impact', actions: ['Affects performance review', 'Manager to review employee contravention record at end of performance cycle'] },
+  LEVEL_2: { min: 3, max: 4, name: 'Mandatory Training', actions: ['Complete Procurement Compliance Training within 30 days'] },
+  LEVEL_3: { min: 5, max: Infinity, name: 'Performance Impact', actions: ['Affects performance review', 'Manager to review employee contravention record at end of performance cycle'] },
 };
 
 // Severity Points Mapping

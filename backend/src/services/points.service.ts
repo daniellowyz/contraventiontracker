@@ -27,10 +27,11 @@ export class PointsService {
   /**
    * Determine escalation level based on total points
    * Level 1: 1-2 points - Verbal Advisory
-   * Level 2: 3+ points - Mandatory Training
-   * Level 3: Determined by checkForPerformanceImpact (post-training offense or >3pt single offense)
+   * Level 2: 3-4 points - Mandatory Training
+   * Level 3: 5+ points - Performance Impact
    */
   getEscalationLevel(totalPoints: number): EscalationLevel | null {
+    if (totalPoints >= ESCALATION_MATRIX.LEVEL_3.min) return 'LEVEL_3';
     if (totalPoints >= ESCALATION_MATRIX.LEVEL_2.min) return 'LEVEL_2';
     if (totalPoints >= ESCALATION_MATRIX.LEVEL_1.min) return 'LEVEL_1';
     return null;
@@ -82,8 +83,8 @@ export class PointsService {
    * Add points to an employee and trigger escalation if needed
    * Escalation logic:
    * - Level 1: 1-2 points → Verbal Advisory
-   * - Level 2: 3+ points → Mandatory Training
-   * - Level 3: Post-training offense OR single offense >3 points → Performance Impact
+   * - Level 2: 3-4 points → Mandatory Training
+   * - Level 3: 5+ points → Performance Impact
    */
   async addPoints(
     employeeId: string,
@@ -109,16 +110,11 @@ export class PointsService {
     const previousLevel = pointsRecord.currentLevel;
     const newTotal = pointsRecord.totalPoints + points;
 
-    // Check for performance impact (Level 3) - post-training offense or >3pt single offense
-    const performanceImpact = await this.checkForPerformanceImpact(employeeId, points);
+    // Determine new level based purely on points
+    const newLevel = this.getEscalationLevel(newTotal);
 
-    // Determine new level: if performance impact, it's LEVEL_3, otherwise use points-based logic
-    let newLevel: EscalationLevel | null;
-    if (performanceImpact) {
-      newLevel = 'LEVEL_3';
-    } else {
-      newLevel = this.getEscalationLevel(newTotal);
-    }
+    // Performance impact is now just Level 3 (5+ points)
+    const performanceImpact = newTotal >= ESCALATION_MATRIX.LEVEL_3.min;
 
     // Update points history
     const history = (pointsRecord.pointsHistory as unknown as PointsHistoryEntry[]) || [];
@@ -148,7 +144,7 @@ export class PointsService {
       await this.createEscalation(employeeId, newLevel, newTotal);
     }
 
-    // Trigger training at Level 2 (3+ points)
+    // Trigger training at Level 2 (3-4 points)
     if (newTotal >= ESCALATION_MATRIX.LEVEL_2.min) {
       await this.triggerTraining(employeeId);
     }
@@ -419,17 +415,9 @@ export class PointsService {
       const oldLevel = emp.currentLevel;
       const hasTraining = emp.employee.trainingRecords.length > 0;
 
-      // Recalculate level based on new 3-level system
-      let newLevel: EscalationLevel | null = null;
-
-      // Check for performance impact first (if they completed training and have any points)
-      if (hasTraining && emp.totalPoints > 0) {
-        newLevel = 'LEVEL_3';
-      } else if (emp.totalPoints >= ESCALATION_MATRIX.LEVEL_2.min) {
-        newLevel = 'LEVEL_2';
-      } else if (emp.totalPoints >= ESCALATION_MATRIX.LEVEL_1.min) {
-        newLevel = 'LEVEL_1';
-      }
+      // Recalculate level based on points:
+      // Level 1: 1-2 pts, Level 2: 3-4 pts, Level 3: 5+ pts
+      const newLevel = this.getEscalationLevel(emp.totalPoints);
 
       // Update if level changed
       if (oldLevel !== newLevel) {
@@ -549,11 +537,12 @@ export class PointsService {
       const expectedPoints = activeContraventions.reduce((sum, c) => sum + c.points, 0);
       const currentPoints = employee.pointsRecord?.totalPoints || 0;
 
-      // Check if points need to be fixed
-      if (expectedPoints !== currentPoints) {
-        // Create or update points record
-        const newLevel = this.getEscalationLevel(expectedPoints);
+      // Check if points need to be fixed OR if level needs updating
+      const newLevel = this.getEscalationLevel(expectedPoints);
+      const currentLevel = employee.pointsRecord?.currentLevel || null;
+      const needsFix = expectedPoints !== currentPoints || newLevel !== currentLevel;
 
+      if (needsFix) {
         const history: PointsHistoryEntry[] = activeContraventions.map((c) => ({
           date: new Date().toISOString(),
           points: c.points,
@@ -583,6 +572,11 @@ export class PointsService {
           });
         }
 
+        // Trigger training if at Level 2 (3+ points) and no active training
+        if (expectedPoints >= 3) {
+          await this.triggerTraining(employee.id);
+        }
+
         employeesFixed++;
         details.push({
           employeeId: employee.id,
@@ -593,6 +587,11 @@ export class PointsService {
           fixed: true,
         });
       } else {
+        // Even if points are correct, check if training needs to be triggered
+        if (expectedPoints >= 3) {
+          await this.triggerTraining(employee.id);
+        }
+
         details.push({
           employeeId: employee.id,
           employeeName: employee.name,
@@ -641,19 +640,22 @@ export class PointsService {
     const currentLevel = points?.currentLevel;
 
     // Calculate next level threshold
+    // Level 1: 1-2 pts, Level 2: 3-4 pts, Level 3: 5+ pts
     let nextLevelThreshold: number | null = null;
     let pointsToNextLevel: number | null = null;
+    const currentPoints = points?.totalPoints || 0;
 
-    // Only using 3 levels: LEVEL_1 (1-2 pts), LEVEL_2 (3+ pts / training), LEVEL_3 (performance impact)
-    // Level 3 is special - triggered by post-training offense or >3pt single offense, not by points threshold
-    if (currentLevel === 'LEVEL_1') {
-      nextLevelThreshold = ESCALATION_MATRIX.LEVEL_2.min;
-      pointsToNextLevel = nextLevelThreshold - (points?.totalPoints || 0);
-    } else if (!currentLevel && (points?.totalPoints || 0) < ESCALATION_MATRIX.LEVEL_1.min) {
+    if (!currentLevel && currentPoints < ESCALATION_MATRIX.LEVEL_1.min) {
       nextLevelThreshold = ESCALATION_MATRIX.LEVEL_1.min;
-      pointsToNextLevel = nextLevelThreshold - (points?.totalPoints || 0);
+      pointsToNextLevel = nextLevelThreshold - currentPoints;
+    } else if (currentLevel === 'LEVEL_1') {
+      nextLevelThreshold = ESCALATION_MATRIX.LEVEL_2.min;
+      pointsToNextLevel = nextLevelThreshold - currentPoints;
+    } else if (currentLevel === 'LEVEL_2') {
+      nextLevelThreshold = ESCALATION_MATRIX.LEVEL_3.min;
+      pointsToNextLevel = nextLevelThreshold - currentPoints;
     }
-    // Level 2 and Level 3 don't have a "next level" based on points
+    // Level 3 is the highest level
 
     return {
       employeeId: user.id,
