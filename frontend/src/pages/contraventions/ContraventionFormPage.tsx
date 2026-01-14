@@ -253,7 +253,7 @@ export function ContraventionFormPage() {
         { value: '', label: 'Select an employee...' },
         ...(employees?.map((emp) => ({
           value: emp.id,
-          label: `${emp.name} (${emp.employeeId})${!emp.isActive ? ' [Deactivated]' : ''} - ${emp.department?.name || 'No Department'}`,
+          label: `${emp.name}${!emp.isActive ? ' [Deactivated]' : ''}`,
         })) || []),
       ]
     : employees
@@ -261,7 +261,7 @@ export function ContraventionFormPage() {
           .filter((emp) => emp.email === user?.email)
           .map((emp) => ({
             value: emp.id,
-            label: `${emp.name} (${emp.employeeId}) - ${emp.department?.name || 'No Department'}`,
+            label: emp.name,
           }))
       : [];
 
