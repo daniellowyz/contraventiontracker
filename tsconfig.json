@@ -14,6 +14,6 @@
     "declarationMap": true,
     "moduleResolution": "node"
   },
-  "include": ["api/**/*", "backend/src/**/*"],
+  "include": ["api/**/*", "server/**/*"],
   "exclude": ["node_modules", "frontend"]
 }
