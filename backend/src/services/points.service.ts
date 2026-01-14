@@ -498,6 +498,120 @@ export class PointsService {
   }
 
   /**
+   * Sync points from contraventions for all employees
+   * This recalculates points based on actual contraventions that exist in the database
+   */
+  async syncPointsFromContraventions(): Promise<{
+    employeesProcessed: number;
+    employeesFixed: number;
+    details: Array<{
+      employeeId: string;
+      employeeName: string;
+      contraventionCount: number;
+      previousPoints: number;
+      newPoints: number;
+      fixed: boolean;
+    }>;
+  }> {
+    const details: Array<{
+      employeeId: string;
+      employeeName: string;
+      contraventionCount: number;
+      previousPoints: number;
+      newPoints: number;
+      fixed: boolean;
+    }> = [];
+
+    // Get all employees with their contraventions and points records
+    const employees = await prisma.user.findMany({
+      where: { isActive: true },
+      include: {
+        contraventions: {
+          select: {
+            id: true,
+            referenceNo: true,
+            points: true,
+            status: true,
+          },
+        },
+        pointsRecord: true,
+      },
+    });
+
+    let employeesFixed = 0;
+
+    for (const employee of employees) {
+      // Only count ACTIVE contraventions (not voided/overturned)
+      const activeContraventions = employee.contraventions.filter(
+        (c) => !['VOIDED', 'DISPUTED_OVERTURNED'].includes(c.status)
+      );
+
+      const expectedPoints = activeContraventions.reduce((sum, c) => sum + c.points, 0);
+      const currentPoints = employee.pointsRecord?.totalPoints || 0;
+
+      // Check if points need to be fixed
+      if (expectedPoints !== currentPoints) {
+        // Create or update points record
+        const newLevel = this.getEscalationLevel(expectedPoints);
+
+        const history: PointsHistoryEntry[] = activeContraventions.map((c) => ({
+          date: new Date().toISOString(),
+          points: c.points,
+          contraventionId: c.id,
+          reason: `Synced from ${c.referenceNo}`,
+          type: 'add' as const,
+        }));
+
+        if (employee.pointsRecord) {
+          await prisma.employeePoints.update({
+            where: { employeeId: employee.id },
+            data: {
+              totalPoints: expectedPoints,
+              currentLevel: newLevel,
+              lastCalculated: new Date(),
+              pointsHistory: history as unknown as Parameters<typeof prisma.employeePoints.update>[0]['data']['pointsHistory'],
+            },
+          });
+        } else {
+          await prisma.employeePoints.create({
+            data: {
+              employeeId: employee.id,
+              totalPoints: expectedPoints,
+              currentLevel: newLevel,
+              pointsHistory: history as unknown as Parameters<typeof prisma.employeePoints.create>[0]['data']['pointsHistory'],
+            },
+          });
+        }
+
+        employeesFixed++;
+        details.push({
+          employeeId: employee.id,
+          employeeName: employee.name,
+          contraventionCount: activeContraventions.length,
+          previousPoints: currentPoints,
+          newPoints: expectedPoints,
+          fixed: true,
+        });
+      } else {
+        details.push({
+          employeeId: employee.id,
+          employeeName: employee.name,
+          contraventionCount: activeContraventions.length,
+          previousPoints: currentPoints,
+          newPoints: expectedPoints,
+          fixed: false,
+        });
+      }
+    }
+
+    return {
+      employeesProcessed: employees.length,
+      employeesFixed,
+      details: details.filter((d) => d.fixed || d.contraventionCount > 0),
+    };
+  }
+
+  /**
    * Get employee points summary
    */
   async getEmployeePointsSummary(employeeId: string) {

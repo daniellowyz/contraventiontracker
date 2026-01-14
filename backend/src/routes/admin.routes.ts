@@ -559,6 +559,17 @@ router.post('/escalations/recalculate', authenticate, requireAdmin, async (req: 
   }
 });
 
+// POST /api/admin/points/sync - Sync points from contraventions (admin only)
+router.post('/points/sync', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const pointsService = (await import('../services/points.service')).default;
+    const result = await pointsService.syncPointsFromContraventions();
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // ============== USER MANAGEMENT ==============
 
 // GET /api/admin/users - List all users (admin only)

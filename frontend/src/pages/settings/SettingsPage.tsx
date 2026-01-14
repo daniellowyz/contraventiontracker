@@ -1211,10 +1211,7 @@ export function SettingsPage() {
                           {usersData.map((userData) => (
                             <tr key={userData.id} className="hover:bg-gray-50">
                               <td className="px-4 py-3">
-                                <div>
-                                  <p className="font-medium text-gray-900">{userData.name}</p>
-                                  <p className="text-xs text-gray-500">{userData.employeeId}</p>
-                                </div>
+                                <p className="font-medium text-gray-900">{userData.name}</p>
                               </td>
                               <td className="px-4 py-3 text-gray-700">{userData.email}</td>
                               <td className="px-4 py-3 text-gray-700">{userData.department?.name || '-'}</td>

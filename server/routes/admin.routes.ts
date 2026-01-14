@@ -540,22 +540,10 @@ router.post('/users/remap-contraventions', authenticate, requireAdmin, async (re
 // Only allows deletion of ogp.gov.sg users with no contraventions
 router.delete('/users/:id', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
 
     const user = await prisma.user.findUnique({
       where: { id },
-      include: {
-        _count: {
-          select: {
-            contraventions: true,
-            escalations: true,
-            loggedContras: true,
-            acknowledgedContras: true,
-            disputesSubmitted: true,
-            disputesDecided: true,
-          },
-        },
-      },
     });
 
     if (!user) {
@@ -567,19 +555,24 @@ router.delete('/users/:id', authenticate, requireAdmin, async (req: Authenticate
       throw new AppError('Can only delete @ogp.gov.sg placeholder accounts', 400);
     }
 
+    // Get counts separately
+    const contraventionCount = await prisma.contravention.count({ where: { employeeId: id } });
+    const loggedContrasCount = await prisma.contravention.count({ where: { loggedById: id } });
+    const acknowledgedContrasCount = await prisma.contravention.count({ where: { acknowledgedById: id } });
+
     // Safety check: don't delete users with contraventions (as employee)
-    if (user._count.contraventions > 0) {
-      throw new AppError(`Cannot delete user with ${user._count.contraventions} contravention(s). Remap them first.`, 400);
+    if (contraventionCount > 0) {
+      throw new AppError(`Cannot delete user with ${contraventionCount} contravention(s). Remap them first.`, 400);
     }
 
     // Check for logged contraventions - need to reassign or clear
-    if (user._count.loggedContras > 0) {
-      throw new AppError(`Cannot delete user who logged ${user._count.loggedContras} contravention(s). The user has related records.`, 400);
+    if (loggedContrasCount > 0) {
+      throw new AppError(`Cannot delete user who logged ${loggedContrasCount} contravention(s). The user has related records.`, 400);
     }
 
     // Check for acknowledged contraventions - need to clear
-    if (user._count.acknowledgedContras > 0) {
-      throw new AppError(`Cannot delete user who acknowledged ${user._count.acknowledgedContras} contravention(s). The user has related records.`, 400);
+    if (acknowledgedContrasCount > 0) {
+      throw new AppError(`Cannot delete user who acknowledged ${acknowledgedContrasCount} contravention(s). The user has related records.`, 400);
     }
 
     console.log(`[DeleteUser] Deleting user ${user.email}`);
@@ -1454,6 +1447,17 @@ router.post('/escalations/recalculate', authenticate, requireAdmin, async (req: 
   try {
     const pointsService = (await import('../services/points.service')).default;
     const result = await pointsService.recalculateAllEscalations();
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/admin/points/sync - Sync points from contraventions (admin only)
+router.post('/points/sync', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const pointsService = (await import('../services/points.service')).default;
+    const result = await pointsService.syncPointsFromContraventions();
     res.json({ success: true, data: result });
   } catch (error) {
     next(error);
