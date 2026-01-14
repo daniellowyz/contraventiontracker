@@ -170,6 +170,26 @@ export function SettingsPage() {
     },
   });
 
+  // Admin: Sync points from contraventions mutation
+  const syncPointsMutation = useMutation({
+    mutationFn: async () => {
+      const response = await client.post('/admin/points/sync');
+      return response.data;
+    },
+    onSuccess: (data) => {
+      refetchFiscalYear();
+      const fixed = data.data.details.filter((d: { fixed: boolean }) => d.fixed);
+      if (fixed.length > 0) {
+        alert(`Points synced!\nEmployees fixed: ${data.data.employeesFixed}\n\nFixed employees:\n${fixed.map((d: { employeeName: string; previousPoints: number; newPoints: number }) => `- ${d.employeeName}: ${d.previousPoints} → ${d.newPoints} pts`).join('\n')}`);
+      } else {
+        alert('All employee points are already in sync!');
+      }
+    },
+    onError: () => {
+      alert('Failed to sync points');
+    },
+  });
+
   // Admin: Users list query
   const { data: usersData, refetch: refetchUsers } = useQuery({
     queryKey: ['admin-users', userSearch],
@@ -1213,18 +1233,28 @@ export function SettingsPage() {
                         <Calendar className="w-5 h-5 text-purple-500" />
                         <h2 className="text-lg font-semibold text-gray-900">Fiscal Year Points Reset</h2>
                       </div>
-                      <Button
-                        variant="secondary"
-                        onClick={() => {
-                          if (confirm('Are you sure you want to reset ALL employee points to 0? This action cannot be undone.')) {
-                            resetPointsMutation.mutate();
-                          }
-                        }}
-                        disabled={resetPointsMutation.isPending}
-                      >
-                        <RefreshCw className={`w-4 h-4 mr-2 ${resetPointsMutation.isPending ? 'animate-spin' : ''}`} />
-                        {resetPointsMutation.isPending ? 'Resetting...' : 'Reset All Points'}
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="secondary"
+                          onClick={() => syncPointsMutation.mutate()}
+                          disabled={syncPointsMutation.isPending}
+                        >
+                          <RefreshCw className={`w-4 h-4 mr-2 ${syncPointsMutation.isPending ? 'animate-spin' : ''}`} />
+                          {syncPointsMutation.isPending ? 'Syncing...' : 'Sync Points'}
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          onClick={() => {
+                            if (confirm('Are you sure you want to reset ALL employee points to 0? This action cannot be undone.')) {
+                              resetPointsMutation.mutate();
+                            }
+                          }}
+                          disabled={resetPointsMutation.isPending}
+                        >
+                          <RefreshCw className={`w-4 h-4 mr-2 ${resetPointsMutation.isPending ? 'animate-spin' : ''}`} />
+                          {resetPointsMutation.isPending ? 'Resetting...' : 'Reset All Points'}
+                        </Button>
+                      </div>
                     </div>
 
                     {fiscalYearStatus && (
