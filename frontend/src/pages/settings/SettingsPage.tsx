@@ -952,77 +952,7 @@ export function SettingsPage() {
                     </div>
                   )}
 
-                  {/* OGP Users Management Section - for unmatched ogp.gov.sg accounts */}
-                  {ogpUsersData && ogpUsersData.length > 0 && (
-                    <div className="mb-6 p-4 bg-orange-50 border border-orange-200 rounded-lg">
-                      <div className="flex items-center gap-2 mb-3">
-                        <AlertTriangle className="w-5 h-5 text-orange-600" />
-                        <h4 className="font-medium text-orange-800">
-                          OGP Placeholder Accounts ({ogpUsersData.length})
-                        </h4>
-                      </div>
-                      <p className="text-sm text-orange-700 mb-4">
-                        These @ogp.gov.sg accounts don't have matching @open.gov.sg accounts.
-                        You can manually remap their contraventions to another user, or delete them if they have no contraventions.
-                      </p>
-                      <div className="space-y-2 max-h-64 overflow-y-auto">
-                        {ogpUsersData.map((ogpUser) => (
-                          <div key={ogpUser.id} className="bg-white p-3 rounded border border-orange-200 flex items-center justify-between">
-                            <div className="flex-1">
-                              <p className="font-medium text-gray-900">{ogpUser.name}</p>
-                              <p className="text-sm text-gray-600">{ogpUser.email}</p>
-                              <p className="text-xs text-gray-500">
-                                {ogpUser.contraventionCount} contravention(s)
-                              </p>
-                            </div>
-                            <div className="flex gap-2">
-                              {ogpUser.contraventionCount > 0 ? (
-                                <>
-                                  <Button
-                                    variant="secondary"
-                                    size="sm"
-                                    onClick={() => {
-                                      setRemapModalUser(ogpUser);
-                                      setRemapTargetEmail('');
-                                    }}
-                                  >
-                                    Remap
-                                  </Button>
-                                  <Button
-                                    variant="secondary"
-                                    size="sm"
-                                    onClick={() => {
-                                      if (confirm(`Deactivate ${ogpUser.email}?\n\nThis user has ${ogpUser.contraventionCount} contravention(s) that will be preserved.\nThe user will no longer be able to log in but their records remain.`)) {
-                                        deactivateUserMutation.mutate(ogpUser.id);
-                                      }
-                                    }}
-                                    disabled={deactivateUserMutation.isPending}
-                                    className="text-orange-600 hover:text-orange-700"
-                                  >
-                                    {deactivateUserMutation.isPending ? 'Deactivating...' : 'Deactivate'}
-                                  </Button>
-                                </>
-                              ) : (
-                                <Button
-                                  variant="secondary"
-                                  size="sm"
-                                  onClick={() => {
-                                    if (confirm(`Delete ${ogpUser.email}?\n\nThis account has no contraventions and will be permanently deleted.`)) {
-                                      deleteUserMutation.mutate(ogpUser.id);
-                                    }
-                                  }}
-                                  disabled={deleteUserMutation.isPending}
-                                  className="text-red-600 hover:text-red-700"
-                                >
-                                  {deleteUserMutation.isPending ? 'Deleting...' : 'Delete'}
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  {/* OGP Users Management Section - hidden as remaining accounts have logged contraventions and cannot be deleted */}
 
                   {/* Deactivated Users Section */}
                   {inactiveUsersData && inactiveUsersData.length > 0 && (
