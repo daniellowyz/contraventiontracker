@@ -6,6 +6,35 @@ import { AppError } from '../middleware/errorHandler';
 
 const router = Router();
 
+// GET /api/admin/approvers - List all users who can approve (ADMIN or APPROVER role)
+router.get('/approvers', authenticate, async (_req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const approvers = await prisma.user.findMany({
+      where: {
+        isActive: true,
+        role: { in: ['ADMIN', 'APPROVER'] },
+      },
+      select: {
+        id: true,
+        employeeId: true,
+        email: true,
+        name: true,
+        position: true,
+        role: true,
+        department: { select: { id: true, name: true } },
+      },
+      orderBy: [
+        { role: 'asc' }, // ADMIN first, then APPROVER
+        { name: 'asc' },
+      ],
+    });
+
+    res.json({ success: true, data: approvers });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // GET /api/admin/email-status - Get email configuration status (admin only)
 router.get('/email-status', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
   try {

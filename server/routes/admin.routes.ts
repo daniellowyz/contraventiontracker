@@ -7,6 +7,37 @@ import slackService from '../services/slack.service';
 
 const router = Router();
 
+// ==================== APPROVERS LIST ====================
+
+// GET /api/admin/approvers - List all users who can approve (ADMIN or APPROVER role)
+router.get('/approvers', authenticate, async (_req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const approvers = await prisma.user.findMany({
+      where: {
+        isActive: true,
+        role: { in: ['ADMIN', 'APPROVER'] },
+      },
+      select: {
+        id: true,
+        employeeId: true,
+        email: true,
+        name: true,
+        position: true,
+        role: true,
+        department: { select: { id: true, name: true } },
+      },
+      orderBy: [
+        { role: 'asc' }, // ADMIN first, then APPROVER
+        { name: 'asc' },
+      ],
+    });
+
+    res.json({ success: true, data: approvers });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // ==================== USER MANAGEMENT ====================
 
 // GET /api/admin/users - List all users (admin only)
