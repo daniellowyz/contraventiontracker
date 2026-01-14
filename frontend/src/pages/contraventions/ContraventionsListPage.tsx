@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/Input';
 import { MonthYearPicker } from '@/components/ui/MonthYearPicker';
 import { formatDate, formatCurrency, getSeverityColor, getStatusColor } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
-import { Plus, ChevronLeft, ChevronRight, Eye, Trash2 } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, Eye, Trash2, FileWarning } from 'lucide-react';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All Status' },
@@ -224,31 +224,52 @@ export function ContraventionsListPage() {
         {/* Table */}
         <Card padding="none">
           {isLoading ? (
-            <div className="p-8 text-center text-gray-500">Loading...</div>
+            <div className="p-8">
+              <div className="space-y-3">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="flex gap-4 items-center">
+                    <div className="skeleton h-5 w-24" />
+                    <div className="skeleton h-5 w-32" />
+                    <div className="skeleton h-5 w-28" />
+                    <div className="skeleton h-6 w-16 rounded-full" />
+                    <div className="skeleton h-5 w-12" />
+                    <div className="skeleton h-5 w-20" />
+                    <div className="skeleton h-6 w-20 rounded-full" />
+                    <div className="skeleton h-5 w-24" />
+                  </div>
+                ))}
+              </div>
+            </div>
           ) : !data?.data.length ? (
-            <div className="p-8 text-center text-gray-500">No contraventions found</div>
+            <div className="p-12 text-center">
+              <div className="text-gray-400 mb-2">
+                <FileWarning className="w-12 h-12 mx-auto" />
+              </div>
+              <p className="text-gray-500">No contraventions found</p>
+              <p className="text-sm text-gray-400 mt-1">Try adjusting your filters</p>
+            </div>
           ) : (
             <>
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto max-h-[600px] sticky-header">
                 <table className="w-full">
-                  <thead className="bg-gray-50 border-b border-gray-200">
+                  <thead className="bg-gray-50/95 border-b border-gray-200">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Reference</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Employee</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Severity</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Points</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Value</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase"></th>
+                      <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Reference</th>
+                      <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Employee</th>
+                      <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Type</th>
+                      <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Severity</th>
+                      <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Points</th>
+                      <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Value</th>
+                      <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
+                      <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Date</th>
+                      <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"></th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200">
+                  <tbody className="divide-y divide-gray-100">
                     {data.data.map((contravention) => (
                       <tr
                         key={contravention.id}
-                        className="hover:bg-gray-50 cursor-pointer"
+                        className="hover:bg-gray-50/50 cursor-pointer transition-colors"
                         onClick={() => navigate(`/contraventions/${contravention.id}`)}
                       >
                         <td className="px-6 py-4 text-sm font-medium text-gray-900">

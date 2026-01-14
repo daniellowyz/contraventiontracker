@@ -68,10 +68,10 @@ export function Sidebar() {
               key={item.href}
               to={item.href}
               className={cn(
-                'flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                'flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150',
                 isActive
-                  ? 'bg-primary-50 text-primary-700'
-                  : 'text-gray-600 hover:bg-gray-50'
+                  ? 'bg-primary-50 text-primary-700 border-l-3 border-primary-600'
+                  : 'text-gray-600 hover:bg-gray-50 hover:translate-x-0.5'
               )}
             >
               <item.icon className="w-5 h-5" />
@@ -93,10 +93,10 @@ export function Sidebar() {
                   key={item.href}
                   to={item.href}
                   className={cn(
-                    'flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                    'flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150',
                     isActive
-                      ? 'bg-primary-50 text-primary-700'
-                      : 'text-gray-600 hover:bg-gray-50'
+                      ? 'bg-primary-50 text-primary-700 border-l-3 border-primary-600'
+                      : 'text-gray-600 hover:bg-gray-50 hover:translate-x-0.5'
                   )}
                 >
                   <item.icon className="w-5 h-5" />
@@ -125,10 +125,10 @@ export function Sidebar() {
                   key={item.href}
                   to={item.href}
                   className={cn(
-                    'flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                    'flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150',
                     isActive
-                      ? 'bg-primary-50 text-primary-700'
-                      : 'text-gray-600 hover:bg-gray-50'
+                      ? 'bg-primary-50 text-primary-700 border-l-3 border-primary-600'
+                      : 'text-gray-600 hover:bg-gray-50 hover:translate-x-0.5'
                   )}
                 >
                   <item.icon className="w-5 h-5" />

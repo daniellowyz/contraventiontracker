@@ -46,13 +46,33 @@ export function DashboardPage() {
 
   if (isLoading) {
     return (
-      <div className="p-8">
-        <div className="animate-pulse space-y-6">
-          <div className="h-8 bg-gray-200 rounded w-48" />
-          <div className="grid grid-cols-4 gap-6">
+      <div>
+        <Header title="Dashboard" subtitle="Overview of procurement contraventions" />
+        <div className="p-8 space-y-6">
+          {/* Skeleton stat cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-32 bg-gray-200 rounded-xl" />
+              <div key={i} className="bg-white rounded-xl p-6 border border-gray-100/80">
+                <div className="flex items-center gap-4">
+                  <div className="skeleton w-12 h-12 rounded-lg" />
+                  <div className="flex-1 space-y-2">
+                    <div className="skeleton h-4 w-24" />
+                    <div className="skeleton h-7 w-16" />
+                  </div>
+                </div>
+              </div>
             ))}
+          </div>
+          {/* Skeleton charts */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 bg-white rounded-xl p-6 border border-gray-100/80">
+              <div className="skeleton h-5 w-32 mb-6" />
+              <div className="skeleton h-64 w-full" />
+            </div>
+            <div className="bg-white rounded-xl p-6 border border-gray-100/80">
+              <div className="skeleton h-5 w-24 mb-6" />
+              <div className="skeleton h-64 w-full rounded-full mx-auto" style={{ maxWidth: '180px' }} />
+            </div>
           </div>
         </div>
       </div>
@@ -123,21 +143,32 @@ export function DashboardPage() {
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={stats.monthlyTrend} style={{ cursor: 'pointer' }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
                   <XAxis
                     dataKey="month"
                     tickFormatter={(val) => val.split('-')[1]}
-                    tick={{ fontSize: 12 }}
+                    tick={{ fontSize: 12, fill: '#6b7280' }}
+                    axisLine={{ stroke: '#e5e7eb' }}
+                    tickLine={false}
                   />
-                  <YAxis tick={{ fontSize: 12 }} />
+                  <YAxis
+                    tick={{ fontSize: 12, fill: '#6b7280' }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
                   <Tooltip
                     formatter={(value: number) => [value, 'Contraventions']}
                     labelFormatter={(label) => `Month: ${label}`}
+                    contentStyle={{
+                      borderRadius: '8px',
+                      border: '1px solid #e5e7eb',
+                      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
+                    }}
                   />
                   <Bar
                     dataKey="count"
-                    fill="#3b82f6"
-                    radius={[4, 4, 0, 0]}
+                    fill="#4338ca"
+                    radius={[6, 6, 0, 0]}
                     onClick={(data) => handleBarClick(data)}
                     style={{ cursor: 'pointer' }}
                   />
@@ -167,7 +198,13 @@ export function DashboardPage() {
                       <Cell key={`cell-${index}`} fill={entry.color} style={{ cursor: 'pointer' }} />
                     ))}
                   </Pie>
-                  <Tooltip />
+                  <Tooltip
+                    contentStyle={{
+                      borderRadius: '8px',
+                      border: '1px solid #e5e7eb',
+                      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
+                    }}
+                  />
                 </PieChart>
               </ResponsiveContainer>
             </div>
