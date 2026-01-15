@@ -6,6 +6,7 @@ import reportRoutes from './report.routes';
 import adminRoutes from './admin.routes';
 import notificationRoutes from './notification.routes';
 import approvalRoutes from './approval.routes';
+import slackRoutes from './slack.routes';
 
 const router = Router();
 
@@ -22,5 +23,6 @@ router.use('/reports', reportRoutes);
 router.use('/admin', adminRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/approvals', approvalRoutes);
+router.use('/slack', slackRoutes);
 
 export default router;

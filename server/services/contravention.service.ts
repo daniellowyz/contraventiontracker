@@ -3,6 +3,7 @@ import { AppError } from '../middleware/errorHandler';
 import generateReferenceNumber from '../utils/generateRefNo';
 import pointsService from './points.service';
 import { CreateContraventionInput, UpdateContraventionInput, ContraventionFiltersInput } from '../validators/contravention.schema';
+
 // Lazy import notification service to avoid module loading issues in Vercel
 let notificationServiceModule: typeof import('./notification.service') | null = null;
 async function getNotificationService() {
@@ -15,6 +16,20 @@ async function getNotificationService() {
     }
   }
   return notificationServiceModule.notificationService;
+}
+
+// Lazy import Slack service
+let slackServiceModule: typeof import('./slack.service') | null = null;
+async function getSlackService() {
+  if (!slackServiceModule) {
+    try {
+      slackServiceModule = await import('./slack.service');
+    } catch (err) {
+      console.error('Failed to load Slack service:', err);
+      return null;
+    }
+  }
+  return slackServiceModule.default;
 }
 
 export class ContraventionService {
@@ -475,6 +490,29 @@ export class ContraventionService {
         employeeName: updated.employee.name,
       });
     }
+
+    // Announce to Slack channel
+    getSlackService().then(async (slackSvc) => {
+      if (slackSvc && slackSvc.isConfigured()) {
+        await slackSvc.announceContravention({
+          referenceNo: contravention.referenceNo,
+          employeeName: updated.employee.name,
+          typeName: updated.type.name,
+          severity: contravention.severity,
+          points: contravention.points,
+          valueSgd: contravention.valueSgd ? Number(contravention.valueSgd) : undefined,
+          incidentDate: contravention.incidentDate.toLocaleDateString('en-SG', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+          }),
+          description: contravention.description,
+          contraventionId: id,
+        });
+      }
+    }).catch((err) => {
+      console.error('Failed to announce contravention to Slack:', err);
+    });
 
     return updated;
   }

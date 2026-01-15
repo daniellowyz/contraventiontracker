@@ -239,9 +239,10 @@ export class OtpService {
 
     if (!user) {
       // Auto-create user for allowed domains
-      // Generate unique employee ID
+      // Generate unique employee ID using timestamp to avoid conflicts
+      const timestamp = Date.now().toString(36);
       const count = await prisma.user.count();
-      const employeeId = `EMP${String(count + 1).padStart(4, '0')}`;
+      const employeeId = `EMP${String(count + 1).padStart(4, '0')}-${timestamp}`;
 
       // Extract name from email (before @) - placeholder name
       const namePart = normalizedEmail.split('@')[0];
@@ -250,22 +251,55 @@ export class OtpService {
         .map(part => part.charAt(0).toUpperCase() + part.slice(1))
         .join(' ');
 
-      // New users from tech.gov.sg or ogp.gov.sg need to complete their profile
-      // Only open.gov.sg users who are synced from Slack are pre-populated
-      user = await prisma.user.create({
-        data: {
-          email: normalizedEmail,
-          employeeId,
-          name,
-          role: 'USER',
-          isActive: true,
-          isProfileComplete: false, // New users need to complete profile
-        },
-      });
+      try {
+        // New users from tech.gov.sg or ogp.gov.sg need to complete their profile
+        // Only open.gov.sg users who are synced from Slack are pre-populated
+        user = await prisma.user.create({
+          data: {
+            email: normalizedEmail,
+            employeeId,
+            name,
+            role: 'USER',
+            isActive: true,
+            isProfileComplete: false, // New users need to complete profile
+          },
+        });
 
-      // Create initial points record
-      await prisma.employeePoints.create({
-        data: {
+        // Create initial points record (use upsert to avoid conflicts)
+        await prisma.employeePoints.upsert({
+          where: { employeeId: user.id },
+          update: {}, // No update needed if exists
+          create: {
+            employeeId: user.id,
+            totalPoints: 0,
+          },
+        });
+      } catch (createError: unknown) {
+        // If user creation failed due to unique constraint (race condition),
+        // try to fetch the existing user
+        if ((createError as { code?: string }).code === 'P2002') {
+          user = await prisma.user.findUnique({
+            where: { email: normalizedEmail },
+          });
+          if (!user) {
+            throw new AppError('Failed to create or find user account', 500);
+          }
+        } else {
+          throw createError;
+        }
+      }
+    }
+
+    // User exists - ensure they have a points record
+    const existingPoints = await prisma.employeePoints.findUnique({
+      where: { employeeId: user.id },
+    });
+
+    if (!existingPoints) {
+      await prisma.employeePoints.upsert({
+        where: { employeeId: user.id },
+        update: {},
+        create: {
           employeeId: user.id,
           totalPoints: 0,
         },

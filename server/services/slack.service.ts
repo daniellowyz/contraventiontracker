@@ -1,6 +1,10 @@
 /**
- * Slack Service - Pull active users from Slack workspace
- * Uses users:read permission to list all workspace members
+ * Slack Service - Slack integration for Contravention Tracker
+ * Features:
+ * - Pull active users from Slack workspace
+ * - Post announcements for confirmed contraventions
+ * - Handle interactive approvals from Slack
+ * - Create contraventions via Slack modal
  */
 
 interface SlackUser {
@@ -31,6 +35,16 @@ interface SlackUserListResponse {
   error?: string;
 }
 
+interface SlackApiResponse {
+  ok: boolean;
+  error?: string;
+  ts?: string;
+  channel?: string;
+  message?: unknown;
+  view?: unknown;
+  trigger_id?: string;
+}
+
 export interface NormalizedSlackUser {
   slackId: string;
   email: string;
@@ -40,12 +54,40 @@ export interface NormalizedSlackUser {
   avatarUrl?: string;
 }
 
+export interface ContraventionAnnouncement {
+  referenceNo: string;
+  employeeName: string;
+  typeName: string;
+  severity: string;
+  points: number;
+  valueSgd?: number;
+  incidentDate: string;
+  description: string;
+  contraventionId: string;
+}
+
+export interface ApprovalRequest {
+  approvalId: string;
+  referenceNo: string;
+  employeeName: string;
+  typeName: string;
+  severity: string;
+  requesterName: string;
+  approverEmail: string;
+  contraventionId: string;
+  approvalPdfUrl?: string;
+}
+
 export class SlackService {
   private token: string | undefined;
+  private channelId: string | undefined;
   private baseUrl = 'https://slack.com/api';
+  private appUrl: string;
 
   constructor() {
-    this.token = process.env.SLACK_TOKEN;
+    this.token = process.env.SLACK_BOT_TOKEN || process.env.SLACK_TOKEN;
+    this.channelId = process.env.SLACK_CHANNEL_ID;
+    this.appUrl = process.env.APP_URL || 'https://contravention-tracker.vercel.app';
   }
 
   /**
@@ -188,6 +230,554 @@ export class SlackService {
     const slackEmailSet = new Set(slackUsers.map(u => u.email));
 
     return existingEmails.filter(email => !slackEmailSet.has(email.toLowerCase()));
+  }
+
+  // ==================== MESSAGING METHODS ====================
+
+  /**
+   * Post a message to a Slack channel
+   */
+  async postMessage(channel: string, blocks: unknown[], text: string): Promise<SlackApiResponse> {
+    if (!this.token) {
+      throw new Error('Slack token not configured');
+    }
+
+    const response = await fetch(`${this.baseUrl}/chat.postMessage`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        channel,
+        blocks,
+        text, // Fallback text for notifications
+      }),
+    });
+
+    const result = await response.json() as SlackApiResponse;
+    if (!result.ok) {
+      console.error('[SlackService] postMessage error:', result.error);
+      throw new Error(`Slack API error: ${result.error}`);
+    }
+
+    return result;
+  }
+
+  /**
+   * Announce a confirmed contravention to the designated channel
+   */
+  async announceContravention(data: ContraventionAnnouncement): Promise<void> {
+    if (!this.token || !this.channelId) {
+      console.log('[SlackService] Slack not configured, skipping announcement');
+      return;
+    }
+
+    const severityEmoji = this.getSeverityEmoji(data.severity);
+    const viewUrl = `${this.appUrl}/contraventions/${data.contraventionId}`;
+
+    const blocks = [
+      {
+        type: 'header',
+        text: {
+          type: 'plain_text',
+          text: `${severityEmoji} New Contravention Confirmed`,
+          emoji: true,
+        },
+      },
+      {
+        type: 'section',
+        fields: [
+          {
+            type: 'mrkdwn',
+            text: `*Reference:*\n${data.referenceNo}`,
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Employee:*\n${data.employeeName}`,
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Type:*\n${data.typeName}`,
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Severity:*\n${data.severity}`,
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Points:*\n${data.points}`,
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Value:*\n${data.valueSgd ? `$${data.valueSgd.toLocaleString()}` : 'N/A'}`,
+          },
+        ],
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*Incident Date:* ${data.incidentDate}\n*Description:* ${data.description.substring(0, 200)}${data.description.length > 200 ? '...' : ''}`,
+        },
+      },
+      {
+        type: 'actions',
+        elements: [
+          {
+            type: 'button',
+            text: {
+              type: 'plain_text',
+              text: 'View Details',
+              emoji: true,
+            },
+            url: viewUrl,
+            action_id: 'view_contravention',
+          },
+        ],
+      },
+      {
+        type: 'divider',
+      },
+    ];
+
+    const text = `New contravention confirmed: ${data.referenceNo} - ${data.typeName} (${data.severity})`;
+
+    try {
+      await this.postMessage(this.channelId, blocks, text);
+      console.log(`[SlackService] Announced contravention ${data.referenceNo} to channel`);
+    } catch (error) {
+      console.error('[SlackService] Failed to announce contravention:', error);
+    }
+  }
+
+  /**
+   * Send an approval request notification to an approver via DM
+   */
+  async sendApprovalRequest(data: ApprovalRequest): Promise<void> {
+    if (!this.token) {
+      console.log('[SlackService] Slack not configured, skipping approval request');
+      return;
+    }
+
+    // Find the user by email to get their Slack ID
+    const slackUserId = await this.findUserByEmail(data.approverEmail);
+    if (!slackUserId) {
+      console.log(`[SlackService] Could not find Slack user for ${data.approverEmail}`);
+      return;
+    }
+
+    const severityEmoji = this.getSeverityEmoji(data.severity);
+    const viewUrl = `${this.appUrl}/contraventions/${data.contraventionId}`;
+
+    const blocks = [
+      {
+        type: 'header',
+        text: {
+          type: 'plain_text',
+          text: `${severityEmoji} Approval Request`,
+          emoji: true,
+        },
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*${data.requesterName}* has submitted a contravention for your approval.`,
+        },
+      },
+      {
+        type: 'section',
+        fields: [
+          {
+            type: 'mrkdwn',
+            text: `*Reference:*\n${data.referenceNo}`,
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Employee:*\n${data.employeeName}`,
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Type:*\n${data.typeName}`,
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Severity:*\n${data.severity}`,
+          },
+        ],
+      },
+      {
+        type: 'actions',
+        block_id: `approval_${data.approvalId}`,
+        elements: [
+          {
+            type: 'button',
+            text: {
+              type: 'plain_text',
+              text: 'Approve',
+              emoji: true,
+            },
+            style: 'primary',
+            action_id: 'approve_contravention',
+            value: data.approvalId,
+          },
+          {
+            type: 'button',
+            text: {
+              type: 'plain_text',
+              text: 'Reject',
+              emoji: true,
+            },
+            style: 'danger',
+            action_id: 'reject_contravention',
+            value: data.approvalId,
+          },
+          {
+            type: 'button',
+            text: {
+              type: 'plain_text',
+              text: 'View Details',
+              emoji: true,
+            },
+            url: viewUrl,
+            action_id: 'view_contravention_approval',
+          },
+        ],
+      },
+    ];
+
+    // Add document link if available
+    if (data.approvalPdfUrl) {
+      blocks.splice(3, 0, {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*Supporting Document:* <${data.approvalPdfUrl}|View PDF>`,
+        },
+      });
+    }
+
+    const text = `Approval request for contravention ${data.referenceNo} from ${data.requesterName}`;
+
+    try {
+      await this.postMessage(slackUserId, blocks, text);
+      console.log(`[SlackService] Sent approval request to ${data.approverEmail}`);
+    } catch (error) {
+      console.error('[SlackService] Failed to send approval request:', error);
+    }
+  }
+
+  /**
+   * Update a message to show the approval result
+   */
+  async updateApprovalMessage(
+    channel: string,
+    ts: string,
+    referenceNo: string,
+    status: 'APPROVED' | 'REJECTED',
+    reviewerName: string
+  ): Promise<void> {
+    if (!this.token) return;
+
+    const emoji = status === 'APPROVED' ? ':white_check_mark:' : ':x:';
+    const statusText = status === 'APPROVED' ? 'Approved' : 'Rejected';
+
+    const blocks = [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `${emoji} *Contravention ${referenceNo}* has been *${statusText}* by ${reviewerName}`,
+        },
+      },
+    ];
+
+    try {
+      await fetch(`${this.baseUrl}/chat.update`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          channel,
+          ts,
+          blocks,
+          text: `Contravention ${referenceNo} ${statusText.toLowerCase()} by ${reviewerName}`,
+        }),
+      });
+    } catch (error) {
+      console.error('[SlackService] Failed to update approval message:', error);
+    }
+  }
+
+  /**
+   * Open a modal for creating a new contravention
+   */
+  async openContraventionModal(triggerId: string, employees: Array<{ id: string; name: string }>, types: Array<{ id: string; name: string }>, teams: Array<{ id: string; name: string }>): Promise<void> {
+    if (!this.token) {
+      throw new Error('Slack token not configured');
+    }
+
+    const view = {
+      type: 'modal',
+      callback_id: 'create_contravention_modal',
+      title: {
+        type: 'plain_text',
+        text: 'New Contravention',
+      },
+      submit: {
+        type: 'plain_text',
+        text: 'Submit',
+      },
+      close: {
+        type: 'plain_text',
+        text: 'Cancel',
+      },
+      blocks: [
+        {
+          type: 'input',
+          block_id: 'employee_block',
+          element: {
+            type: 'static_select',
+            action_id: 'employee_select',
+            placeholder: {
+              type: 'plain_text',
+              text: 'Select employee',
+            },
+            options: employees.slice(0, 100).map(e => ({
+              text: { type: 'plain_text' as const, text: e.name.substring(0, 75) },
+              value: e.id,
+            })),
+          },
+          label: {
+            type: 'plain_text',
+            text: 'Employee',
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'type_block',
+          element: {
+            type: 'static_select',
+            action_id: 'type_select',
+            placeholder: {
+              type: 'plain_text',
+              text: 'Select type',
+            },
+            options: types.map(t => ({
+              text: { type: 'plain_text' as const, text: t.name.substring(0, 75) },
+              value: t.id,
+            })),
+          },
+          label: {
+            type: 'plain_text',
+            text: 'Contravention Type',
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'team_block',
+          element: {
+            type: 'static_select',
+            action_id: 'team_select',
+            placeholder: {
+              type: 'plain_text',
+              text: 'Select team',
+            },
+            options: teams.map(t => ({
+              text: { type: 'plain_text' as const, text: t.name.substring(0, 75) },
+              value: t.id,
+            })),
+          },
+          label: {
+            type: 'plain_text',
+            text: 'Team',
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'vendor_block',
+          optional: true,
+          element: {
+            type: 'plain_text_input',
+            action_id: 'vendor_input',
+            placeholder: {
+              type: 'plain_text',
+              text: 'Enter vendor name (optional)',
+            },
+          },
+          label: {
+            type: 'plain_text',
+            text: 'Vendor',
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'value_block',
+          optional: true,
+          element: {
+            type: 'plain_text_input',
+            action_id: 'value_input',
+            placeholder: {
+              type: 'plain_text',
+              text: 'Enter value in SGD (optional)',
+            },
+          },
+          label: {
+            type: 'plain_text',
+            text: 'Value (SGD)',
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'date_block',
+          element: {
+            type: 'datepicker',
+            action_id: 'date_select',
+            placeholder: {
+              type: 'plain_text',
+              text: 'Select date',
+            },
+          },
+          label: {
+            type: 'plain_text',
+            text: 'Incident Date',
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'description_block',
+          element: {
+            type: 'plain_text_input',
+            action_id: 'description_input',
+            multiline: true,
+            placeholder: {
+              type: 'plain_text',
+              text: 'Describe the contravention...',
+            },
+          },
+          label: {
+            type: 'plain_text',
+            text: 'Description',
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'justification_block',
+          element: {
+            type: 'plain_text_input',
+            action_id: 'justification_input',
+            multiline: true,
+            placeholder: {
+              type: 'plain_text',
+              text: 'Explain the justification...',
+            },
+          },
+          label: {
+            type: 'plain_text',
+            text: 'Justification',
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'mitigation_block',
+          element: {
+            type: 'plain_text_input',
+            action_id: 'mitigation_input',
+            multiline: true,
+            placeholder: {
+              type: 'plain_text',
+              text: 'Describe mitigation measures...',
+            },
+          },
+          label: {
+            type: 'plain_text',
+            text: 'Mitigation Measures',
+          },
+        },
+      ],
+    };
+
+    const response = await fetch(`${this.baseUrl}/views.open`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        trigger_id: triggerId,
+        view,
+      }),
+    });
+
+    const result = await response.json() as SlackApiResponse;
+    if (!result.ok) {
+      console.error('[SlackService] views.open error:', result.error);
+      throw new Error(`Slack API error: ${result.error}`);
+    }
+  }
+
+  /**
+   * Find a Slack user ID by email
+   */
+  async findUserByEmail(email: string): Promise<string | null> {
+    if (!this.token) return null;
+
+    try {
+      const response = await fetch(`${this.baseUrl}/users.lookupByEmail?email=${encodeURIComponent(email)}`, {
+        headers: {
+          'Authorization': `Bearer ${this.token}`,
+        },
+      });
+
+      const result = await response.json() as { ok: boolean; user?: { id: string }; error?: string };
+      if (result.ok && result.user) {
+        return result.user.id;
+      }
+      return null;
+    } catch (error) {
+      console.error('[SlackService] lookupByEmail error:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get the emoji for a severity level
+   */
+  private getSeverityEmoji(severity: string): string {
+    switch (severity.toUpperCase()) {
+      case 'CRITICAL':
+        return ':rotating_light:';
+      case 'HIGH':
+        return ':warning:';
+      case 'MEDIUM':
+        return ':large_orange_diamond:';
+      case 'LOW':
+        return ':large_blue_diamond:';
+      default:
+        return ':memo:';
+    }
+  }
+
+  /**
+   * Post announcement to the notification channel
+   */
+  async postToChannel(text: string): Promise<void> {
+    if (!this.token || !this.channelId) {
+      console.log('[SlackService] Channel not configured, skipping post');
+      return;
+    }
+
+    await this.postMessage(this.channelId, [], text);
+  }
+
+  /**
+   * Get the configured channel ID
+   */
+  getChannelId(): string | undefined {
+    return this.channelId;
   }
 }
 
