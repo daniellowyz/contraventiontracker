@@ -352,6 +352,88 @@ async function processApproverRequestApproval(
 }
 
 /**
+ * Process approver request rejection in background
+ */
+async function processApproverRequestRejection(
+  userId: string,
+  reason: string,
+  payload: SlackInteractionPayload
+) {
+  try {
+    // Find the admin user by Slack ID
+    const adminUser = await findUserBySlackId(payload.user.id);
+    if (!adminUser) {
+      console.error('[Slack] Admin user not found for rejection');
+      return;
+    }
+
+    // Check admin role
+    const adminRecord = await prisma.user.findUnique({
+      where: { id: adminUser.id },
+      select: { role: true },
+    });
+
+    if (adminRecord?.role !== 'ADMIN') {
+      await slackService.postMessage(payload.user.id, [],
+        ':x: Only admins can reject approver requests.'
+      );
+      return;
+    }
+
+    // Get the requesting user
+    const requestingUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, name: true, email: true, approverRequestStatus: true },
+    });
+
+    if (!requestingUser) {
+      await slackService.postMessage(payload.user.id, [],
+        ':x: User not found.'
+      );
+      return;
+    }
+
+    if (requestingUser.approverRequestStatus !== 'PENDING') {
+      await slackService.postMessage(payload.user.id, [],
+        `:x: This request has already been ${requestingUser.approverRequestStatus?.toLowerCase() || 'processed'}.`
+      );
+      return;
+    }
+
+    // Reject: update user status
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        approverRequestStatus: 'REJECTED',
+      },
+    });
+
+    // Create notification for the rejected user
+    await prisma.notification.create({
+      data: {
+        userId: userId,
+        type: 'APPROVER_ROLE_REJECTED',
+        title: 'Approver Request Rejected',
+        message: `Your request for approver permissions has been rejected. Reason: ${reason}`,
+        channel: 'IN_APP',
+        status: 'SENT',
+        sentAt: new Date(),
+      },
+    });
+
+    // Send confirmation message to admin
+    await slackService.postMessage(payload.user.id, [],
+      `:white_check_mark: Successfully rejected ${requestingUser.name}'s approver request.`
+    );
+  } catch (error) {
+    console.error('[Slack] Error processing rejection:', error);
+    await slackService.postMessage(payload.user.id, [],
+      `:x: Error rejecting request: ${(error as Error).message}`
+    );
+  }
+}
+
+/**
  * Send a response to Slack via response_url
  */
 async function sendSlackResponse(responseUrl: string, text: string) {
@@ -381,6 +463,7 @@ async function handleViewSubmission(payload: SlackInteractionPayload, res: Respo
     const reason = values?.reason_block?.reason_input?.value;
     const userId = payload.view?.private_metadata;
 
+    // Quick validation only - respond immediately to avoid timeout
     if (!reason || reason.trim() === '') {
       return res.json({
         response_action: 'errors',
@@ -395,84 +478,13 @@ async function handleViewSubmission(payload: SlackInteractionPayload, res: Respo
       });
     }
 
-    // Find the admin user
-    const adminUser = await findUserBySlackId(payload.user.id);
-    if (!adminUser) {
-      return res.json({
-        response_action: 'errors',
-        errors: { reason_block: 'Your Slack account is not linked' },
-      });
-    }
+    // Close the modal immediately to avoid timeout
+    res.json({ response_action: 'clear' });
 
-    // Check admin role
-    const adminRecord = await prisma.user.findUnique({
-      where: { id: adminUser.id },
-      select: { role: true },
+    // Process rejection in background
+    processApproverRequestRejection(userId, reason.trim(), payload).catch(error => {
+      console.error('[Slack] Background rejection error:', error);
     });
-
-    if (adminRecord?.role !== 'ADMIN') {
-      return res.json({
-        response_action: 'errors',
-        errors: { reason_block: 'Only admins can reject requests' },
-      });
-    }
-
-    try {
-      // Get the requesting user
-      const requestingUser = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { id: true, name: true, email: true, approverRequestStatus: true },
-      });
-
-      if (!requestingUser) {
-        return res.json({
-          response_action: 'errors',
-          errors: { reason_block: 'User not found' },
-        });
-      }
-
-      if (requestingUser.approverRequestStatus !== 'PENDING') {
-        return res.json({
-          response_action: 'errors',
-          errors: { reason_block: `This request has already been ${requestingUser.approverRequestStatus?.toLowerCase() || 'processed'}` },
-        });
-      }
-
-      // Reject: update user status
-      await prisma.user.update({
-        where: { id: userId },
-        data: {
-          approverRequestStatus: 'REJECTED',
-        },
-      });
-
-      // Create notification for the rejected user
-      await prisma.notification.create({
-        data: {
-          userId: userId,
-          type: 'APPROVER_ROLE_REJECTED',
-          title: 'Approver Request Rejected',
-          message: `Your request for approver permissions has been rejected. Reason: ${reason.trim()}`,
-          channel: 'IN_APP',
-          status: 'SENT',
-          sentAt: new Date(),
-        },
-      });
-
-      // Close the modal
-      res.json({ response_action: 'clear' });
-
-      // Send confirmation message to admin
-      await slackService.postMessage(payload.user.id, [],
-        `:x: Successfully rejected ${requestingUser.name}'s approver request.`
-      );
-    } catch (error) {
-      console.error('[Slack] Error rejecting approver request:', error);
-      return res.json({
-        response_action: 'errors',
-        errors: { reason_block: (error as Error).message },
-      });
-    }
   } else if (callbackId === 'create_contravention_modal') {
     const values = payload.view?.state?.values;
     if (!values) {
