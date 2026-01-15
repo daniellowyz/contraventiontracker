@@ -795,7 +795,7 @@ export class SlackService {
     }
 
     // Use the dedicated approver requests channel
-    const channelId = 'C09NTF4LTC5'; // test-channel-daniel
+    const channelId = 'C0A7JK9NRRA'; // #hfpg-contraventiontracker
 
     const blocks = [
       {
