@@ -243,30 +243,6 @@ async function handleBlockActions(payload: SlackInteractionPayload, res: Respons
     processApproverRequestApproval(userId, payload, responseUrl).catch(error => {
       console.error('[Slack] Background approval error:', error);
     });
-  } else if (action_id === 'reject_approver_request') {
-    // Open a modal to ask for rejection reason
-    const userId = value;
-
-    if (payload.trigger_id) {
-      try {
-        // Store channel and message info for updating after rejection
-        const metadata = JSON.stringify({
-          userId,
-          channelId: payload.channel?.id,
-          messageTs: payload.message?.ts,
-        });
-        await slackService.openRejectionReasonModal(payload.trigger_id, metadata);
-        res.json({ ok: true });
-      } catch (error) {
-        console.error('[Slack] Failed to open rejection modal:', error);
-        res.json({
-          response_type: 'ephemeral',
-          text: `Failed to open rejection form: ${(error as Error).message}`,
-        });
-      }
-    } else {
-      res.json({ ok: true });
-    }
   } else {
     // Unknown action, just acknowledge
     res.json({ ok: true });
@@ -358,89 +334,6 @@ async function processApproverRequestApproval(
 }
 
 /**
- * Process approver request rejection in background
- */
-async function processApproverRequestRejection(
-  userId: string,
-  reason: string,
-  payload: SlackInteractionPayload,
-  channelId?: string,
-  messageTs?: string
-) {
-  try {
-    // Find the admin user by Slack ID
-    const adminUser = await findUserBySlackId(payload.user.id);
-    if (!adminUser) {
-      console.error('[Slack] Admin user not found for rejection');
-      return;
-    }
-
-    // Check admin role
-    const adminRecord = await prisma.user.findUnique({
-      where: { id: adminUser.id },
-      select: { role: true },
-    });
-
-    if (adminRecord?.role !== 'ADMIN') {
-      console.error('[Slack] User is not admin for rejection');
-      return;
-    }
-
-    // Get the requesting user
-    const requestingUser = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, name: true, email: true, approverRequestStatus: true },
-    });
-
-    if (!requestingUser) {
-      console.error('[Slack] Requesting user not found for rejection');
-      return;
-    }
-
-    if (requestingUser.approverRequestStatus !== 'PENDING') {
-      console.error('[Slack] Request already processed');
-      return;
-    }
-
-    // Reject: update user status
-    await prisma.user.update({
-      where: { id: userId },
-      data: {
-        approverRequestStatus: 'REJECTED',
-      },
-    });
-
-    // Create notification for the rejected user
-    await prisma.notification.create({
-      data: {
-        userId: userId,
-        type: 'APPROVER_ROLE_REJECTED',
-        title: 'Approver Request Rejected',
-        message: `Your request for approver permissions has been rejected. Reason: ${reason}`,
-        channel: 'IN_APP',
-        status: 'SENT',
-        sentAt: new Date(),
-      },
-    });
-
-    // Update the original message in the channel to show rejection
-    if (channelId && messageTs) {
-      await slackService.updateApproverRequestMessage(
-        channelId,
-        messageTs,
-        requestingUser.name,
-        'REJECTED',
-        adminUser.name
-      );
-    }
-
-    console.log(`[Slack] Successfully rejected ${requestingUser.name}'s approver request`);
-  } catch (error) {
-    console.error('[Slack] Error processing rejection:', error);
-  }
-}
-
-/**
  * Send a response to Slack via response_url
  */
 async function sendSlackResponse(responseUrl: string, text: string) {
@@ -464,46 +357,7 @@ async function sendSlackResponse(responseUrl: string, text: string) {
 async function handleViewSubmission(payload: SlackInteractionPayload, res: Response) {
   const callbackId = payload.view?.callback_id;
 
-  if (callbackId === 'reject_approver_request_modal') {
-    // Handle rejection reason submission
-    const values = payload.view?.state?.values;
-    const reason = values?.reason_block?.reason_input?.value;
-    const metadataStr = payload.view?.private_metadata;
-
-    // Quick validation only - respond immediately to avoid timeout
-    if (!reason || reason.trim() === '') {
-      return res.json({
-        response_action: 'errors',
-        errors: { reason_block: 'Please provide a reason for rejection' },
-      });
-    }
-
-    if (!metadataStr) {
-      return res.json({
-        response_action: 'errors',
-        errors: { reason_block: 'Metadata not found' },
-      });
-    }
-
-    // Parse metadata
-    let metadata: { userId: string; channelId?: string; messageTs?: string };
-    try {
-      metadata = JSON.parse(metadataStr);
-    } catch {
-      return res.json({
-        response_action: 'errors',
-        errors: { reason_block: 'Invalid metadata' },
-      });
-    }
-
-    // Close the modal immediately to avoid timeout
-    res.json({ response_action: 'clear' });
-
-    // Process rejection in background
-    processApproverRequestRejection(metadata.userId, reason.trim(), payload, metadata.channelId, metadata.messageTs).catch(error => {
-      console.error('[Slack] Background rejection error:', error);
-    });
-  } else if (callbackId === 'create_contravention_modal') {
+  if (callbackId === 'create_contravention_modal') {
     const values = payload.view?.state?.values;
     if (!values) {
       return res.json({

@@ -844,17 +844,6 @@ export class SlackService {
             action_id: 'approve_approver_request',
             value: data.requestingUserId,
           },
-          {
-            type: 'button',
-            text: {
-              type: 'plain_text',
-              text: 'Reject',
-              emoji: true,
-            },
-            style: 'danger',
-            action_id: 'reject_approver_request',
-            value: data.requestingUserId,
-          },
         ],
       },
       {
@@ -862,7 +851,7 @@ export class SlackService {
         elements: [
           {
             type: 'mrkdwn',
-            text: '_Click a button to approve or reject this request_ • cc @finance',
+            text: '_Click Approve or reject via the web app_ • cc @finance',
           },
         ],
       },
@@ -945,76 +934,6 @@ export class SlackService {
     }
   }
 
-  /**
-   * Open a modal to collect rejection reason
-   */
-  async openRejectionReasonModal(triggerId: string, userId: string): Promise<void> {
-    if (!this.token) {
-      throw new Error('Slack token not configured');
-    }
-
-    const view = {
-      type: 'modal',
-      callback_id: 'reject_approver_request_modal',
-      private_metadata: userId, // Store the user ID to reject
-      title: {
-        type: 'plain_text',
-        text: 'Reject Request',
-      },
-      submit: {
-        type: 'plain_text',
-        text: 'Reject',
-      },
-      close: {
-        type: 'plain_text',
-        text: 'Cancel',
-      },
-      blocks: [
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: 'Please provide a reason for rejecting this approver request. The user will be notified with this reason.',
-          },
-        },
-        {
-          type: 'input',
-          block_id: 'reason_block',
-          element: {
-            type: 'plain_text_input',
-            action_id: 'reason_input',
-            multiline: true,
-            placeholder: {
-              type: 'plain_text',
-              text: 'Enter rejection reason...',
-            },
-          },
-          label: {
-            type: 'plain_text',
-            text: 'Rejection Reason',
-          },
-        },
-      ],
-    };
-
-    const response = await fetch(`${this.baseUrl}/views.open`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        trigger_id: triggerId,
-        view,
-      }),
-    });
-
-    const result = await response.json() as SlackApiResponse;
-    if (!result.ok) {
-      console.error('[SlackService] views.open error:', result.error);
-      throw new Error(`Slack API error: ${result.error}`);
-    }
-  }
 }
 
 export default new SlackService();
