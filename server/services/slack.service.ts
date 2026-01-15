@@ -862,13 +862,13 @@ export class SlackService {
         elements: [
           {
             type: 'mrkdwn',
-            text: '_Click a button to approve or reject this request_',
+            text: '_Click a button to approve or reject this request_ • cc @finance',
           },
         ],
       },
     ];
 
-    const text = `${data.requestingUserName} (${data.position}) has requested approver permissions`;
+    const text = `${data.requestingUserName} (${data.position}) has requested approver permissions @finance`;
 
     try {
       await this.postMessage(channelId, blocks, text);
