@@ -781,28 +781,21 @@ export class SlackService {
   }
 
   /**
-   * Send DM to an admin about a new approver role request
+   * Send approver role request notification to channel with interactive buttons
    */
-  async sendApproverRoleRequestDM(data: {
-    adminEmail: string;
-    adminName: string;
+  async sendApproverRoleRequestToChannel(data: {
+    requestingUserId: string;
     requestingUserName: string;
     requestingUserEmail: string;
     position: string;
   }): Promise<void> {
     if (!this.token) {
-      console.log('[SlackService] Slack not configured, skipping approver request DM');
+      console.log('[SlackService] Slack not configured, skipping approver request notification');
       return;
     }
 
-    // Find the admin by email to get their Slack ID
-    const slackUserId = await this.findUserByEmail(data.adminEmail);
-    if (!slackUserId) {
-      console.log(`[SlackService] Could not find Slack user for admin ${data.adminEmail}`);
-      return;
-    }
-
-    const approverRequestsUrl = `${this.appUrl}/settings/approver-requests`;
+    // Use the dedicated approver requests channel
+    const channelId = 'C09NTF4LTC5'; // test-channel-daniel
 
     const blocks = [
       {
@@ -844,27 +837,111 @@ export class SlackService {
             type: 'button',
             text: {
               type: 'plain_text',
-              text: 'Review Request',
+              text: 'Approve',
               emoji: true,
             },
             style: 'primary',
-            url: approverRequestsUrl,
-            action_id: 'view_approver_request',
+            action_id: 'approve_approver_request',
+            value: data.requestingUserId,
+          },
+          {
+            type: 'button',
+            text: {
+              type: 'plain_text',
+              text: 'Reject',
+              emoji: true,
+            },
+            style: 'danger',
+            action_id: 'reject_approver_request',
+            value: data.requestingUserId,
           },
         ],
       },
       {
-        type: 'divider',
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: '_Click a button to approve or reject this request_',
+          },
+        ],
       },
     ];
 
     const text = `${data.requestingUserName} (${data.position}) has requested approver permissions`;
 
     try {
-      await this.postMessage(slackUserId, blocks, text);
-      console.log(`[SlackService] Sent approver request DM to ${data.adminEmail}`);
+      await this.postMessage(channelId, blocks, text);
+      console.log(`[SlackService] Sent approver request to channel ${channelId}`);
     } catch (error) {
-      console.error('[SlackService] Failed to send approver request DM:', error);
+      console.error('[SlackService] Failed to send approver request to channel:', error);
+    }
+  }
+
+  /**
+   * Update approver request message after it's been processed
+   */
+  async updateApproverRequestMessage(
+    channelId: string,
+    messageTs: string,
+    requestingUserName: string,
+    status: 'APPROVED' | 'REJECTED',
+    reviewerName: string
+  ): Promise<void> {
+    if (!this.token) return;
+
+    const statusEmoji = status === 'APPROVED' ? ':white_check_mark:' : ':x:';
+    const statusColor = status === 'APPROVED' ? '#22c55e' : '#ef4444';
+    const statusText = status === 'APPROVED' ? 'approved' : 'rejected';
+
+    const blocks = [
+      {
+        type: 'header',
+        text: {
+          type: 'plain_text',
+          text: `${statusEmoji} Approver Request ${status}`,
+          emoji: true,
+        },
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*${requestingUserName}*'s approver request has been *${statusText}* by ${reviewerName}.`,
+        },
+      },
+      {
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: `_Processed on ${new Date().toLocaleString('en-SG')}_`,
+          },
+        ],
+      },
+    ];
+
+    try {
+      const response = await fetch('https://slack.com/api/chat.update', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          channel: channelId,
+          ts: messageTs,
+          blocks,
+          text: `${requestingUserName}'s approver request has been ${statusText} by ${reviewerName}`,
+        }),
+      });
+
+      const result = await response.json() as { ok: boolean; error?: string };
+      if (!result.ok) {
+        console.error('[SlackService] Failed to update message:', result.error);
+      }
+    } catch (error) {
+      console.error('[SlackService] Error updating approver request message:', error);
     }
   }
 }

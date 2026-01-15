@@ -368,7 +368,7 @@ export const notificationService = {
           type: 'APPROVER_ROLE_REQUESTED',
           title: 'New Approver Request',
           message: `${params.requestingUserName} (${params.position}) has requested approver permissions.`,
-          link: '/settings/approver-requests',
+          link: '/settings?tab=users',
         })
       )
     );
@@ -386,19 +386,14 @@ export const notificationService = {
       )
     );
 
-    // Send Slack DMs to all admins
+    // Send Slack notification to channel (with interactive buttons)
     if (slackService.isConfigured()) {
-      await Promise.all(
-        admins.map((admin: { id: string; email: string; name: string }) =>
-          slackService.sendApproverRoleRequestDM({
-            adminEmail: admin.email,
-            adminName: admin.name,
-            requestingUserName: params.requestingUserName,
-            requestingUserEmail: params.requestingUserEmail,
-            position: params.position,
-          })
-        )
-      );
+      await slackService.sendApproverRoleRequestToChannel({
+        requestingUserId: params.requestingUserId,
+        requestingUserName: params.requestingUserName,
+        requestingUserEmail: params.requestingUserEmail,
+        position: params.position,
+      });
     }
 
     return notifications;

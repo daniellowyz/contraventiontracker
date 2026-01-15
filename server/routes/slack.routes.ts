@@ -231,6 +231,100 @@ async function handleBlockActions(payload: SlackInteractionPayload, res: Respons
     } else {
       res.json({ ok: true });
     }
+  } else if (action_id === 'approve_approver_request' || action_id === 'reject_approver_request') {
+    // Handle approver role request approve/reject
+    const userId = value; // The user ID who requested approver role
+    const isApprove = action_id === 'approve_approver_request';
+
+    // Find the admin user by Slack ID
+    const slackUserId = payload.user.id;
+    const adminUser = await findUserBySlackId(slackUserId);
+
+    if (!adminUser) {
+      return res.json({
+        response_type: 'ephemeral',
+        text: 'Your Slack account is not linked to a Contravention Tracker account.',
+      });
+    }
+
+    // Check if the admin user is actually an admin
+    const adminRecord = await prisma.user.findUnique({
+      where: { id: adminUser.id },
+      select: { role: true },
+    });
+
+    if (adminRecord?.role !== 'ADMIN') {
+      return res.json({
+        response_type: 'ephemeral',
+        text: 'Only admins can approve or reject approver requests.',
+      });
+    }
+
+    try {
+      // Get the requesting user
+      const requestingUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, name: true, email: true, requestedApprover: true, approverRequestStatus: true },
+      });
+
+      if (!requestingUser) {
+        return res.json({
+          response_type: 'ephemeral',
+          text: 'User not found.',
+        });
+      }
+
+      if (requestingUser.approverRequestStatus !== 'PENDING') {
+        return res.json({
+          response_type: 'ephemeral',
+          text: `This request has already been ${requestingUser.approverRequestStatus?.toLowerCase() || 'processed'}.`,
+        });
+      }
+
+      if (isApprove) {
+        // Approve: update user role to APPROVER
+        await prisma.user.update({
+          where: { id: userId },
+          data: {
+            role: 'APPROVER',
+            approverRequestStatus: 'APPROVED',
+          },
+        });
+      } else {
+        // Reject: just update the status
+        await prisma.user.update({
+          where: { id: userId },
+          data: {
+            approverRequestStatus: 'REJECTED',
+          },
+        });
+      }
+
+      // Update the original message to show it's been processed
+      if (payload.channel && payload.message) {
+        await slackService.updateApproverRequestMessage(
+          payload.channel.id,
+          payload.message.ts,
+          requestingUser.name,
+          isApprove ? 'APPROVED' : 'REJECTED',
+          adminUser.name
+        );
+      }
+
+      // Invalidate the pending count cache
+      // (React Query on frontend will refetch automatically)
+
+      res.json({
+        response_type: 'ephemeral',
+        text: `Successfully ${isApprove ? 'approved' : 'rejected'} ${requestingUser.name}'s approver request.`,
+      });
+    } catch (error) {
+      console.error('[Slack] Error processing approver request:', error);
+      res.json({
+        response_type: 'ephemeral',
+        text: `Error: ${(error as Error).message}`,
+      });
+    }
   } else {
     // Unknown action, just acknowledge
     res.json({ ok: true });

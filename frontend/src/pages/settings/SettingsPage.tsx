@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useAuthStore } from '@/stores/authStore';
 import { Header } from '@/components/layout/Header';
@@ -101,8 +102,25 @@ interface DuplicateUser {
 
 export function SettingsPage() {
   const { user, isAdmin } = useAuthStore();
-  const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
+  const [searchParams, setSearchParams] = useSearchParams();
   const [saved, setSaved] = useState(false);
+
+  // Get initial tab from URL or default to 'profile'
+  const tabFromUrl = searchParams.get('tab') as SettingsTab | null;
+  const [activeTab, setActiveTab] = useState<SettingsTab>(
+    tabFromUrl && ['profile', 'notifications', 'security', 'users', 'admin'].includes(tabFromUrl)
+      ? tabFromUrl
+      : 'profile'
+  );
+
+  // Sync URL when tab changes
+  useEffect(() => {
+    if (activeTab !== 'profile') {
+      setSearchParams({ tab: activeTab }, { replace: true });
+    } else {
+      setSearchParams({}, { replace: true });
+    }
+  }, [activeTab, setSearchParams]);
 
   // Profile form state
   const [profileData, setProfileData] = useState({
@@ -214,6 +232,17 @@ export function SettingsPage() {
       return response.data.data as ApproverRequest[];
     },
     enabled: isAdmin && activeTab === 'users',
+  });
+
+  // Admin: Fetch pending approver requests count (for sidebar badge, always fetch if admin)
+  const { data: pendingApproverRequestsCount = 0 } = useQuery({
+    queryKey: ['pendingApproverRequestsCount'],
+    queryFn: async () => {
+      const response = await client.get('/admin/approver-requests/count');
+      return response.data.data.count as number;
+    },
+    enabled: isAdmin,
+    refetchInterval: 30000, // Refresh every 30 seconds
   });
 
   // Admin: Approve approver request mutation
@@ -416,11 +445,11 @@ export function SettingsPage() {
   };
 
   const tabs = [
-    { id: 'profile' as const, label: 'Profile', icon: User },
-    { id: 'notifications' as const, label: 'Notifications', icon: Bell },
-    { id: 'security' as const, label: 'Security', icon: Shield },
-    ...(isAdmin ? [{ id: 'users' as const, label: 'User Management', icon: Users }] : []),
-    ...(isAdmin ? [{ id: 'admin' as const, label: 'Admin Tools', icon: Settings }] : []),
+    { id: 'profile' as const, label: 'Profile', icon: User, badge: 0 },
+    { id: 'notifications' as const, label: 'Notifications', icon: Bell, badge: 0 },
+    { id: 'security' as const, label: 'Security', icon: Shield, badge: 0 },
+    ...(isAdmin ? [{ id: 'users' as const, label: 'User Management', icon: Users, badge: pendingApproverRequestsCount }] : []),
+    ...(isAdmin ? [{ id: 'admin' as const, label: 'Admin Tools', icon: Settings, badge: 0 }] : []),
   ];
 
   return (
@@ -446,7 +475,12 @@ export function SettingsPage() {
                   }`}
                 >
                   <tab.icon className="w-4 h-4" />
-                  {tab.label}
+                  <span className="flex-1 text-left">{tab.label}</span>
+                  {tab.badge > 0 && (
+                    <span className="bg-orange-500 text-white text-xs font-medium px-2 py-0.5 rounded-full min-w-[20px] text-center">
+                      {tab.badge > 99 ? '99+' : tab.badge}
+                    </span>
+                  )}
                 </button>
               ))}
             </nav>
