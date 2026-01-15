@@ -267,6 +267,10 @@ router.post('/approver-requests/:id/reject', authenticate, requireAdmin, async (
     const { id } = req.params;
     const { reason } = req.body;
 
+    if (!reason || reason.trim() === '') {
+      throw new AppError('Rejection reason is required', 400);
+    }
+
     const user = await prisma.user.findUnique({ where: { id } });
     if (!user) {
       throw new AppError('User not found', 404);
@@ -298,7 +302,21 @@ router.post('/approver-requests/:id/reject', authenticate, requireAdmin, async (
         entityId: id,
         action: 'APPROVER_REQUEST_REJECTED',
         userId: req.user!.userId,
-        newValues: { reason: reason || 'No reason provided' },
+        newValues: { reason: reason.trim() },
+      },
+    });
+
+    // Send notification to the user about rejection
+    const rejectionReason = typeof reason === 'string' ? reason.trim() : String(reason);
+    await prisma.notification.create({
+      data: {
+        userId: id,
+        type: 'APPROVER_ROLE_REJECTED',
+        title: 'Approver Request Rejected',
+        message: `Your request for approver permissions has been rejected. Reason: ${rejectionReason}`,
+        channel: 'IN_APP',
+        status: 'SENT',
+        sentAt: new Date(),
       },
     });
 

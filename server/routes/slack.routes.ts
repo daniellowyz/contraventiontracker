@@ -290,34 +290,31 @@ async function handleBlockActions(payload: SlackInteractionPayload, res: Respons
             approverRequestStatus: 'APPROVED',
           },
         });
-      } else {
-        // Reject: just update the status
-        await prisma.user.update({
-          where: { id: userId },
-          data: {
-            approverRequestStatus: 'REJECTED',
-          },
+
+        // Update the original message to show it's been processed
+        if (payload.channel && payload.message) {
+          await slackService.updateApproverRequestMessage(
+            payload.channel.id,
+            payload.message.ts,
+            requestingUser.name,
+            'APPROVED',
+            adminUser.name
+          );
+        }
+
+        res.json({
+          response_type: 'ephemeral',
+          text: `Successfully approved ${requestingUser.name}'s approver request.`,
         });
+      } else {
+        // For rejection, redirect to web app to provide a reason
+        const webAppUrl = process.env.APP_URL || 'https://contraventiontracker.vercel.app';
+        res.json({
+          response_type: 'ephemeral',
+          text: `To reject this request, please use the web app where you can provide a reason: ${webAppUrl}/settings?tab=users`,
+        });
+        return;
       }
-
-      // Update the original message to show it's been processed
-      if (payload.channel && payload.message) {
-        await slackService.updateApproverRequestMessage(
-          payload.channel.id,
-          payload.message.ts,
-          requestingUser.name,
-          isApprove ? 'APPROVED' : 'REJECTED',
-          adminUser.name
-        );
-      }
-
-      // Invalidate the pending count cache
-      // (React Query on frontend will refetch automatically)
-
-      res.json({
-        response_type: 'ephemeral',
-        text: `Successfully ${isApprove ? 'approved' : 'rejected'} ${requestingUser.name}'s approver request.`,
-      });
     } catch (error) {
       console.error('[Slack] Error processing approver request:', error);
       res.json({

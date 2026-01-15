@@ -262,8 +262,8 @@ export function SettingsPage() {
 
   // Admin: Reject approver request mutation
   const rejectApproverMutation = useMutation({
-    mutationFn: async (userId: string) => {
-      const response = await client.post(`/admin/approver-requests/${userId}/reject`);
+    mutationFn: async ({ userId, reason }: { userId: string; reason: string }) => {
+      const response = await client.post(`/admin/approver-requests/${userId}/reject`, { reason });
       return response.data;
     },
     onSuccess: () => {
@@ -928,8 +928,13 @@ export function SettingsPage() {
                                 variant="secondary"
                                 size="sm"
                                 onClick={() => {
-                                  if (confirm(`Reject ${request.name}'s approver request?`)) {
-                                    rejectApproverMutation.mutate(request.id);
+                                  const reason = prompt(`Please provide a reason for rejecting ${request.name}'s approver request:`);
+                                  if (reason !== null) {
+                                    if (reason.trim() === '') {
+                                      alert('Please provide a reason for rejection');
+                                      return;
+                                    }
+                                    rejectApproverMutation.mutate({ userId: request.id, reason: reason.trim() });
                                   }
                                 }}
                                 disabled={approveApproverMutation.isPending || rejectApproverMutation.isPending}
