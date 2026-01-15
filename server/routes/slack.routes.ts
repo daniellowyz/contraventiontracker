@@ -231,20 +231,60 @@ async function handleBlockActions(payload: SlackInteractionPayload, res: Respons
     } else {
       res.json({ ok: true });
     }
-  } else if (action_id === 'approve_approver_request' || action_id === 'reject_approver_request') {
-    // Handle approver role request approve/reject
-    const userId = value; // The user ID who requested approver role
-    const isApprove = action_id === 'approve_approver_request';
+  } else if (action_id === 'approve_approver_request') {
+    // Handle approver role request approval
+    // Respond immediately to avoid Slack timeout, then process in background
+    res.json({ ok: true });
 
+    const userId = value;
+    const responseUrl = payload.response_url;
+
+    // Process in background
+    processApproverRequestApproval(userId, payload, responseUrl).catch(error => {
+      console.error('[Slack] Background approval error:', error);
+    });
+  } else if (action_id === 'reject_approver_request') {
+    // Open a modal to ask for rejection reason
+    const userId = value;
+
+    if (payload.trigger_id) {
+      try {
+        await slackService.openRejectionReasonModal(payload.trigger_id, userId);
+        res.json({ ok: true });
+      } catch (error) {
+        console.error('[Slack] Failed to open rejection modal:', error);
+        res.json({
+          response_type: 'ephemeral',
+          text: `Failed to open rejection form: ${(error as Error).message}`,
+        });
+      }
+    } else {
+      res.json({ ok: true });
+    }
+  } else {
+    // Unknown action, just acknowledge
+    res.json({ ok: true });
+  }
+}
+
+/**
+ * Process approver request approval in background
+ */
+async function processApproverRequestApproval(
+  userId: string,
+  payload: SlackInteractionPayload,
+  responseUrl?: string
+) {
+  try {
     // Find the admin user by Slack ID
     const slackUserId = payload.user.id;
     const adminUser = await findUserBySlackId(slackUserId);
 
     if (!adminUser) {
-      return res.json({
-        response_type: 'ephemeral',
-        text: 'Your Slack account is not linked to a Contravention Tracker account.',
-      });
+      if (responseUrl) {
+        await sendSlackResponse(responseUrl, 'Your Slack account is not linked to a Contravention Tracker account.');
+      }
+      return;
     }
 
     // Check if the admin user is actually an admin
@@ -254,77 +294,78 @@ async function handleBlockActions(payload: SlackInteractionPayload, res: Respons
     });
 
     if (adminRecord?.role !== 'ADMIN') {
-      return res.json({
-        response_type: 'ephemeral',
-        text: 'Only admins can approve or reject approver requests.',
-      });
+      if (responseUrl) {
+        await sendSlackResponse(responseUrl, 'Only admins can approve or reject approver requests.');
+      }
+      return;
     }
 
-    try {
-      // Get the requesting user
-      const requestingUser = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { id: true, name: true, email: true, requestedApprover: true, approverRequestStatus: true },
-      });
+    // Get the requesting user
+    const requestingUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, name: true, email: true, requestedApprover: true, approverRequestStatus: true },
+    });
 
-      if (!requestingUser) {
-        return res.json({
-          response_type: 'ephemeral',
-          text: 'User not found.',
-        });
+    if (!requestingUser) {
+      if (responseUrl) {
+        await sendSlackResponse(responseUrl, 'User not found.');
       }
-
-      if (requestingUser.approverRequestStatus !== 'PENDING') {
-        return res.json({
-          response_type: 'ephemeral',
-          text: `This request has already been ${requestingUser.approverRequestStatus?.toLowerCase() || 'processed'}.`,
-        });
-      }
-
-      if (isApprove) {
-        // Approve: update user role to APPROVER
-        await prisma.user.update({
-          where: { id: userId },
-          data: {
-            role: 'APPROVER',
-            approverRequestStatus: 'APPROVED',
-          },
-        });
-
-        // Update the original message to show it's been processed
-        if (payload.channel && payload.message) {
-          await slackService.updateApproverRequestMessage(
-            payload.channel.id,
-            payload.message.ts,
-            requestingUser.name,
-            'APPROVED',
-            adminUser.name
-          );
-        }
-
-        res.json({
-          response_type: 'ephemeral',
-          text: `Successfully approved ${requestingUser.name}'s approver request.`,
-        });
-      } else {
-        // For rejection, redirect to web app to provide a reason
-        const webAppUrl = process.env.APP_URL || 'https://contraventiontracker.vercel.app';
-        res.json({
-          response_type: 'ephemeral',
-          text: `To reject this request, please use the web app where you can provide a reason: ${webAppUrl}/settings?tab=users`,
-        });
-        return;
-      }
-    } catch (error) {
-      console.error('[Slack] Error processing approver request:', error);
-      res.json({
-        response_type: 'ephemeral',
-        text: `Error: ${(error as Error).message}`,
-      });
+      return;
     }
-  } else {
-    // Unknown action, just acknowledge
-    res.json({ ok: true });
+
+    if (requestingUser.approverRequestStatus !== 'PENDING') {
+      if (responseUrl) {
+        await sendSlackResponse(responseUrl, `This request has already been ${requestingUser.approverRequestStatus?.toLowerCase() || 'processed'}.`);
+      }
+      return;
+    }
+
+    // Approve: update user role to APPROVER
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        role: 'APPROVER',
+        approverRequestStatus: 'APPROVED',
+      },
+    });
+
+    // Update the original message to show it's been processed
+    if (payload.channel && payload.message) {
+      await slackService.updateApproverRequestMessage(
+        payload.channel.id,
+        payload.message.ts,
+        requestingUser.name,
+        'APPROVED',
+        adminUser.name
+      );
+    }
+
+    if (responseUrl) {
+      await sendSlackResponse(responseUrl, `Successfully approved ${requestingUser.name}'s approver request.`);
+    }
+  } catch (error) {
+    console.error('[Slack] Error processing approver request:', error);
+    if (responseUrl) {
+      await sendSlackResponse(responseUrl, `Error: ${(error as Error).message}`);
+    }
+  }
+}
+
+/**
+ * Send a response to Slack via response_url
+ */
+async function sendSlackResponse(responseUrl: string, text: string) {
+  try {
+    await fetch(responseUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        response_type: 'ephemeral',
+        text,
+      }),
+    });
+  } catch (error) {
+    console.error('[Slack] Failed to send response:', error);
   }
 }
 
@@ -334,7 +375,105 @@ async function handleBlockActions(payload: SlackInteractionPayload, res: Respons
 async function handleViewSubmission(payload: SlackInteractionPayload, res: Response) {
   const callbackId = payload.view?.callback_id;
 
-  if (callbackId === 'create_contravention_modal') {
+  if (callbackId === 'reject_approver_request_modal') {
+    // Handle rejection reason submission
+    const values = payload.view?.state?.values;
+    const reason = values?.reason_block?.reason_input?.value;
+    const userId = payload.view?.private_metadata;
+
+    if (!reason || reason.trim() === '') {
+      return res.json({
+        response_action: 'errors',
+        errors: { reason_block: 'Please provide a reason for rejection' },
+      });
+    }
+
+    if (!userId) {
+      return res.json({
+        response_action: 'errors',
+        errors: { reason_block: 'User ID not found' },
+      });
+    }
+
+    // Find the admin user
+    const adminUser = await findUserBySlackId(payload.user.id);
+    if (!adminUser) {
+      return res.json({
+        response_action: 'errors',
+        errors: { reason_block: 'Your Slack account is not linked' },
+      });
+    }
+
+    // Check admin role
+    const adminRecord = await prisma.user.findUnique({
+      where: { id: adminUser.id },
+      select: { role: true },
+    });
+
+    if (adminRecord?.role !== 'ADMIN') {
+      return res.json({
+        response_action: 'errors',
+        errors: { reason_block: 'Only admins can reject requests' },
+      });
+    }
+
+    try {
+      // Get the requesting user
+      const requestingUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, name: true, email: true, approverRequestStatus: true },
+      });
+
+      if (!requestingUser) {
+        return res.json({
+          response_action: 'errors',
+          errors: { reason_block: 'User not found' },
+        });
+      }
+
+      if (requestingUser.approverRequestStatus !== 'PENDING') {
+        return res.json({
+          response_action: 'errors',
+          errors: { reason_block: `This request has already been ${requestingUser.approverRequestStatus?.toLowerCase() || 'processed'}` },
+        });
+      }
+
+      // Reject: update user status
+      await prisma.user.update({
+        where: { id: userId },
+        data: {
+          approverRequestStatus: 'REJECTED',
+        },
+      });
+
+      // Create notification for the rejected user
+      await prisma.notification.create({
+        data: {
+          userId: userId,
+          type: 'APPROVER_ROLE_REJECTED',
+          title: 'Approver Request Rejected',
+          message: `Your request for approver permissions has been rejected. Reason: ${reason.trim()}`,
+          channel: 'IN_APP',
+          status: 'SENT',
+          sentAt: new Date(),
+        },
+      });
+
+      // Close the modal
+      res.json({ response_action: 'clear' });
+
+      // Send confirmation message to admin
+      await slackService.postMessage(payload.user.id, [],
+        `:x: Successfully rejected ${requestingUser.name}'s approver request.`
+      );
+    } catch (error) {
+      console.error('[Slack] Error rejecting approver request:', error);
+      return res.json({
+        response_action: 'errors',
+        errors: { reason_block: (error as Error).message },
+      });
+    }
+  } else if (callbackId === 'create_contravention_modal') {
     const values = payload.view?.state?.values;
     if (!values) {
       return res.json({
