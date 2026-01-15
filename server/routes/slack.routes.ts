@@ -232,122 +232,66 @@ async function handleBlockActions(payload: SlackInteractionPayload, res: Respons
       res.json({ ok: true });
     }
   } else if (action_id === 'approve_approver_request') {
-    // Handle approver role request approval
-    // Respond immediately to avoid Slack timeout, then process in background
-    res.json({ ok: true });
-
+    // Handle approver role request approval - process synchronously before responding
     const userId = value;
-    const responseUrl = payload.response_url;
+    const approverName = payload.user.name || payload.user.username || 'Admin';
 
-    // Process in background
-    processApproverRequestApproval(userId, payload, responseUrl).catch(error => {
-      console.error('[Slack] Background approval error:', error);
-    });
+    try {
+      // Get the requesting user
+      const requestingUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, name: true, email: true, approverRequestStatus: true },
+      });
+
+      if (!requestingUser) {
+        return res.json({
+          response_type: 'ephemeral',
+          text: 'User not found.',
+        });
+      }
+
+      if (requestingUser.approverRequestStatus !== 'PENDING') {
+        return res.json({
+          response_type: 'ephemeral',
+          text: `This request has already been ${requestingUser.approverRequestStatus?.toLowerCase() || 'processed'}.`,
+        });
+      }
+
+      // Approve: update user role to APPROVER
+      await prisma.user.update({
+        where: { id: userId },
+        data: {
+          role: 'APPROVER',
+          approverRequestStatus: 'APPROVED',
+        },
+      });
+
+      // Update the original message to show it's been processed
+      if (payload.channel && payload.message) {
+        await slackService.updateApproverRequestMessage(
+          payload.channel.id,
+          payload.message.ts,
+          requestingUser.name,
+          'APPROVED',
+          approverName
+        );
+      }
+
+      // Respond with success
+      res.json({
+        response_type: 'ephemeral',
+        text: `Successfully approved ${requestingUser.name}'s approver request.`,
+      });
+    } catch (error) {
+      console.error('[Slack] Error processing approver request:', error);
+      res.json({
+        response_type: 'ephemeral',
+        text: `Error: ${(error as Error).message}`,
+      });
+    }
   } else {
     // Unknown action, just acknowledge
     res.json({ ok: true });
-  }
-}
-
-/**
- * Process approver request approval in background
- */
-async function processApproverRequestApproval(
-  userId: string,
-  payload: SlackInteractionPayload,
-  responseUrl?: string
-) {
-  try {
-    // Find the admin user by Slack ID
-    const slackUserId = payload.user.id;
-    const adminUser = await findUserBySlackId(slackUserId);
-
-    if (!adminUser) {
-      if (responseUrl) {
-        await sendSlackResponse(responseUrl, 'Your Slack account is not linked to a Contravention Tracker account.');
-      }
-      return;
-    }
-
-    // Check if the admin user is actually an admin
-    const adminRecord = await prisma.user.findUnique({
-      where: { id: adminUser.id },
-      select: { role: true },
-    });
-
-    if (adminRecord?.role !== 'ADMIN') {
-      if (responseUrl) {
-        await sendSlackResponse(responseUrl, 'Only admins can approve or reject approver requests.');
-      }
-      return;
-    }
-
-    // Get the requesting user
-    const requestingUser = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, name: true, email: true, requestedApprover: true, approverRequestStatus: true },
-    });
-
-    if (!requestingUser) {
-      if (responseUrl) {
-        await sendSlackResponse(responseUrl, 'User not found.');
-      }
-      return;
-    }
-
-    if (requestingUser.approverRequestStatus !== 'PENDING') {
-      if (responseUrl) {
-        await sendSlackResponse(responseUrl, `This request has already been ${requestingUser.approverRequestStatus?.toLowerCase() || 'processed'}.`);
-      }
-      return;
-    }
-
-    // Approve: update user role to APPROVER
-    await prisma.user.update({
-      where: { id: userId },
-      data: {
-        role: 'APPROVER',
-        approverRequestStatus: 'APPROVED',
-      },
-    });
-
-    // Update the original message to show it's been processed
-    if (payload.channel && payload.message) {
-      await slackService.updateApproverRequestMessage(
-        payload.channel.id,
-        payload.message.ts,
-        requestingUser.name,
-        'APPROVED',
-        adminUser.name
-      );
-    }
-
-    if (responseUrl) {
-      await sendSlackResponse(responseUrl, `Successfully approved ${requestingUser.name}'s approver request.`);
-    }
-  } catch (error) {
-    console.error('[Slack] Error processing approver request:', error);
-    if (responseUrl) {
-      await sendSlackResponse(responseUrl, `Error: ${(error as Error).message}`);
-    }
-  }
-}
-
-/**
- * Send a response to Slack via response_url
- */
-async function sendSlackResponse(responseUrl: string, text: string) {
-  try {
-    await fetch(responseUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        response_type: 'ephemeral',
-        text,
-      }),
-    });
-  } catch (error) {
-    console.error('[Slack] Failed to send response:', error);
   }
 }
 
