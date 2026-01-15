@@ -249,7 +249,13 @@ async function handleBlockActions(payload: SlackInteractionPayload, res: Respons
 
     if (payload.trigger_id) {
       try {
-        await slackService.openRejectionReasonModal(payload.trigger_id, userId);
+        // Store channel and message info for updating after rejection
+        const metadata = JSON.stringify({
+          userId,
+          channelId: payload.channel?.id,
+          messageTs: payload.message?.ts,
+        });
+        await slackService.openRejectionReasonModal(payload.trigger_id, metadata);
         res.json({ ok: true });
       } catch (error) {
         console.error('[Slack] Failed to open rejection modal:', error);
@@ -357,7 +363,9 @@ async function processApproverRequestApproval(
 async function processApproverRequestRejection(
   userId: string,
   reason: string,
-  payload: SlackInteractionPayload
+  payload: SlackInteractionPayload,
+  channelId?: string,
+  messageTs?: string
 ) {
   try {
     // Find the admin user by Slack ID
@@ -374,9 +382,7 @@ async function processApproverRequestRejection(
     });
 
     if (adminRecord?.role !== 'ADMIN') {
-      await slackService.postMessage(payload.user.id, [],
-        ':x: Only admins can reject approver requests.'
-      );
+      console.error('[Slack] User is not admin for rejection');
       return;
     }
 
@@ -387,16 +393,12 @@ async function processApproverRequestRejection(
     });
 
     if (!requestingUser) {
-      await slackService.postMessage(payload.user.id, [],
-        ':x: User not found.'
-      );
+      console.error('[Slack] Requesting user not found for rejection');
       return;
     }
 
     if (requestingUser.approverRequestStatus !== 'PENDING') {
-      await slackService.postMessage(payload.user.id, [],
-        `:x: This request has already been ${requestingUser.approverRequestStatus?.toLowerCase() || 'processed'}.`
-      );
+      console.error('[Slack] Request already processed');
       return;
     }
 
@@ -421,15 +423,20 @@ async function processApproverRequestRejection(
       },
     });
 
-    // Send confirmation message to admin
-    await slackService.postMessage(payload.user.id, [],
-      `:white_check_mark: Successfully rejected ${requestingUser.name}'s approver request.`
-    );
+    // Update the original message in the channel to show rejection
+    if (channelId && messageTs) {
+      await slackService.updateApproverRequestMessage(
+        channelId,
+        messageTs,
+        requestingUser.name,
+        'REJECTED',
+        adminUser.name
+      );
+    }
+
+    console.log(`[Slack] Successfully rejected ${requestingUser.name}'s approver request`);
   } catch (error) {
     console.error('[Slack] Error processing rejection:', error);
-    await slackService.postMessage(payload.user.id, [],
-      `:x: Error rejecting request: ${(error as Error).message}`
-    );
   }
 }
 
@@ -461,7 +468,7 @@ async function handleViewSubmission(payload: SlackInteractionPayload, res: Respo
     // Handle rejection reason submission
     const values = payload.view?.state?.values;
     const reason = values?.reason_block?.reason_input?.value;
-    const userId = payload.view?.private_metadata;
+    const metadataStr = payload.view?.private_metadata;
 
     // Quick validation only - respond immediately to avoid timeout
     if (!reason || reason.trim() === '') {
@@ -471,10 +478,21 @@ async function handleViewSubmission(payload: SlackInteractionPayload, res: Respo
       });
     }
 
-    if (!userId) {
+    if (!metadataStr) {
       return res.json({
         response_action: 'errors',
-        errors: { reason_block: 'User ID not found' },
+        errors: { reason_block: 'Metadata not found' },
+      });
+    }
+
+    // Parse metadata
+    let metadata: { userId: string; channelId?: string; messageTs?: string };
+    try {
+      metadata = JSON.parse(metadataStr);
+    } catch {
+      return res.json({
+        response_action: 'errors',
+        errors: { reason_block: 'Invalid metadata' },
       });
     }
 
@@ -482,7 +500,7 @@ async function handleViewSubmission(payload: SlackInteractionPayload, res: Respo
     res.json({ response_action: 'clear' });
 
     // Process rejection in background
-    processApproverRequestRejection(userId, reason.trim(), payload).catch(error => {
+    processApproverRequestRejection(metadata.userId, reason.trim(), payload, metadata.channelId, metadata.messageTs).catch(error => {
       console.error('[Slack] Background rejection error:', error);
     });
   } else if (callbackId === 'create_contravention_modal') {
