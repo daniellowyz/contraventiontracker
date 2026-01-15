@@ -707,6 +707,79 @@ export const emailService = {
   },
 
   /**
+   * Send notification to admin when a user requests approver role
+   */
+  async sendApproverRoleRequestEmail(params: {
+    adminEmail: string;
+    adminName: string;
+    requestingUserName: string;
+    requestingUserEmail: string;
+    position: string;
+  }): Promise<EmailResult> {
+    // Try to send via Google Apps Script webhook first
+    if (EMAIL_CONFIG.GAS_WEBHOOK_URL) {
+      return this.sendViaWebhook({
+        type: 'APPROVER_ROLE_REQUESTED',
+        adminEmail: params.adminEmail,
+        adminName: params.adminName,
+        requestingUserName: params.requestingUserName,
+        requestingUserEmail: params.requestingUserEmail,
+        position: params.position,
+        appUrl: EMAIL_CONFIG.APP_URL,
+      });
+    }
+
+    const approverRequestsUrl = `${EMAIL_CONFIG.APP_URL}/settings/approver-requests`;
+
+    return this.send({
+      to: params.adminEmail,
+      toName: params.adminName,
+      subject: `New Approver Request: ${params.requestingUserName}`,
+      htmlBody: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #1e40af;">New Approver Request</h2>
+
+          <p>Dear ${params.adminName},</p>
+
+          <p>A user has requested to become an approver in the Contravention Tracker system.</p>
+
+          <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+            <tr>
+              <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: bold;">Name</td>
+              <td style="padding: 8px; border: 1px solid #e5e7eb;">${params.requestingUserName}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: bold;">Email</td>
+              <td style="padding: 8px; border: 1px solid #e5e7eb;">${params.requestingUserEmail}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: bold;">Position</td>
+              <td style="padding: 8px; border: 1px solid #e5e7eb;">${params.position}</td>
+            </tr>
+          </table>
+
+          <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; padding: 16px; border-radius: 8px; margin: 20px 0;">
+            <p style="margin: 0 0 12px 0; font-weight: bold; color: #1e40af;">Action Required</p>
+            <p style="margin: 0; color: #1e3a8a;">Please log in to review and approve or reject this request.</p>
+          </div>
+
+          <p style="margin: 24px 0; text-align: center;">
+            <a href="${approverRequestsUrl}" style="background-color: #1e40af; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">
+              Review Request
+            </a>
+          </p>
+
+          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+
+          <p style="color: #9ca3af; font-size: 12px;">
+            This is an automated message from the Contravention Tracker system.
+          </p>
+        </div>
+      `,
+    });
+  },
+
+  /**
    * Get current sandbox status
    */
   getSandboxStatus() {

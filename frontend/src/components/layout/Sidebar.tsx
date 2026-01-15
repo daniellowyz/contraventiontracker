@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
 import { approvalsApi } from '@/api/approvals.api';
+import { approversApi } from '@/api/approvers.api';
 import {
   LayoutDashboard,
   FileWarning,
@@ -41,6 +42,14 @@ export function Sidebar() {
     queryKey: ['pendingApprovalsCount'],
     queryFn: approvalsApi.getPendingCount,
     enabled: isApprover,
+    refetchInterval: 30000, // Refresh every 30 seconds
+  });
+
+  // Fetch pending approver role requests count for admins
+  const { data: pendingApproverRequestsCount = 0 } = useQuery({
+    queryKey: ['pendingApproverRequestsCount'],
+    queryFn: approversApi.getPendingRequestsCount,
+    enabled: isAdmin,
     refetchInterval: 30000, // Refresh every 30 seconds
   });
 
@@ -132,7 +141,12 @@ export function Sidebar() {
                   )}
                 >
                   <item.icon className="w-5 h-5" />
-                  {item.label}
+                  <span className="flex-1">{item.label}</span>
+                  {pendingApproverRequestsCount > 0 && (
+                    <span className="bg-orange-500 text-white text-xs font-medium px-2 py-0.5 rounded-full min-w-[20px] text-center">
+                      {pendingApproverRequestsCount > 99 ? '99+' : pendingApproverRequestsCount}
+                    </span>
+                  )}
                 </Link>
               );
             })}

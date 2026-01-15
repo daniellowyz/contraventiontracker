@@ -1,5 +1,6 @@
 import { prisma } from '../config/database';
 import { emailService } from './email.service';
+import slackService from './slack.service';
 
 export type NotificationType =
   | 'CONTRAVENTION_LOGGED'
@@ -13,7 +14,8 @@ export type NotificationType =
   | 'TRAINING_OVERDUE'
   | 'POINTS_UPDATED'
   | 'ACKNOWLEDGMENT_REMINDER'
-  | 'APPROVAL_REQUESTED';
+  | 'APPROVAL_REQUESTED'
+  | 'APPROVER_ROLE_REQUESTED';
 
 interface CreateNotificationParams {
   userId: string;
@@ -333,6 +335,73 @@ export const notificationService = {
     });
 
     return notification;
+  },
+
+  /**
+   * Notify all admins when a user requests approver role
+   * Sends in-app notification, email, and Slack DM to all admins
+   */
+  async notifyApproverRoleRequested(params: {
+    requestingUserId: string;
+    requestingUserName: string;
+    requestingUserEmail: string;
+    position: string;
+  }) {
+    // Get all admin users
+    const admins = await prisma.user.findMany({
+      where: { role: 'ADMIN', isActive: true },
+      select: { id: true, email: true, name: true },
+    });
+
+    if (admins.length === 0) {
+      console.warn('[Notification] No admins found to notify about approver request');
+      return [];
+    }
+
+    console.log(`[Notification] Notifying ${admins.length} admins about approver request from ${params.requestingUserName}`);
+
+    // Create in-app notifications for all admins
+    const notifications = await Promise.all(
+      admins.map((admin: { id: string; email: string; name: string }) =>
+        this.create({
+          userId: admin.id,
+          type: 'APPROVER_ROLE_REQUESTED',
+          title: 'New Approver Request',
+          message: `${params.requestingUserName} (${params.position}) has requested approver permissions.`,
+          link: '/settings/approver-requests',
+        })
+      )
+    );
+
+    // Send emails to all admins
+    await Promise.all(
+      admins.map((admin: { id: string; email: string; name: string }) =>
+        emailService.sendApproverRoleRequestEmail({
+          adminEmail: admin.email,
+          adminName: admin.name,
+          requestingUserName: params.requestingUserName,
+          requestingUserEmail: params.requestingUserEmail,
+          position: params.position,
+        })
+      )
+    );
+
+    // Send Slack DMs to all admins
+    if (slackService.isConfigured()) {
+      await Promise.all(
+        admins.map((admin: { id: string; email: string; name: string }) =>
+          slackService.sendApproverRoleRequestDM({
+            adminEmail: admin.email,
+            adminName: admin.name,
+            requestingUserName: params.requestingUserName,
+            requestingUserEmail: params.requestingUserEmail,
+            position: params.position,
+          })
+        )
+      );
+    }
+
+    return notifications;
   },
 
   /**

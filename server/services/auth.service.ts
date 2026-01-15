@@ -2,6 +2,46 @@ import prisma from '../config/database';
 import { JwtPayload, Role } from '../types';
 import { AppError } from '../middleware/errorHandler';
 
+// Lazy imports to avoid circular dependencies
+let notificationServiceModule: typeof import('./notification.service') | null = null;
+async function getNotificationService() {
+  if (!notificationServiceModule) {
+    try {
+      notificationServiceModule = await import('./notification.service');
+    } catch (err) {
+      console.error('Failed to load notification service:', err);
+      return null;
+    }
+  }
+  return notificationServiceModule.notificationService;
+}
+
+let slackServiceModule: typeof import('./slack.service') | null = null;
+async function getSlackService() {
+  if (!slackServiceModule) {
+    try {
+      slackServiceModule = await import('./slack.service');
+    } catch (err) {
+      console.error('Failed to load Slack service:', err);
+      return null;
+    }
+  }
+  return slackServiceModule.default;
+}
+
+let emailServiceModule: typeof import('./email.service') | null = null;
+async function getEmailService() {
+  if (!emailServiceModule) {
+    try {
+      emailServiceModule = await import('./email.service');
+    } catch (err) {
+      console.error('Failed to load email service:', err);
+      return null;
+    }
+  }
+  return emailServiceModule.emailService;
+}
+
 export class AuthService {
   async register(data: {
     email: string;
@@ -51,6 +91,7 @@ export class AuthService {
       email: user.email,
       name: user.name,
       role: user.role,
+      isProfileComplete: user.isProfileComplete,
     };
   }
 
@@ -108,6 +149,26 @@ export class AuthService {
         approverRequestStatus: data.requestApprover ? 'PENDING' : null,
       },
     });
+
+    // If user requested approver role, notify all admins
+    if (data.requestApprover) {
+      console.log(`[Auth] User ${data.name} requested approver role, notifying admins...`);
+
+      try {
+        const notificationService = await getNotificationService();
+        if (notificationService) {
+          await notificationService.notifyApproverRoleRequested({
+            requestingUserId: userId,
+            requestingUserName: data.name,
+            requestingUserEmail: user.email,
+            position: data.position,
+          });
+        }
+      } catch (error) {
+        // Don't fail profile completion if notifications fail
+        console.error('[Auth] Failed to send approver request notifications:', error);
+      }
+    }
 
     return updatedUser;
   }

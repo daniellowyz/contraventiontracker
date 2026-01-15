@@ -194,6 +194,22 @@ router.get('/approver-requests', authenticate, requireAdmin, async (_req: Authen
   }
 });
 
+// GET /api/admin/approver-requests/count - Get count of pending approver requests (for sidebar badge)
+router.get('/approver-requests/count', authenticate, requireAdmin, async (_req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const count = await prisma.user.count({
+      where: {
+        requestedApprover: true,
+        approverRequestStatus: 'PENDING',
+      },
+    });
+
+    res.json({ success: true, data: { count } });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // POST /api/admin/approver-requests/:id/approve - Approve an approver role request
 router.post('/approver-requests/:id/approve', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
   try {

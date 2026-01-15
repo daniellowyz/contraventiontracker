@@ -779,6 +779,94 @@ export class SlackService {
   getChannelId(): string | undefined {
     return this.channelId;
   }
+
+  /**
+   * Send DM to an admin about a new approver role request
+   */
+  async sendApproverRoleRequestDM(data: {
+    adminEmail: string;
+    adminName: string;
+    requestingUserName: string;
+    requestingUserEmail: string;
+    position: string;
+  }): Promise<void> {
+    if (!this.token) {
+      console.log('[SlackService] Slack not configured, skipping approver request DM');
+      return;
+    }
+
+    // Find the admin by email to get their Slack ID
+    const slackUserId = await this.findUserByEmail(data.adminEmail);
+    if (!slackUserId) {
+      console.log(`[SlackService] Could not find Slack user for admin ${data.adminEmail}`);
+      return;
+    }
+
+    const approverRequestsUrl = `${this.appUrl}/settings/approver-requests`;
+
+    const blocks = [
+      {
+        type: 'header',
+        text: {
+          type: 'plain_text',
+          text: ':raising_hand: New Approver Request',
+          emoji: true,
+        },
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*${data.requestingUserName}* has requested approver permissions.`,
+        },
+      },
+      {
+        type: 'section',
+        fields: [
+          {
+            type: 'mrkdwn',
+            text: `*Name:*\n${data.requestingUserName}`,
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Email:*\n${data.requestingUserEmail}`,
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Position:*\n${data.position}`,
+          },
+        ],
+      },
+      {
+        type: 'actions',
+        elements: [
+          {
+            type: 'button',
+            text: {
+              type: 'plain_text',
+              text: 'Review Request',
+              emoji: true,
+            },
+            style: 'primary',
+            url: approverRequestsUrl,
+            action_id: 'view_approver_request',
+          },
+        ],
+      },
+      {
+        type: 'divider',
+      },
+    ];
+
+    const text = `${data.requestingUserName} (${data.position}) has requested approver permissions`;
+
+    try {
+      await this.postMessage(slackUserId, blocks, text);
+      console.log(`[SlackService] Sent approver request DM to ${data.adminEmail}`);
+    } catch (error) {
+      console.error('[SlackService] Failed to send approver request DM:', error);
+    }
+  }
 }
 
 export default new SlackService();
