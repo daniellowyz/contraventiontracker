@@ -5,6 +5,8 @@ import { validateBody, validateQuery } from '../middleware/validate';
 import {
   createContraventionSchema,
   updateContraventionSchema,
+  userUpdateContraventionSchema,
+  resubmitContraventionSchema,
   uploadApprovalSchema,
   markCompleteSchema,
   contraventionFiltersSchema,
@@ -117,6 +119,46 @@ router.post(
         req.params.id,
         req.user!.userId,
         req.body.notes
+      );
+      res.json({ success: true, data: contravention });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// PATCH /api/contraventions/:id/user-edit - User edits their own contravention
+// Users can only edit contraventions they created, and only when status is PENDING_APPROVAL or REJECTED
+router.patch(
+  '/:id/user-edit',
+  authenticate,
+  validateBody(userUpdateContraventionSchema),
+  async (req: AuthenticatedRequest, res: Response, next) => {
+    try {
+      const contravention = await contraventionService.userUpdate(
+        req.params.id,
+        req.user!.userId,
+        req.body
+      );
+      res.json({ success: true, data: contravention });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// POST /api/contraventions/:id/resubmit - Resubmit a rejected contravention
+// Only the user who created the contravention can resubmit it
+router.post(
+  '/:id/resubmit',
+  authenticate,
+  validateBody(resubmitContraventionSchema),
+  async (req: AuthenticatedRequest, res: Response, next) => {
+    try {
+      const contravention = await contraventionService.resubmit(
+        req.params.id,
+        req.user!.userId,
+        req.body
       );
       res.json({ success: true, data: contravention });
     } catch (error) {

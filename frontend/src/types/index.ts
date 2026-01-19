@@ -56,6 +56,8 @@ export interface Contravention {
   vendor?: string;
   valueSgd?: number;
   description: string;
+  justification?: string;
+  mitigation?: string;
   summary?: string;
   severity: Severity;
   points: number;
@@ -65,6 +67,8 @@ export interface Contravention {
   acknowledgedAt?: string;
   acknowledgedBy?: { id: string; name: string };
   loggedBy: { id: string; name: string };
+  evidenceUrls?: string[];
+  supportingDocs?: string[];
   approvalPdfUrl?: string;
   authorizerEmail?: string;
   approvalRequests?: ContraventionApproval[];

@@ -311,6 +311,7 @@ export const notificationService = {
     contraventionId: string;
     referenceNo: string;
     employeeName: string;
+    submitterName: string;
     typeName: string;
     severity: string;
   }) {
@@ -319,7 +320,7 @@ export const notificationService = {
       userId: params.approverUserId,
       type: 'APPROVAL_REQUESTED',
       title: 'Approval Request',
-      message: `${params.employeeName} has requested your approval for contravention ${params.referenceNo} (${params.typeName}).`,
+      message: `${params.submitterName} has requested your approval for contravention ${params.referenceNo} (${params.typeName}) for ${params.employeeName}.`,
       link: `/approvals`,
     });
 

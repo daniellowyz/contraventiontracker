@@ -7,6 +7,7 @@ export interface ContraventionFilters {
   typeId?: string;
   departmentId?: string;
   employeeId?: string;
+  loggedById?: string;  // Filter by who logged the contravention
   dateFrom?: string;
   dateTo?: string;
   period?: string; // Format: "YYYY-MM-DD_YYYY-MM-DD" for fiscal year filtering
@@ -27,8 +28,35 @@ export interface CreateContraventionInput {
   summary?: string;
   incidentDate: string;
   evidenceUrls?: string[];
+  supportingDocs?: string[];  // Supporting documentation URLs
   authorizerEmail?: string; // Email of the approver to seek contravention approval
   approvalPdfUrl?: string; // URL of the uploaded approval PDF
+}
+
+// Input for users editing their own contraventions (more restrictive)
+export interface UserUpdateContraventionInput {
+  vendor?: string;
+  valueSgd?: number;
+  description?: string;
+  justification?: string;
+  mitigation?: string;
+  summary?: string;
+  evidenceUrls?: string[];
+  supportingDocs?: string[];
+  authorizerEmail?: string;
+}
+
+// Input for resubmitting a rejected contravention
+export interface ResubmitContraventionInput {
+  vendor?: string;
+  valueSgd?: number;
+  description: string;
+  justification: string;
+  mitigation: string;
+  summary?: string;
+  evidenceUrls?: string[];
+  supportingDocs?: string[];
+  authorizerEmail?: string;
 }
 
 export const contraventionsApi = {
@@ -79,6 +107,18 @@ export const contraventionsApi = {
 
   markComplete: async (id: string, notes?: string) => {
     const response = await client.post<ApiResponse<Contravention>>(`/contraventions/${id}/complete`, { notes });
+    return response.data.data!;
+  },
+
+  // User edit - for editing own contraventions (before approval or when rejected)
+  userUpdate: async (id: string, data: UserUpdateContraventionInput) => {
+    const response = await client.patch<ApiResponse<Contravention>>(`/contraventions/${id}/user-edit`, data);
+    return response.data.data!;
+  },
+
+  // Resubmit - for resubmitting rejected contraventions
+  resubmit: async (id: string, data: ResubmitContraventionInput) => {
+    const response = await client.post<ApiResponse<Contravention>>(`/contraventions/${id}/resubmit`, data);
     return response.data.data!;
   },
 

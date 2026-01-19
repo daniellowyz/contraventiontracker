@@ -2,7 +2,7 @@ import prisma from '../config/database';
 import { AppError } from '../middleware/errorHandler';
 import generateReferenceNumber from '../utils/generateRefNo';
 import pointsService from './points.service';
-import { CreateContraventionInput, UpdateContraventionInput, ContraventionFiltersInput } from '../validators/contravention.schema';
+import { CreateContraventionInput, UpdateContraventionInput, UserUpdateContraventionInput, ResubmitContraventionInput, ContraventionFiltersInput } from '../validators/contravention.schema';
 
 // Lazy import notification service to avoid module loading issues in Vercel
 let notificationServiceModule: typeof import('./notification.service') | null = null;
@@ -84,6 +84,7 @@ export class ContraventionService {
         points,
         incidentDate: new Date(data.incidentDate),
         evidenceUrls: data.evidenceUrls || [],
+        supportingDocs: data.supportingDocs || [],
         authorizerEmail: data.authorizerEmail,
         approvalPdfUrl: data.approvalPdfUrl,
         // Status depends on whether approver is selected and if PDF is uploaded
@@ -190,6 +191,7 @@ export class ContraventionService {
               contraventionId: contravention.id,
               referenceNo,
               employeeName: employee.name,
+              submitterName: contravention.loggedBy?.name || 'A user',
               typeName: contraventionType.name,
               severity,
             }).catch((err: Error) => {
@@ -262,7 +264,7 @@ export class ContraventionService {
    * Get all contraventions with filters and pagination
    */
   async findAll(filters: ContraventionFiltersInput) {
-    const { page, limit, status, severity, typeId, departmentId, employeeId, teamId, dateFrom, dateTo, search } = filters;
+    const { page, limit, status, severity, typeId, departmentId, employeeId, teamId, loggedById, dateFrom, dateTo, search } = filters;
 
     const where: Record<string, unknown> = {};
 
@@ -271,6 +273,7 @@ export class ContraventionService {
     if (typeId) where.typeId = typeId;
     if (employeeId) where.employeeId = employeeId;
     if (teamId) where.teamId = teamId;
+    if (loggedById) where.loggedById = loggedById;
 
     if (departmentId) {
       where.employee = { departmentId };
@@ -570,6 +573,175 @@ export class ContraventionService {
       },
       orderBy: { incidentDate: 'desc' },
     });
+  }
+
+  /**
+   * Update a contravention by the user who logged it
+   * Users can only edit contraventions they created and only when status is PENDING_APPROVAL or REJECTED
+   */
+  async userUpdate(id: string, userId: string, data: UserUpdateContraventionInput) {
+    const contravention = await prisma.contravention.findUnique({
+      where: { id },
+      include: {
+        employee: { select: { id: true, name: true } },
+        type: { select: { id: true, name: true } },
+      },
+    });
+
+    if (!contravention) {
+      throw new AppError('Contravention not found', 404);
+    }
+
+    // Check if user is the one who logged this contravention
+    if (contravention.loggedById !== userId) {
+      throw new AppError('You can only edit contraventions you created', 403);
+    }
+
+    // Check status - users can only edit when PENDING_APPROVAL or REJECTED
+    const editableStatuses = ['PENDING_APPROVAL', 'REJECTED'];
+    if (!editableStatuses.includes(contravention.status)) {
+      throw new AppError('This contravention can no longer be edited. It has already been approved.', 400);
+    }
+
+    // Update the contravention with allowed fields only
+    const updated = await prisma.contravention.update({
+      where: { id },
+      data: {
+        vendor: data.vendor,
+        valueSgd: data.valueSgd,
+        description: data.description,
+        justification: data.justification,
+        mitigation: data.mitigation,
+        summary: data.summary,
+        evidenceUrls: data.evidenceUrls,
+        supportingDocs: data.supportingDocs,
+        authorizerEmail: data.authorizerEmail,
+      },
+      include: {
+        employee: { select: { id: true, name: true, email: true, department: true } },
+        type: true,
+        team: { select: { id: true, name: true, isPersonal: true } },
+        loggedBy: { select: { id: true, name: true } },
+      },
+    });
+
+    return updated;
+  }
+
+  /**
+   * Resubmit a rejected contravention
+   * This resets the status back to PENDING_APPROVAL and creates a new approval request
+   */
+  async resubmit(id: string, userId: string, data: ResubmitContraventionInput) {
+    const contravention = await prisma.contravention.findUnique({
+      where: { id },
+      include: {
+        employee: { select: { id: true, name: true, email: true } },
+        type: { select: { id: true, name: true } },
+        loggedBy: { select: { id: true, name: true } },
+      },
+    });
+
+    if (!contravention) {
+      throw new AppError('Contravention not found', 404);
+    }
+
+    // Check if user is the one who logged this contravention
+    if (contravention.loggedById !== userId) {
+      throw new AppError('You can only resubmit contraventions you created', 403);
+    }
+
+    // Check status - can only resubmit when REJECTED
+    if (contravention.status !== 'REJECTED') {
+      throw new AppError('Only rejected contraventions can be resubmitted', 400);
+    }
+
+    // Determine new approver email (use provided or existing)
+    const approverEmail = data.authorizerEmail || contravention.authorizerEmail;
+
+    if (!approverEmail) {
+      throw new AppError('An approver email is required to resubmit', 400);
+    }
+
+    // Look up the approver
+    const approver = await prisma.user.findUnique({
+      where: { email: approverEmail.toLowerCase() },
+    });
+
+    if (!approver) {
+      throw new AppError('Approver not found with the provided email', 404);
+    }
+
+    if (approver.role !== 'APPROVER' && approver.role !== 'ADMIN') {
+      throw new AppError('The specified user is not an approver', 400);
+    }
+
+    // Update the contravention
+    const updated = await prisma.contravention.update({
+      where: { id },
+      data: {
+        vendor: data.vendor ?? contravention.vendor,
+        valueSgd: data.valueSgd ?? contravention.valueSgd,
+        description: data.description,
+        justification: data.justification,
+        mitigation: data.mitigation,
+        summary: data.summary ?? contravention.summary,
+        evidenceUrls: data.evidenceUrls ?? contravention.evidenceUrls,
+        supportingDocs: data.supportingDocs ?? (contravention.supportingDocs || []),
+        authorizerEmail: approverEmail,
+        status: 'PENDING_APPROVAL',
+      },
+      include: {
+        employee: { select: { id: true, name: true, email: true, department: true } },
+        type: true,
+        team: { select: { id: true, name: true, isPersonal: true } },
+        loggedBy: { select: { id: true, name: true } },
+      },
+    });
+
+    // Create or update approval request
+    await prisma.contraventionApproval.upsert({
+      where: {
+        contraventionId_approverId: {
+          contraventionId: id,
+          approverId: approver.id,
+        },
+      },
+      update: {
+        status: 'PENDING',
+        reviewedById: null,
+        reviewedAt: null,
+        reviewNotes: null,
+      },
+      create: {
+        contraventionId: id,
+        approverId: approver.id,
+        status: 'PENDING',
+      },
+    });
+
+    // Send notification to the approver
+    getNotificationService().then((notificationSvc) => {
+      if (notificationSvc) {
+        notificationSvc.notifyApprovalRequested({
+          approverUserId: approver.id,
+          approverEmail: approver.email,
+          approverName: approver.name,
+          contraventionId: id,
+          referenceNo: contravention.referenceNo,
+          employeeName: contravention.employee.name,
+          submitterName: contravention.loggedBy?.name || 'A user',
+          typeName: contravention.type.name,
+          severity: contravention.severity,
+        }).catch((err: Error) => {
+          console.error('Failed to send resubmission approval notification:', err);
+        });
+      }
+    }).catch((err: Error) => {
+      console.error('Failed to load notification service:', err);
+    });
+
+    return updated;
   }
 
   /**
