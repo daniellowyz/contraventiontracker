@@ -39,7 +39,7 @@ import {
   Paperclip
 } from 'lucide-react';
 import { Severity, ContraventionStatus } from '@/types';
-import { uploadApprovalPdf, uploadSupportingDoc, supabase } from '@/lib/supabase';
+import { uploadApprovalPdf } from '@/lib/supabase';
 
 const SEVERITY_OPTIONS = [
   { value: 'LOW', label: 'Low' },
@@ -101,9 +101,8 @@ export function ContraventionDetailPage() {
   const [isPersonalEdit, setIsPersonalEdit] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // File upload for supporting docs in user edit/resubmit
-  const [pendingSupportingDocs, setPendingSupportingDocs] = useState<File[]>([]);
-  const [isUploadingDocs, setIsUploadingDocs] = useState(false);
+  // URL input for supporting docs in user edit/resubmit
+  const [newDocUrl, setNewDocUrl] = useState('');
 
   // Departed member handling for reassignment
   const [isDepartedMember, setIsDepartedMember] = useState(false);
@@ -318,50 +317,24 @@ export function ContraventionDetailPage() {
     }
   };
 
-  const handleUserEditSave = async () => {
+  const handleUserEditSave = () => {
     if (!userEditData.description?.trim()) {
       setError('Description is required');
       return;
     }
 
-    // Upload pending supporting documents first
-    let updatedData = { ...userEditData };
-    if (pendingSupportingDocs.length > 0 && supabase && contravention) {
-      try {
-        setIsUploadingDocs(true);
-        const uploadedUrls: string[] = [];
-        for (const file of pendingSupportingDocs) {
-          const url = await uploadSupportingDoc(file, contravention.referenceNo);
-          if (url) {
-            uploadedUrls.push(url);
-          }
-        }
-        updatedData = {
-          ...updatedData,
-          supportingDocs: [...(updatedData.supportingDocs || []), ...uploadedUrls],
-        };
-      } catch (uploadError) {
-        setError(uploadError instanceof Error ? uploadError.message : 'Failed to upload supporting documents');
-        setIsUploadingDocs(false);
-        return;
-      } finally {
-        setIsUploadingDocs(false);
-      }
-    }
-
-    userEditMutation.mutate(updatedData);
-    setPendingSupportingDocs([]);
+    userEditMutation.mutate(userEditData);
   };
 
   const handleUserEditCancel = () => {
     setIsUserEditing(false);
     setUserEditData({});
-    setPendingSupportingDocs([]);
+    setNewDocUrl('');
     setError('');
   };
 
   // Resubmit from user edit form (for rejected contraventions)
-  const handleUserEditResubmit = async () => {
+  const handleUserEditResubmit = () => {
     if (!userEditData.description?.trim()) {
       setError('Description is required');
       return;
@@ -379,57 +352,17 @@ export function ContraventionDetailPage() {
       return;
     }
 
-    // Upload pending supporting documents first
-    let updatedData = { ...userEditData };
-    if (pendingSupportingDocs.length > 0 && supabase && contravention) {
-      try {
-        setIsUploadingDocs(true);
-        const uploadedUrls: string[] = [];
-        for (const file of pendingSupportingDocs) {
-          const url = await uploadSupportingDoc(file, contravention.referenceNo);
-          if (url) {
-            uploadedUrls.push(url);
-          }
-        }
-        updatedData = {
-          ...updatedData,
-          supportingDocs: [...(updatedData.supportingDocs || []), ...uploadedUrls],
-        };
-      } catch (uploadError) {
-        setError(uploadError instanceof Error ? uploadError.message : 'Failed to upload supporting documents');
-        setIsUploadingDocs(false);
-        return;
-      } finally {
-        setIsUploadingDocs(false);
-      }
-    }
-
     // Use resubmit API
     resubmitMutation.mutate({
-      description: updatedData.description!,
-      justification: updatedData.justification!,
-      mitigation: updatedData.mitigation!,
-      vendor: updatedData.vendor || undefined,
-      valueSgd: updatedData.valueSgd || undefined,
-      summary: updatedData.summary || undefined,
-      supportingDocs: updatedData.supportingDocs,
-      authorizerEmail: updatedData.authorizerEmail,
+      description: userEditData.description!,
+      justification: userEditData.justification!,
+      mitigation: userEditData.mitigation!,
+      vendor: userEditData.vendor || undefined,
+      valueSgd: userEditData.valueSgd || undefined,
+      summary: userEditData.summary || undefined,
+      supportingDocs: userEditData.supportingDocs,
+      authorizerEmail: userEditData.authorizerEmail,
     });
-    setPendingSupportingDocs([]);
-  };
-
-  // Supporting docs file handlers
-  const handleSupportingDocSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      setPendingSupportingDocs((prev) => [...prev, ...Array.from(files)]);
-      // Reset input so the same file can be selected again
-      e.target.value = '';
-    }
-  };
-
-  const removePendingDoc = (index: number) => {
-    setPendingSupportingDocs((prev) => prev.filter((_, i) => i !== index));
   };
 
   const removeExistingDoc = (index: number) => {
@@ -614,14 +547,14 @@ export function ContraventionDetailPage() {
                       variant="secondary"
                       onClick={handleUserEditSave}
                       isLoading={userEditMutation.isPending}
-                      disabled={isUploadingDocs || resubmitMutation.isPending}
+                      disabled={resubmitMutation.isPending}
                     >
                       <Save className="w-4 h-4 mr-2" />
                       Save Draft
                     </Button>
                     <Button
                       onClick={handleUserEditResubmit}
-                      isLoading={resubmitMutation.isPending || isUploadingDocs}
+                      isLoading={resubmitMutation.isPending}
                       disabled={userEditMutation.isPending}
                     >
                       <RotateCcw className="w-4 h-4 mr-2" />
@@ -629,7 +562,7 @@ export function ContraventionDetailPage() {
                     </Button>
                   </>
                 ) : (
-                  <Button onClick={handleUserEditSave} isLoading={userEditMutation.isPending || isUploadingDocs}>
+                  <Button onClick={handleUserEditSave} isLoading={userEditMutation.isPending}>
                     <Save className="w-4 h-4 mr-2" />
                     Update
                   </Button>
@@ -960,7 +893,6 @@ export function ContraventionDetailPage() {
                       {/* Existing uploaded documents */}
                       {userEditData.supportingDocs && userEditData.supportingDocs.length > 0 && (
                         <div className="mb-3 space-y-2">
-                          <p className="text-xs font-medium text-gray-600">Current:</p>
                           {userEditData.supportingDocs.map((url, index) => (
                             <div key={index} className="flex items-center gap-2 p-2 bg-green-50 rounded-lg">
                               <Paperclip className="w-4 h-4 text-green-600 flex-shrink-0" />
@@ -970,7 +902,7 @@ export function ContraventionDetailPage() {
                                 rel="noopener noreferrer"
                                 className="text-sm text-blue-600 hover:text-blue-800 truncate flex-1"
                               >
-                                Document {index + 1}
+                                {url}
                                 <ExternalLink className="w-3 h-3 inline ml-1" />
                               </a>
                               <button
@@ -985,54 +917,36 @@ export function ContraventionDetailPage() {
                         </div>
                       )}
 
-                      {/* Pending files to upload */}
-                      {pendingSupportingDocs.length > 0 && (
-                        <div className="mb-3 space-y-2">
-                          <p className="text-xs font-medium text-gray-600">Pending upload:</p>
-                          {pendingSupportingDocs.map((file, index) => (
-                            <div key={index} className="flex items-center gap-2 p-2 bg-amber-50 rounded-lg">
-                              <Paperclip className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                              <span className="text-sm text-gray-700 truncate flex-1">{file.name}</span>
-                              <span className="text-xs text-gray-500">{(file.size / 1024).toFixed(1)} KB</span>
-                              <button
-                                type="button"
-                                onClick={() => removePendingDoc(index)}
-                                className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* File input - input must be INSIDE the label for proper click handling */}
-                      <label
-                        className={`inline-flex items-center justify-center font-medium rounded-lg transition-colors px-4 py-2 text-sm cursor-pointer ${
-                          isUploadingDocs
-                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                            : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
-                        }`}
-                      >
-                        {isUploadingDocs ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Uploading...
-                          </>
-                        ) : (
-                          <>
-                            <Upload className="w-4 h-4 mr-2" />
-                            Add Files
-                          </>
-                        )}
-                        <input
-                          type="file"
-                          multiple
-                          accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif"
-                          onChange={handleSupportingDocSelect}
-                          className="sr-only"
+                      {/* URL input */}
+                      <div className="flex gap-2">
+                        <Input
+                          type="url"
+                          value={newDocUrl}
+                          onChange={(e) => setNewDocUrl(e.target.value)}
+                          placeholder="https://drive.google.com/file/..."
+                          className="flex-1"
                         />
-                      </label>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={() => {
+                            if (newDocUrl.trim()) {
+                              setUserEditData((prev) => ({
+                                ...prev,
+                                supportingDocs: [...(prev.supportingDocs || []), newDocUrl.trim()],
+                              }));
+                              setNewDocUrl('');
+                            }
+                          }}
+                          disabled={!newDocUrl.trim()}
+                        >
+                          <Plus className="w-4 h-4 mr-1" />
+                          Add
+                        </Button>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Paste a URL to a document and click Add.
+                      </p>
                     </div>
 
                     {/* Approver Selection - only show for rejected contraventions */}
