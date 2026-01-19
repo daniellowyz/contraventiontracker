@@ -104,7 +104,7 @@ export class SlackService {
   constructor() {
     this.token = process.env.SLACK_BOT_TOKEN || process.env.SLACK_TOKEN;
     this.channelId = process.env.SLACK_CHANNEL_ID;
-    this.appUrl = process.env.APP_URL || 'https://contravention-tracker.vercel.app';
+    this.appUrl = process.env.APP_URL || 'https://contraventiontracker.hack2026.gov.sg';
   }
 
   /**
