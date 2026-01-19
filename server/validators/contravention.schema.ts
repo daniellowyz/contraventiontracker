@@ -39,25 +39,25 @@ export const updateContraventionSchema = z.object({
 
 // Schema for users editing their own contraventions (more restrictive)
 export const userUpdateContraventionSchema = z.object({
-  vendor: z.string().optional(),
-  valueSgd: z.number().optional(),
+  vendor: z.string().nullable().optional(),
+  valueSgd: z.number().nullable().optional(),
   description: z.string().optional(),
   justification: z.string().optional(),
   mitigation: z.string().optional(),
-  summary: z.string().optional(),
+  summary: z.string().nullable().optional(),
   evidenceUrls: z.array(z.string().url()).optional(),
   supportingDocs: z.array(z.string().url()).optional(),
-  authorizerEmail: z.string().email('Invalid email format').optional(),
+  authorizerEmail: z.string().email('Invalid email format').nullable().optional(),
 });
 
 // Schema for resubmitting a rejected contravention
 export const resubmitContraventionSchema = z.object({
-  vendor: z.string().optional(),
-  valueSgd: z.number().optional(),
+  vendor: z.string().nullable().optional(),
+  valueSgd: z.number().nullable().optional(),
   description: z.string().min(1, 'Description is required'),
   justification: z.string().min(1, 'Justification is required'),
   mitigation: z.string().min(1, 'Mitigation measures are required'),
-  summary: z.string().optional(),
+  summary: z.string().nullable().optional(),
   evidenceUrls: z.array(z.string().url()).optional(),
   supportingDocs: z.array(z.string().url()).optional(),
   authorizerEmail: z.string().email('Invalid email format').optional(),

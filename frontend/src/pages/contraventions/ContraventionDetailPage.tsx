@@ -89,11 +89,9 @@ export function ContraventionDetailPage() {
   const isAdmin = user?.role === 'ADMIN';
 
   const [isEditing, setIsEditing] = useState(false);
-  const [isUserEditing, setIsUserEditing] = useState(false); // User edit mode (non-admin)
-  const [isResubmitting, setIsResubmitting] = useState(false); // Resubmit mode for rejected contraventions
+  const [isUserEditing, setIsUserEditing] = useState(false); // User edit mode (non-admin) - merged edit and resubmit
   const [editData, setEditData] = useState<Partial<CreateContraventionInput> & { severity?: Severity; employeeId?: string; teamId?: string; status?: ContraventionStatus }>({});
-  const [userEditData, setUserEditData] = useState<UserUpdateContraventionInput>({});
-  const [resubmitData, setResubmitData] = useState<ResubmitContraventionInput>({ description: '', justification: '', mitigation: '' });
+  const [userEditData, setUserEditData] = useState<UserUpdateContraventionInput & { authorizerEmail?: string }>({});
   const [error, setError] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
@@ -135,11 +133,11 @@ export function ContraventionDetailPage() {
     enabled: isAdmin,
   });
 
-  // Fetch approvers for resubmit
+  // Fetch approvers for user edit (for resubmit option)
   const { data: approvers } = useQuery({
     queryKey: ['approvers'],
     queryFn: () => approversApi.getAll(),
-    enabled: isResubmitting,
+    enabled: isUserEditing,
   });
 
   // Check if current user can edit this contravention (non-admin edit)
@@ -196,8 +194,8 @@ export function ContraventionDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['contravention', id] });
       queryClient.invalidateQueries({ queryKey: ['contraventions'] });
-      setIsResubmitting(false);
-      setResubmitData({ description: '', justification: '', mitigation: '' });
+      setIsUserEditing(false);
+      setUserEditData({});
       setError('');
     },
     onError: (err: Error) => {
@@ -359,47 +357,31 @@ export function ContraventionDetailPage() {
   const handleUserEditCancel = () => {
     setIsUserEditing(false);
     setUserEditData({});
+    setPendingSupportingDocs([]);
     setError('');
   };
 
-  // Resubmit handlers
-  const handleResubmit = () => {
-    if (contravention) {
-      setResubmitData({
-        vendor: contravention.vendor || undefined,
-        valueSgd: contravention.valueSgd,
-        description: contravention.description,
-        justification: contravention.justification || '',
-        mitigation: contravention.mitigation || '',
-        summary: contravention.summary || undefined,
-        evidenceUrls: contravention.evidenceUrls || [],
-        supportingDocs: contravention.supportingDocs || [],
-        authorizerEmail: contravention.authorizerEmail || '',
-      });
-      setIsResubmitting(true);
-    }
-  };
-
-  const handleResubmitSave = async () => {
-    if (!resubmitData.description?.trim()) {
+  // Resubmit from user edit form (for rejected contraventions)
+  const handleUserEditResubmit = async () => {
+    if (!userEditData.description?.trim()) {
       setError('Description is required');
       return;
     }
-    if (!resubmitData.justification?.trim()) {
+    if (!userEditData.justification?.trim()) {
       setError('Justification is required');
       return;
     }
-    if (!resubmitData.mitigation?.trim()) {
+    if (!userEditData.mitigation?.trim()) {
       setError('Mitigation measures are required');
       return;
     }
-    if (!resubmitData.authorizerEmail?.trim()) {
-      setError('Please select an approver');
+    if (!userEditData.authorizerEmail?.trim()) {
+      setError('Please select an approver to resubmit');
       return;
     }
 
     // Upload pending supporting documents first
-    let updatedData = { ...resubmitData };
+    let updatedData = { ...userEditData };
     if (pendingSupportingDocs.length > 0 && supabase && contravention) {
       try {
         setIsUploadingDocs(true);
@@ -423,15 +405,18 @@ export function ContraventionDetailPage() {
       }
     }
 
-    resubmitMutation.mutate(updatedData);
+    // Use resubmit API
+    resubmitMutation.mutate({
+      description: updatedData.description!,
+      justification: updatedData.justification!,
+      mitigation: updatedData.mitigation!,
+      vendor: updatedData.vendor || undefined,
+      valueSgd: updatedData.valueSgd || undefined,
+      summary: updatedData.summary || undefined,
+      supportingDocs: updatedData.supportingDocs,
+      authorizerEmail: updatedData.authorizerEmail,
+    });
     setPendingSupportingDocs([]);
-  };
-
-  const handleResubmitCancel = () => {
-    setIsResubmitting(false);
-    setResubmitData({ description: '', justification: '', mitigation: '' });
-    setPendingSupportingDocs([]);
-    setError('');
   };
 
   // Supporting docs file handlers
@@ -449,14 +434,9 @@ export function ContraventionDetailPage() {
     setPendingSupportingDocs((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const removeExistingDoc = (index: number, isUserEdit: boolean) => {
-    if (isUserEdit) {
-      const currentDocs = userEditData.supportingDocs || [];
-      setUserEditData({ ...userEditData, supportingDocs: currentDocs.filter((_, i) => i !== index) });
-    } else {
-      const currentDocs = resubmitData.supportingDocs || [];
-      setResubmitData({ ...resubmitData, supportingDocs: currentDocs.filter((_, i) => i !== index) });
-    }
+  const removeExistingDoc = (index: number) => {
+    const currentDocs = userEditData.supportingDocs || [];
+    setUserEditData({ ...userEditData, supportingDocs: currentDocs.filter((_: string, i: number) => i !== index) });
   };
 
   // Handler for creating departed member during reassignment
@@ -596,24 +576,17 @@ export function ContraventionDetailPage() {
         actions={
           <div className="flex gap-2">
             {/* Admin edit button */}
-            {isAdmin && !isEditing && !isUserEditing && !isResubmitting && (
+            {isAdmin && !isEditing && !isUserEditing && (
               <Button onClick={handleEdit}>
                 <Edit2 className="w-4 h-4 mr-2" />
                 Edit
               </Button>
             )}
             {/* User edit button (for their own contraventions) */}
-            {!isAdmin && canUserEdit && !isUserEditing && !isResubmitting && (
+            {!isAdmin && canUserEdit && !isUserEditing && (
               <Button onClick={handleUserEdit}>
                 <Edit2 className="w-4 h-4 mr-2" />
                 Edit
-              </Button>
-            )}
-            {/* Resubmit button for rejected contraventions */}
-            {canUserEdit && contravention.status === 'REJECTED' && !isUserEditing && !isResubmitting && (
-              <Button variant="primary" onClick={handleResubmit}>
-                <RotateCcw className="w-4 h-4 mr-2" />
-                Resubmit
               </Button>
             )}
             {/* Admin editing controls */}
@@ -636,23 +609,33 @@ export function ContraventionDetailPage() {
                   <X className="w-4 h-4 mr-2" />
                   Cancel
                 </Button>
-                <Button onClick={handleUserEditSave} isLoading={userEditMutation.isPending || isUploadingDocs}>
-                  <Save className="w-4 h-4 mr-2" />
-                  Update
-                </Button>
-              </>
-            )}
-            {/* Resubmit controls */}
-            {isResubmitting && (
-              <>
-                <Button variant="secondary" onClick={handleResubmitCancel}>
-                  <X className="w-4 h-4 mr-2" />
-                  Cancel
-                </Button>
-                <Button onClick={handleResubmitSave} isLoading={resubmitMutation.isPending || isUploadingDocs}>
-                  <Save className="w-4 h-4 mr-2" />
-                  Resubmit for Approval
-                </Button>
+                {/* For rejected contraventions, show Save Draft and Resubmit options */}
+                {contravention.status === 'REJECTED' ? (
+                  <>
+                    <Button
+                      variant="secondary"
+                      onClick={handleUserEditSave}
+                      isLoading={userEditMutation.isPending}
+                      disabled={isUploadingDocs || resubmitMutation.isPending}
+                    >
+                      <Save className="w-4 h-4 mr-2" />
+                      Save Draft
+                    </Button>
+                    <Button
+                      onClick={handleUserEditResubmit}
+                      isLoading={resubmitMutation.isPending || isUploadingDocs}
+                      disabled={userEditMutation.isPending}
+                    >
+                      <RotateCcw className="w-4 h-4 mr-2" />
+                      Resubmit for Approval
+                    </Button>
+                  </>
+                ) : (
+                  <Button onClick={handleUserEditSave} isLoading={userEditMutation.isPending || isUploadingDocs}>
+                    <Save className="w-4 h-4 mr-2" />
+                    Update
+                  </Button>
+                )}
               </>
             )}
             <Button variant="secondary" onClick={() => navigate('/contraventions')}>
@@ -994,7 +977,7 @@ export function ContraventionDetailPage() {
                               </a>
                               <button
                                 type="button"
-                                onClick={() => removeExistingDoc(index, true)}
+                                onClick={() => removeExistingDoc(index)}
                                 className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
                               >
                                 <Trash2 className="w-4 h-4" />
@@ -1044,188 +1027,37 @@ export function ContraventionDetailPage() {
                         )}
                       </Button>
                     </div>
+
+                    {/* Approver Selection - only show for rejected contraventions */}
+                    {contravention.status === 'REJECTED' && (
+                      <div className="pt-4 border-t border-gray-200">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Select Approver <span className="text-red-500">*</span>
+                          <span className="text-xs font-normal text-gray-500 ml-1">(required to resubmit)</span>
+                        </label>
+                        <Select
+                          options={[
+                            { value: '', label: 'Select an approver...' },
+                            ...(approvers?.map((approver) => ({
+                              value: approver.email,
+                              label: `${approver.name}${approver.position ? ` - ${approver.position}` : ''} (${approver.role})`,
+                            })) || []),
+                          ]}
+                          value={userEditData.authorizerEmail || ''}
+                          onChange={(e) => setUserEditData({ ...userEditData, authorizerEmail: e.target.value })}
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          An approval request will be sent to the selected approver when you click "Resubmit for Approval".
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </Card>
             )}
 
-            {/* Resubmit Form */}
-            {isResubmitting && (
-              <Card>
-                <div className="p-6">
-                  <h2 className="text-lg font-semibold text-gray-900 mb-4">Resubmit Contravention</h2>
-                  <p className="text-sm text-gray-500 mb-4">
-                    Update your contravention details and select an approver to resubmit for approval.
-                  </p>
-
-                  <div className="space-y-4">
-                    {/* Description */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Description <span className="text-red-500">*</span>
-                      </label>
-                      <textarea
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[100px]"
-                        value={resubmitData.description || ''}
-                        onChange={(e) => setResubmitData({ ...resubmitData, description: e.target.value })}
-                        placeholder="Detailed description..."
-                      />
-                    </div>
-
-                    {/* Justification */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Justification for Non-Compliance <span className="text-red-500">*</span>
-                      </label>
-                      <textarea
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[100px]"
-                        value={resubmitData.justification || ''}
-                        onChange={(e) => setResubmitData({ ...resubmitData, justification: e.target.value })}
-                        placeholder="Explain why proper procedures were not followed..."
-                      />
-                    </div>
-
-                    {/* Mitigation */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Mitigation Measures <span className="text-red-500">*</span>
-                      </label>
-                      <textarea
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[100px]"
-                        value={resubmitData.mitigation || ''}
-                        onChange={(e) => setResubmitData({ ...resubmitData, mitigation: e.target.value })}
-                        placeholder="Describe steps to prevent this from happening again..."
-                      />
-                    </div>
-
-                    {/* Vendor */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Vendor</label>
-                      <Input
-                        type="text"
-                        value={resubmitData.vendor || ''}
-                        onChange={(e) => setResubmitData({ ...resubmitData, vendor: e.target.value })}
-                        placeholder="Vendor name"
-                      />
-                    </div>
-
-                    {/* Value */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Value (SGD)</label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={resubmitData.valueSgd || ''}
-                        onChange={(e) => setResubmitData({ ...resubmitData, valueSgd: e.target.value ? parseFloat(e.target.value) : undefined })}
-                        placeholder="0.00"
-                      />
-                    </div>
-
-                    {/* Approver Selection */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Select Approver <span className="text-red-500">*</span>
-                      </label>
-                      <Select
-                        options={[
-                          { value: '', label: 'Select an approver...' },
-                          ...(approvers?.map((approver) => ({
-                            value: approver.email,
-                            label: `${approver.name}${approver.position ? ` - ${approver.position}` : ''} (${approver.role})`,
-                          })) || []),
-                        ]}
-                        value={resubmitData.authorizerEmail || ''}
-                        onChange={(e) => setResubmitData({ ...resubmitData, authorizerEmail: e.target.value })}
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        An approval request will be sent to the selected approver.
-                      </p>
-                    </div>
-
-                    {/* Supporting Documents */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
-                        <Paperclip className="w-4 h-4" />
-                        Supporting Documents
-                      </label>
-
-                      {/* Existing uploaded documents */}
-                      {resubmitData.supportingDocs && resubmitData.supportingDocs.length > 0 && (
-                        <div className="mb-3 space-y-2">
-                          <p className="text-xs font-medium text-gray-600">Current:</p>
-                          {resubmitData.supportingDocs.map((url, index) => (
-                            <div key={index} className="flex items-center gap-2 p-2 bg-green-50 rounded-lg">
-                              <Paperclip className="w-4 h-4 text-green-600 flex-shrink-0" />
-                              <a
-                                href={url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-sm text-blue-600 hover:text-blue-800 truncate flex-1"
-                              >
-                                Document {index + 1}
-                                <ExternalLink className="w-3 h-3 inline ml-1" />
-                              </a>
-                              <button
-                                type="button"
-                                onClick={() => removeExistingDoc(index, false)}
-                                className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Pending files to upload */}
-                      {pendingSupportingDocs.length > 0 && (
-                        <div className="mb-3 space-y-2">
-                          <p className="text-xs font-medium text-gray-600">Pending upload:</p>
-                          {pendingSupportingDocs.map((file, index) => (
-                            <div key={index} className="flex items-center gap-2 p-2 bg-amber-50 rounded-lg">
-                              <Paperclip className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                              <span className="text-sm text-gray-700 truncate flex-1">{file.name}</span>
-                              <span className="text-xs text-gray-500">{(file.size / 1024).toFixed(1)} KB</span>
-                              <button
-                                type="button"
-                                onClick={() => removePendingDoc(index)}
-                                className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* File input - shared with User Edit Form */}
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        onClick={() => supportingDocsInputRef.current?.click()}
-                        disabled={isUploadingDocs}
-                      >
-                        {isUploadingDocs ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Uploading...
-                          </>
-                        ) : (
-                          <>
-                            <Upload className="w-4 h-4 mr-2" />
-                            Add Files
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            )}
-
-            {/* Hidden file input shared by both edit forms */}
-            {(isUserEditing || isResubmitting) && (
+            {/* Hidden file input for user edit form */}
+            {isUserEditing && (
               <input
                 ref={supportingDocsInputRef}
                 type="file"
