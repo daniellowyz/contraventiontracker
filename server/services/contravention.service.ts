@@ -518,6 +518,7 @@ export class ContraventionService {
           select: { id: true, name: true, email: true, department: true },
         },
         type: true,
+        team: { select: { id: true, name: true } },
         loggedBy: { select: { id: true, name: true } },
       },
     });
@@ -534,21 +535,26 @@ export class ContraventionService {
     }
 
     // Announce APPROVED contravention to management Slack channel
+    // Full details for transparency and learning
     getSlackService().then(async (slackSvc) => {
       if (slackSvc && slackSvc.isConfigured()) {
         await slackSvc.announceApprovedContravention({
           referenceNo: contravention.referenceNo,
           employeeName: updated.employee.name,
+          teamName: updated.team?.name || 'Personal',
           typeName: updated.type.name,
           severity: contravention.severity,
           points: contravention.points,
           valueSgd: contravention.valueSgd ? Number(contravention.valueSgd) : undefined,
+          vendor: contravention.vendor || undefined,
           incidentDate: contravention.incidentDate.toLocaleDateString('en-SG', {
             day: 'numeric',
-            month: 'long',
+            month: 'short',
             year: 'numeric',
           }),
           description: contravention.description,
+          justification: contravention.justification || 'Not provided',
+          mitigation: contravention.mitigation || 'Not provided',
           contraventionId: id,
         });
       }

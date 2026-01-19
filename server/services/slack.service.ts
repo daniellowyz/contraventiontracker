@@ -57,12 +57,16 @@ export interface NormalizedSlackUser {
 export interface ContraventionAnnouncement {
   referenceNo: string;
   employeeName: string;
+  teamName: string;
   typeName: string;
   severity: string;
   points: number;
   valueSgd?: number;
+  vendor?: string;
   incidentDate: string;
   description: string;
+  justification: string;
+  mitigation: string;
   contraventionId: string;
 }
 
@@ -289,6 +293,7 @@ export class SlackService {
   /**
    * Announce an APPROVED contravention to the management channel
    * This is called only when a contravention is fully approved (not during creation)
+   * Format focused on learning and transparency - shows full details including mitigation
    */
   async announceApprovedContravention(data: ContraventionAnnouncement): Promise<void> {
     if (!this.token || !this.managementChannelId) {
@@ -296,53 +301,79 @@ export class SlackService {
       return;
     }
 
-    const severityEmoji = this.getSeverityEmoji(data.severity);
+    const severityEmoji: Record<string, string> = {
+      'LOW': ':large_blue_circle:',
+      'MEDIUM': ':large_yellow_circle:',
+      'HIGH': ':large_orange_circle:',
+      'CRITICAL': ':red_circle:',
+    };
+
+    const emoji = severityEmoji[data.severity] || ':white_circle:';
     const viewUrl = `${this.appUrl}/contraventions/${data.contraventionId}`;
+
+    // Format value if present
+    const valueStr = data.valueSgd
+      ? `$${data.valueSgd.toLocaleString('en-SG', { minimumFractionDigits: 2 })}`
+      : null;
+
+    // Build the details line
+    let detailsLine = `${emoji} ${data.severity} • ${data.points} pts`;
+    if (valueStr) {
+      detailsLine += ` • ${valueStr}`;
+    }
+    if (data.vendor) {
+      detailsLine += ` • ${data.vendor}`;
+    }
 
     const blocks = [
       {
         type: 'header',
         text: {
           type: 'plain_text',
-          text: `${severityEmoji} Contravention Approved`,
+          text: `:clipboard: Contravention: ${data.referenceNo}`,
           emoji: true,
         },
       },
       {
         type: 'section',
-        fields: [
-          {
-            type: 'mrkdwn',
-            text: `*Reference:*\n${data.referenceNo}`,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*Employee:*\n${data.employeeName}`,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*Type:*\n${data.typeName}`,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*Severity:*\n${data.severity}`,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*Points:*\n${data.points}`,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*Value:*\n${data.valueSgd ? `$${data.valueSgd.toLocaleString()}` : 'N/A'}`,
-          },
-        ],
+        text: {
+          type: 'mrkdwn',
+          text: `*${data.employeeName}* • ${data.teamName}\n:calendar: ${data.incidentDate}`,
+        },
       },
       {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*Incident Date:* ${data.incidentDate}\n*Description:* ${data.description.substring(0, 200)}${data.description.length > 200 ? '...' : ''}`,
+          text: `*Type:* ${data.typeName}\n${detailsLine}`,
         },
+      },
+      {
+        type: 'divider',
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*What happened:*\n${data.description}`,
+        },
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*Why it happened:*\n${data.justification}`,
+        },
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*How we'll prevent this:*\n${data.mitigation}`,
+        },
+      },
+      {
+        type: 'divider',
       },
       {
         type: 'actions',
@@ -355,16 +386,13 @@ export class SlackService {
               emoji: true,
             },
             url: viewUrl,
-            action_id: 'view_contravention',
+            action_id: 'view_contravention_details',
           },
         ],
       },
-      {
-        type: 'divider',
-      },
     ];
 
-    const text = `Contravention approved: ${data.referenceNo} - ${data.typeName} (${data.severity})`;
+    const text = `Contravention ${data.referenceNo} for ${data.employeeName} - ${data.typeName}`;
 
     try {
       await this.postMessage(this.managementChannelId, blocks, text);
