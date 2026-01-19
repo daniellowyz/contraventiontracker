@@ -1,8 +1,8 @@
 import { Request } from 'express';
-import { Role, Severity, ContraventionStatus, DisputeStatus, EscalationLevel, TrainingStatus } from '@prisma/client';
+import { Role, ContraventionStatus, DisputeStatus, EscalationLevel, TrainingStatus } from '@prisma/client';
 
 // Re-export Prisma enums
-export { Role, Severity, ContraventionStatus, DisputeStatus, EscalationLevel, TrainingStatus };
+export { Role, ContraventionStatus, DisputeStatus, EscalationLevel, TrainingStatus };
 
 // User in JWT payload
 export interface JwtPayload {
@@ -42,11 +42,11 @@ export interface DashboardStats {
     totalContraventions: number;
     pendingAcknowledgment: number;
     thisMonth: number;
-    criticalIssues: number;
+    highPointsIssues: number;
     totalValueAffected: number;
   };
   byStatus: Record<ContraventionStatus, number>;
-  bySeverity: Record<Severity, number>;
+  byPoints: Record<string, number>;
   employeesAtRisk: {
     id: string;
     name: string;
@@ -101,7 +101,6 @@ export interface CreateContraventionInput {
 // Contravention Filters
 export interface ContraventionFilters {
   status?: ContraventionStatus;
-  severity?: Severity;
   typeId?: string;
   departmentId?: string;
   employeeId?: string;

@@ -1,34 +1,14 @@
 import prisma from '../config/database';
-import { ESCALATION_MATRIX, POINTS_CONFIG, SEVERITY_POINTS } from '../config/constants';
-import { EscalationLevel, Severity, PointsHistoryEntry } from '../types';
+import { ESCALATION_MATRIX, POINTS_CONFIG } from '../config/constants';
+import { EscalationLevel, PointsHistoryEntry } from '../types';
 import { addDays } from '../utils/dateUtils';
 
 export class PointsService {
   /**
-   * Calculate points for a contravention based on type and value
-   */
-  calculatePoints(defaultPoints: number, severity: Severity, valueSgd?: number): number {
-    let points = defaultPoints;
-
-    // Apply value modifiers
-    if (valueSgd) {
-      if (valueSgd > 100000 && severity !== 'CRITICAL') {
-        // Upgrade to critical-level points for high-value contraventions
-        points = SEVERITY_POINTS.CRITICAL;
-      } else if (valueSgd > 10000 && severity === 'MEDIUM') {
-        // Add 1 point for medium severity above $10k
-        points += 1;
-      }
-    }
-
-    return points;
-  }
-
-  /**
-   * Determine escalation level based on total points
-   * Level 1: 1-2 points - Verbal Advisory
-   * Level 2: 3-4 points - Mandatory Training
-   * Level 3: 5+ points - Performance Impact
+   * Determine escalation level (stage) based on total points
+   * Stage 1: 5 points - Notify reporting manager
+   * Stage 2: 10 points - Notify Department Head and Hong + Mandatory Training
+   * Stage 3: >15 points - Full escalation with procurement rights paused
    */
   getEscalationLevel(totalPoints: number): EscalationLevel | null {
     if (totalPoints >= ESCALATION_MATRIX.LEVEL_3.min) return 'LEVEL_3';
@@ -81,10 +61,10 @@ export class PointsService {
 
   /**
    * Add points to an employee and trigger escalation if needed
-   * Escalation logic:
-   * - Level 1: 1-2 points → Verbal Advisory
-   * - Level 2: 3-4 points → Mandatory Training
-   * - Level 3: 5+ points → Performance Impact
+   * Escalation logic (Stages of Correction):
+   * - Stage 1: 5 points → Notify reporting manager
+   * - Stage 2: 10 points → Notify Department Head and Hong + Mandatory Training
+   * - Stage 3: >15 points → Full escalation with procurement rights paused
    */
   async addPoints(
     employeeId: string,
@@ -113,7 +93,7 @@ export class PointsService {
     // Determine new level based purely on points
     const newLevel = this.getEscalationLevel(newTotal);
 
-    // Performance impact is now just Level 3 (5+ points)
+    // Stage 3 is the most serious (>15 points)
     const performanceImpact = newTotal >= ESCALATION_MATRIX.LEVEL_3.min;
 
     // Update points history
@@ -144,7 +124,7 @@ export class PointsService {
       await this.createEscalation(employeeId, newLevel, newTotal);
     }
 
-    // Trigger training at Level 2 (3-4 points)
+    // Trigger training at Stage 2 (10+ points)
     if (newTotal >= ESCALATION_MATRIX.LEVEL_2.min) {
       await this.triggerTraining(employeeId);
     }
@@ -158,10 +138,10 @@ export class PointsService {
   async createEscalation(employeeId: string, level: EscalationLevel, triggerPoints: number): Promise<void> {
     const details = this.getEscalationDetails(level);
 
-    // Calculate due date based on level
+    // Calculate due date based on stage
     let dueDays = 30; // Default for training
-    if (level === 'LEVEL_1') dueDays = 7; // Verbal advisory within a week
-    if (level === 'LEVEL_3') dueDays = 1; // Performance impact - immediate notification
+    if (level === 'LEVEL_1') dueDays = 7; // Stage 1 - notify manager within a week
+    if (level === 'LEVEL_3') dueDays = 1; // Stage 3 - immediate action required
 
     await prisma.escalation.create({
       data: {
@@ -175,7 +155,7 @@ export class PointsService {
   }
 
   /**
-   * Trigger mandatory training for an employee (at Level 2 / 3+ points)
+   * Trigger mandatory training for an employee (at Stage 2 / 10+ points)
    */
   async triggerTraining(employeeId: string): Promise<void> {
     // Get any active training course
@@ -572,8 +552,8 @@ export class PointsService {
           });
         }
 
-        // Trigger training if at Level 2 (3+ points) and no active training
-        if (expectedPoints >= 3) {
+        // Trigger training if at Stage 2 (10+ points) and no active training
+        if (expectedPoints >= ESCALATION_MATRIX.LEVEL_2.min) {
           await this.triggerTraining(employee.id);
         }
 
@@ -588,7 +568,7 @@ export class PointsService {
         });
       } else {
         // Even if points are correct, check if training needs to be triggered
-        if (expectedPoints >= 3) {
+        if (expectedPoints >= ESCALATION_MATRIX.LEVEL_2.min) {
           await this.triggerTraining(employee.id);
         }
 
@@ -639,8 +619,8 @@ export class PointsService {
     const points = user.pointsRecord;
     const currentLevel = points?.currentLevel;
 
-    // Calculate next level threshold
-    // Level 1: 1-2 pts, Level 2: 3-4 pts, Level 3: 5+ pts
+    // Calculate next stage threshold
+    // Stage 1: 5 pts, Stage 2: 10 pts, Stage 3: 16+ pts
     let nextLevelThreshold: number | null = null;
     let pointsToNextLevel: number | null = null;
     const currentPoints = points?.totalPoints || 0;
@@ -655,7 +635,7 @@ export class PointsService {
       nextLevelThreshold = ESCALATION_MATRIX.LEVEL_3.min;
       pointsToNextLevel = nextLevelThreshold - currentPoints;
     }
-    // Level 3 is the highest level
+    // Stage 3 is the highest level
 
     return {
       employeeId: user.id,

@@ -36,17 +36,12 @@ import {
   UserCheck,
   ClipboardCheck,
   RotateCcw,
-  Paperclip
+  Paperclip,
+  Sparkles,
+  Star
 } from 'lucide-react';
-import { Severity, ContraventionStatus } from '@/types';
+import { ContraventionStatus } from '@/types';
 import { uploadApprovalPdf } from '@/lib/supabase';
-
-const SEVERITY_OPTIONS = [
-  { value: 'LOW', label: 'Low' },
-  { value: 'MEDIUM', label: 'Medium' },
-  { value: 'HIGH', label: 'High' },
-  { value: 'CRITICAL', label: 'Critical' },
-];
 
 const STATUS_OPTIONS = [
   { value: 'PENDING_APPROVAL', label: 'Pending Approver Review' },
@@ -57,13 +52,6 @@ const STATUS_OPTIONS = [
 ];
 
 type BadgeVariant = 'default' | 'success' | 'warning' | 'danger' | 'info';
-
-const severityColors: Record<Severity, BadgeVariant> = {
-  LOW: 'success',
-  MEDIUM: 'warning',
-  HIGH: 'danger',
-  CRITICAL: 'danger',
-};
 
 const statusColors: Record<ContraventionStatus, BadgeVariant> = {
   PENDING_APPROVAL: 'warning',
@@ -90,7 +78,7 @@ export function ContraventionDetailPage() {
 
   const [isEditing, setIsEditing] = useState(false);
   const [isUserEditing, setIsUserEditing] = useState(false); // User edit mode (non-admin) - merged edit and resubmit
-  const [editData, setEditData] = useState<Partial<CreateContraventionInput> & { severity?: Severity; employeeId?: string; teamId?: string; status?: ContraventionStatus }>({});
+  const [editData, setEditData] = useState<Partial<CreateContraventionInput> & { employeeId?: string; teamId?: string; status?: ContraventionStatus; points?: number; justification?: string; mitigation?: string }>({});
   const [userEditData, setUserEditData] = useState<UserUpdateContraventionInput & { authorizerEmail?: string }>({});
   const [error, setError] = useState('');
   const [isUploading, setIsUploading] = useState(false);
@@ -100,6 +88,15 @@ export function ContraventionDetailPage() {
   const [newTeamName, setNewTeamName] = useState('');
   const [isPersonalEdit, setIsPersonalEdit] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Promote to permanent type state
+  const [showPromoteModal, setShowPromoteModal] = useState(false);
+  const [promoteData, setPromoteData] = useState({
+    name: '',
+    category: 'PROCUREMENT' as string,
+    defaultPoints: 1,
+  });
+  const [isPromoting, setIsPromoting] = useState(false);
 
   // URL input for supporting docs in user edit/resubmit
   const [newDocUrl, setNewDocUrl] = useState('');
@@ -221,12 +218,14 @@ export function ContraventionDetailPage() {
         vendor: contravention.vendor || '',
         valueSgd: contravention.valueSgd,
         description: contravention.description,
+        justification: contravention.justification || '',
+        mitigation: contravention.mitigation || '',
         summary: contravention.summary || '',
         incidentDate: contravention.incidentDate.split('T')[0],
-        severity: contravention.severity,
         employeeId: contravention.employee.id,
         teamId: contravention.team?.id || '',
         status: contravention.status,
+        points: contravention.points,
       });
       // Check if current team is the "Personal" team
       setIsPersonalEdit(contravention.team?.isPersonal || false);
@@ -271,6 +270,18 @@ export function ContraventionDetailPage() {
     // Include status change if changed (admin only)
     if (editData.status && editData.status !== contravention.status) {
       changes.status = editData.status;
+    }
+    // Include points change if changed (admin only, for "Others" type)
+    if (editData.points !== undefined && editData.points !== contravention.points) {
+      changes.points = editData.points;
+    }
+    // Include justification change if changed (admin only)
+    if ((editData.justification?.trim() || '') !== (contravention.justification || '')) {
+      changes.justification = editData.justification?.trim() || '';
+    }
+    // Include mitigation change if changed (admin only)
+    if ((editData.mitigation?.trim() || '') !== (contravention.mitigation || '')) {
+      changes.mitigation = editData.mitigation?.trim() || '';
     }
 
     // Check if any changes were made
@@ -592,13 +603,10 @@ export function ContraventionDetailPage() {
                 <h2 className="text-lg font-semibold text-gray-900 mb-4">Contravention Details</h2>
 
                 <div className="space-y-4">
-                  {/* Status and Severity Badges */}
+                  {/* Status and Points Badges */}
                   <div className="flex gap-3">
                     <Badge variant={statusColors[contravention.status]}>
                       {statusLabels[contravention.status]}
-                    </Badge>
-                    <Badge variant={severityColors[contravention.severity]}>
-                      {contravention.severity} Severity
                     </Badge>
                     <Badge variant="default">{contravention.points} Points</Badge>
                   </div>
@@ -606,8 +614,18 @@ export function ContraventionDetailPage() {
                   {/* Type */}
                   <div>
                     <label className="block text-sm font-medium text-gray-500">Type</label>
-                    <p className="text-gray-900">{contravention.type.name}</p>
+                    <p className="text-gray-900">
+                      {contravention.type.name}
+                      {contravention.customTypeName && (
+                        <span className="text-blue-600 ml-1">: {contravention.customTypeName}</span>
+                      )}
+                    </p>
                     <p className="text-sm text-gray-500">Category: {contravention.type.category}</p>
+                    {contravention.type.isOthers && (
+                      <p className="text-xs text-amber-600 mt-1">
+                        ⚠️ This is an "Others" type - Admin can adjust points
+                      </p>
+                    )}
                   </div>
 
                   {/* Summary */}
@@ -720,19 +738,39 @@ export function ContraventionDetailPage() {
                     </div>
                   )}
 
-                  {/* Justification */}
-                  {!isEditing && contravention.justification && (
+                  {/* Justification - Editable for admin, or read-only when not editing for users */}
+                  {(isAdmin || !isEditing) && (
                     <div>
                       <label className="block text-sm font-medium text-gray-500">Justification for Non-Compliance</label>
-                      <p className="text-gray-900 whitespace-pre-wrap">{contravention.justification}</p>
+                      {isEditing && isAdmin ? (
+                        <textarea
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                          rows={3}
+                          value={editData.justification || ''}
+                          onChange={(e) => setEditData({ ...editData, justification: e.target.value })}
+                          placeholder="Enter justification for non-compliance"
+                        />
+                      ) : (
+                        <p className="text-gray-900 whitespace-pre-wrap">{contravention.justification || <span className="text-gray-400 italic">Not provided</span>}</p>
+                      )}
                     </div>
                   )}
 
-                  {/* Mitigation */}
-                  {!isEditing && contravention.mitigation && (
+                  {/* Mitigation - Editable for admin, or read-only when not editing for users */}
+                  {(isAdmin || !isEditing) && (
                     <div>
                       <label className="block text-sm font-medium text-gray-500">Mitigation Measures</label>
-                      <p className="text-gray-900 whitespace-pre-wrap">{contravention.mitigation}</p>
+                      {isEditing && isAdmin ? (
+                        <textarea
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                          rows={3}
+                          value={editData.mitigation || ''}
+                          onChange={(e) => setEditData({ ...editData, mitigation: e.target.value })}
+                          placeholder="Enter mitigation measures"
+                        />
+                      ) : (
+                        <p className="text-gray-900 whitespace-pre-wrap">{contravention.mitigation || <span className="text-gray-400 italic">Not provided</span>}</p>
+                      )}
                     </div>
                   )}
 
@@ -1241,13 +1279,26 @@ export function ContraventionDetailPage() {
                         value={editData.status || ''}
                         onChange={(e) => setEditData({ ...editData, status: e.target.value as ContraventionStatus })}
                       />
+                      {/* Points adjustment - shown for all contraventions, especially useful for "Others" type */}
                       <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1 mt-3">Severity</label>
-                        <Select
-                          options={SEVERITY_OPTIONS}
-                          value={editData.severity || ''}
-                          onChange={(e) => setEditData({ ...editData, severity: e.target.value as Severity })}
+                        <label className="block text-xs font-medium text-gray-500 mb-1 mt-3">
+                          Points
+                          {contravention.type.isOthers && (
+                            <span className="text-amber-600 ml-1">(Custom type - adjust as needed)</span>
+                          )}
+                        </label>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={editData.points ?? ''}
+                          onChange={(e) => setEditData({ ...editData, points: e.target.value ? parseInt(e.target.value, 10) : undefined })}
+                          placeholder="Points"
                         />
+                        {editData.points !== contravention.points && (
+                          <p className="text-xs text-amber-600 mt-1">
+                            Changing points from {contravention.points} to {editData.points} will update the employee's total.
+                          </p>
+                        )}
                       </div>
                     </div>
                   ) : (
@@ -1256,10 +1307,10 @@ export function ContraventionDetailPage() {
                         {statusLabels[contravention.status]}
                       </Badge>
                       <div className="flex items-center gap-2 mt-2">
-                        <Badge variant={severityColors[contravention.severity]}>
-                          {contravention.severity}
+                        <Badge variant="default">
+                          {contravention.points} pts
                         </Badge>
-                        <span className="text-xs text-gray-500">severity</span>
+                        <span className="text-xs text-gray-500">assigned</span>
                       </div>
                     </div>
                   )}
@@ -1487,9 +1538,151 @@ export function ContraventionDetailPage() {
                 </div>
               </Card>
             )}
+
+            {/* Promote to Permanent Type - standalone card for "Others" type with customTypeName */}
+            {isAdmin && contravention.type.isOthers && contravention.customTypeName && (
+              <Card className="mt-4">
+                <div className="p-4">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-amber-500" />
+                    Custom Type Management
+                  </h3>
+                  <p className="text-xs text-gray-500 mb-3">
+                    This contravention uses a custom "Others" type: <span className="font-medium text-gray-700">{contravention.customTypeName}</span>
+                  </p>
+                  <Button
+                    variant="secondary"
+                    className="w-full justify-start"
+                    onClick={() => {
+                      setPromoteData({
+                        name: contravention.customTypeName || '',
+                        category: 'PROCUREMENT',
+                        defaultPoints: contravention.points,
+                      });
+                      setShowPromoteModal(true);
+                    }}
+                  >
+                    <Star className="w-4 h-4 mr-2" />
+                    Promote to Permanent Type
+                  </Button>
+                </div>
+              </Card>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Promote to Permanent Type Modal */}
+      {showPromoteModal && contravention && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <Star className="w-5 h-5 text-amber-500" />
+                Promote to Permanent Type
+              </h2>
+              <p className="text-sm text-gray-600 mb-4">
+                This will create a new permanent contravention type from "{contravention.customTypeName}" and update all
+                existing contraventions using this custom name to use the new type instead.
+              </p>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Type Name <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    type="text"
+                    value={promoteData.name}
+                    onChange={(e) => setPromoteData({ ...promoteData, name: e.target.value })}
+                    placeholder="Contravention type name"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                  <Select
+                    options={[
+                      { value: 'PROCUREMENT', label: 'Procurement' },
+                      { value: 'FINANCE', label: 'Finance' },
+                      { value: 'HR', label: 'HR' },
+                      { value: 'COMPLIANCE', label: 'Compliance' },
+                      { value: 'OPERATIONS', label: 'Operations' },
+                      { value: 'OTHER', label: 'Other' },
+                    ]}
+                    value={promoteData.category}
+                    onChange={(e) => setPromoteData({ ...promoteData, category: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Default Points</label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={promoteData.defaultPoints}
+                    onChange={(e) => setPromoteData({ ...promoteData, defaultPoints: parseInt(e.target.value, 10) || 0 })}
+                  />
+                </div>
+              </div>
+
+              {error && (
+                <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+                  {error}
+                </div>
+              )}
+
+              <div className="mt-6 flex justify-end gap-3">
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setShowPromoteModal(false);
+                    setError('');
+                  }}
+                  disabled={isPromoting}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={async () => {
+                    if (!promoteData.name.trim()) {
+                      setError('Type name is required');
+                      return;
+                    }
+
+                    setIsPromoting(true);
+                    setError('');
+
+                    try {
+                      await contraventionsApi.promoteToType(
+                        contravention.customTypeName!,
+                        promoteData.name.trim(),
+                        promoteData.category,
+                        promoteData.defaultPoints
+                      );
+
+                      // Refresh data
+                      queryClient.invalidateQueries({ queryKey: ['contravention', id] });
+                      queryClient.invalidateQueries({ queryKey: ['contraventions'] });
+                      queryClient.invalidateQueries({ queryKey: ['types'] });
+
+                      setShowPromoteModal(false);
+                    } catch (err: unknown) {
+                      setError(err instanceof Error ? err.message : 'Failed to promote type');
+                    } finally {
+                      setIsPromoting(false);
+                    }
+                  }}
+                  isLoading={isPromoting}
+                >
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Create Permanent Type
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

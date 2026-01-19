@@ -7,11 +7,10 @@ export interface DepartmentBreakdown {
   employeeCount: number;
   contraventionCount: number;
   totalPoints: number;
-  bySeverity: {
-    LOW: number;
-    MEDIUM: number;
-    HIGH: number;
-    CRITICAL: number;
+  byPoints: {
+    '1-2': number;
+    '3-4': number;
+    '5+': number;
   };
 }
 
@@ -33,7 +32,7 @@ export interface RepeatOffender {
   recentContraventions: {
     id: string;
     referenceNo: string;
-    severity: string;
+    points: number;
     incidentDate: string;
     type: { name: string };
   }[];

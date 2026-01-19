@@ -12,15 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { ArrowLeft, Save, Upload, Loader2, Plus, UserX, Paperclip, Trash2, ExternalLink } from 'lucide-react';
-import { Severity } from '@/types';
 import { uploadApprovalPdf, supabase } from '@/lib/supabase';
-
-const SEVERITY_OPTIONS = [
-  { value: 'LOW', label: 'Low' },
-  { value: 'MEDIUM', label: 'Medium' },
-  { value: 'HIGH', label: 'High' },
-  { value: 'CRITICAL', label: 'Critical' },
-];
 
 const APPROVAL_STATUS_OPTIONS = [
   { value: '', label: 'Select approval status...' },
@@ -37,6 +29,7 @@ export function ContraventionFormPage() {
     employeeId: string;
     typeId: string;
     teamId: string;
+    customTypeName: string;  // For "Others" type
     vendor: string;
     valueSgd: string;
     description: string;
@@ -44,7 +37,6 @@ export function ContraventionFormPage() {
     mitigation: string;
     summary: string;
     incidentDate: string;
-    severity: Severity;
     approvalStatus: string;
     approverEmail: string;
     supportingDocs: string[];
@@ -52,6 +44,7 @@ export function ContraventionFormPage() {
     employeeId: '',
     typeId: '',
     teamId: '',
+    customTypeName: '',
     vendor: '',
     valueSgd: '',
     description: '',
@@ -59,7 +52,6 @@ export function ContraventionFormPage() {
     mitigation: '',
     summary: '',
     incidentDate: new Date().toISOString().split('T')[0],
-    severity: 'MEDIUM',
     approvalStatus: '',
     approverEmail: '',
     supportingDocs: [],
@@ -177,6 +169,12 @@ export function ContraventionFormPage() {
       setError('Please select a contravention type');
       return;
     }
+    // Validate customTypeName for "Others" type
+    const selectedTypeForValidation = activeTypes.find((t) => t.id === formData.typeId);
+    if (selectedTypeForValidation?.isOthers && !formData.customTypeName.trim()) {
+      setError('Please specify the contravention type name for "Others"');
+      return;
+    }
     if (!formData.description.trim()) {
       setError('Please enter a description');
       return;
@@ -221,6 +219,11 @@ export function ContraventionFormPage() {
       mitigation: formData.mitigation.trim(),
       incidentDate: formData.incidentDate,
     };
+
+    // Add customTypeName for "Others" type
+    if (selectedTypeForValidation?.isOthers && formData.customTypeName.trim()) {
+      submitData.customTypeName = formData.customTypeName.trim();
+    }
 
     if (formData.vendor.trim()) {
       submitData.vendor = formData.vendor.trim();
@@ -312,13 +315,26 @@ export function ContraventionFormPage() {
     }
   };
 
+  // Filter to only show active types, sort with "Others" at the bottom
+  const activeTypes = (types?.filter((type) => type.isActive) || []).sort((a, b) => {
+    // "Others" type goes to the bottom
+    if (a.isOthers && !b.isOthers) return 1;
+    if (!a.isOthers && b.isOthers) return -1;
+    // Otherwise sort by name
+    return a.name.localeCompare(b.name);
+  });
+
   const typeOptions = [
     { value: '', label: 'Select a type...' },
-    ...(types?.map((type) => ({
+    ...(activeTypes.map((type) => ({
       value: type.id,
       label: `${type.name} (${type.category}) - ${type.defaultPoints} pts`,
-    })) || []),
+    }))),
   ];
+
+  // Check if selected type is "Others"
+  const selectedType = activeTypes.find((t) => t.id === formData.typeId);
+  const isOthersType = selectedType?.isOthers || false;
 
   const teamOptions = [
     { value: '', label: 'Select a team...' },
@@ -486,10 +502,38 @@ export function ContraventionFormPage() {
                 <Select
                   options={typeOptions}
                   value={formData.typeId}
-                  onChange={(e) => handleChange('typeId', e.target.value)}
+                  onChange={(e) => {
+                    handleChange('typeId', e.target.value);
+                    // Clear customTypeName when type changes
+                    handleChange('customTypeName', '');
+                  }}
                   disabled={typesLoading}
                 />
+                {selectedType && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    Default points: {selectedType.defaultPoints}
+                    {selectedType.isOthers && ' (Admin can adjust points after creation)'}
+                  </p>
+                )}
               </div>
+
+              {/* Custom Type Name - only shown for "Others" type */}
+              {isOthersType && (
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Specify Contravention Type <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    type="text"
+                    value={formData.customTypeName}
+                    onChange={(e) => handleChange('customTypeName', e.target.value)}
+                    placeholder="e.g., Unauthorized software purchase"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Describe the specific type of contravention. This will be reviewed by admin who may promote it to a permanent type if it becomes common.
+                  </p>
+                </div>
+              )}
 
               {/* Team (required) */}
               <div className="md:col-span-2">
@@ -572,18 +616,6 @@ export function ContraventionFormPage() {
                   value={formData.incidentDate}
                   onChange={(e) => handleChange('incidentDate', e.target.value)}
                   required
-                />
-              </div>
-
-              {/* Severity */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Severity
-                </label>
-                <Select
-                  options={SEVERITY_OPTIONS}
-                  value={formData.severity}
-                  onChange={(e) => handleChange('severity', e.target.value)}
                 />
               </div>
 

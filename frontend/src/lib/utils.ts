@@ -31,19 +31,15 @@ export function formatDateTime(date: string | Date): string {
   }).format(new Date(date));
 }
 
-export function getSeverityColor(severity: string): string {
-  switch (severity) {
-    case 'LOW':
-      return 'bg-green-100 text-green-800';
-    case 'MEDIUM':
-      return 'bg-yellow-100 text-yellow-800';
-    case 'HIGH':
-      return 'bg-orange-100 text-orange-800';
-    case 'CRITICAL':
-      return 'bg-red-100 text-red-800';
-    default:
-      return 'bg-gray-100 text-gray-800';
+export function getPointsColor(points: number): string {
+  if (points >= 5) {
+    return 'bg-red-100 text-red-800';
+  } else if (points >= 3) {
+    return 'bg-orange-100 text-orange-800';
+  } else if (points >= 1) {
+    return 'bg-yellow-100 text-yellow-800';
   }
+  return 'bg-gray-100 text-gray-800';
 }
 
 export function getStatusColor(status: string): string {
@@ -63,11 +59,11 @@ export function getLevelName(level: string | null): string {
   if (!level) return 'None';
   switch (level) {
     case 'LEVEL_1':
-      return 'Verbal Advisory';
+      return 'Stage 1 - Notify Manager';
     case 'LEVEL_2':
-      return 'Mandatory Training';
+      return 'Stage 2 - Training Required';
     case 'LEVEL_3':
-      return 'Performance Impact';
+      return 'Stage 3 - Procurement Paused';
     default:
       return level;
   }

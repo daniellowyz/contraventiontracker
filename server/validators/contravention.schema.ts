@@ -4,6 +4,7 @@ export const createContraventionSchema = z.object({
   employeeId: z.string().min(1, 'Employee ID is required'),
   typeId: z.string().min(1, 'Contravention type is required'),
   teamId: z.string().min(1, 'Team is required'),  // Required team for tracking
+  customTypeName: z.string().optional(),  // For "Others" type - custom contravention name
   vendor: z.string().optional(),
   valueSgd: z.number().optional(),
   description: z.string().min(1, 'Description is required'),
@@ -22,6 +23,7 @@ export const createContraventionSchema = z.object({
 export const updateContraventionSchema = z.object({
   employeeId: z.string().optional(), // Admin can reassign to different employee
   teamId: z.string().nullable().optional(), // Admin can reassign to different team (null to remove)
+  customTypeName: z.string().nullable().optional(),  // For "Others" type - custom contravention name
   vendor: z.string().optional(),
   valueSgd: z.number().optional(),
   description: z.string().optional(),

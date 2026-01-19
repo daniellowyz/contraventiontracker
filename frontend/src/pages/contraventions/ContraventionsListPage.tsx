@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
 import { Input } from '@/components/ui/Input';
 import { MonthYearPicker } from '@/components/ui/MonthYearPicker';
-import { formatDate, formatCurrency, getSeverityColor, getStatusColor } from '@/lib/utils';
+import { formatDate, formatCurrency, getStatusColor } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
 import { Plus, ChevronLeft, ChevronRight, Eye, Trash2, FileWarning } from 'lucide-react';
 
@@ -26,15 +26,6 @@ const STATUS_LABELS: Record<string, string> = {
   COMPLETED: 'Completed',
 };
 
-const SEVERITY_OPTIONS = [
-  { value: '', label: 'All Severity' },
-  { value: 'LOW', label: 'Low' },
-  { value: 'MEDIUM', label: 'Medium' },
-  { value: 'HIGH', label: 'High' },
-  { value: 'CRITICAL', label: 'Critical' },
-];
-
-
 export function ContraventionsListPage() {
   const { isAdmin } = useAuthStore();
   const navigate = useNavigate();
@@ -45,7 +36,6 @@ export function ContraventionsListPage() {
   const getInitialFilters = (): ContraventionFilters => {
     const dateFrom = searchParams.get('dateFrom') || undefined;
     const dateTo = searchParams.get('dateTo') || undefined;
-    const severity = searchParams.get('severity') || undefined;
     const status = searchParams.get('status') || undefined;
     const search = searchParams.get('search') || undefined;
     const page = parseInt(searchParams.get('page') || '1', 10);
@@ -53,7 +43,6 @@ export function ContraventionsListPage() {
     return {
       dateFrom,
       dateTo,
-      severity,
       status,
       search,
       page,
@@ -70,7 +59,6 @@ export function ContraventionsListPage() {
     const params = new URLSearchParams();
     if (filters.dateFrom) params.set('dateFrom', filters.dateFrom);
     if (filters.dateTo) params.set('dateTo', filters.dateTo);
-    if (filters.severity) params.set('severity', filters.severity);
     if (filters.status) params.set('status', filters.status);
     if (filters.search) params.set('search', filters.search);
     if (filters.page && filters.page > 1) params.set('page', filters.page.toString());
@@ -204,13 +192,6 @@ export function ContraventionsListPage() {
                 onChange={(e) => handleFilterChange('status', e.target.value)}
               />
             </div>
-            <div className="w-48">
-              <Select
-                options={SEVERITY_OPTIONS}
-                value={filters.severity || ''}
-                onChange={(e) => handleFilterChange('severity', e.target.value)}
-              />
-            </div>
             <div className="flex-1">
               <Input
                 placeholder="Search by reference, description, or employee..."
@@ -257,7 +238,6 @@ export function ContraventionsListPage() {
                       <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Reference</th>
                       <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Employee</th>
                       <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Type</th>
-                      <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Severity</th>
                       <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Points</th>
                       <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Value</th>
                       <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
@@ -281,11 +261,6 @@ export function ContraventionsListPage() {
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-500">
                           {contravention.type.name}
-                        </td>
-                        <td className="px-6 py-4">
-                          <Badge className={getSeverityColor(contravention.severity)}>
-                            {contravention.severity}
-                          </Badge>
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-900 font-medium">
                           {contravention.points}

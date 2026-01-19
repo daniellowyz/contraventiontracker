@@ -29,6 +29,10 @@ import {
   UserCog,
   MessageSquare,
   Loader2,
+  ListChecks,
+  ArrowUpCircle,
+  Edit2,
+  X,
 } from 'lucide-react';
 
 type SettingsTab = 'profile' | 'notifications' | 'security' | 'users' | 'admin';
@@ -81,6 +85,28 @@ interface SlackSyncResult {
   deactivated: number;
   skipped: number;
   errors: string[];
+}
+
+interface ContraventionTypeData {
+  id: string;
+  name: string;
+  category: string;
+  description: string | null;
+  defaultPoints: number;
+  isActive: boolean;
+  isOthers: boolean;
+}
+
+interface OthersUsageItem {
+  customTypeName: string;
+  count: number;
+  contraventions: Array<{
+    id: string;
+    referenceNo: string;
+    points: number;
+    createdAt: string;
+    employee: { name: string };
+  }>;
 }
 
 interface DuplicateUser {
@@ -348,6 +374,83 @@ export function SettingsPage() {
     enabled: isAdmin && activeTab === 'users',
   });
 
+  // Admin: Contravention types query
+  const { data: contraventionTypes, refetch: refetchTypes } = useQuery({
+    queryKey: ['contravention-types'],
+    queryFn: async () => {
+      const response = await client.get('/admin/types');
+      return response.data.data as ContraventionTypeData[];
+    },
+    enabled: isAdmin && activeTab === 'admin',
+  });
+
+  // Admin: Others usage query (custom type names used with "Others" type)
+  const { data: othersUsage, refetch: refetchOthersUsage } = useQuery({
+    queryKey: ['others-usage'],
+    queryFn: async () => {
+      const response = await client.get('/admin/types/others-usage');
+      return response.data.data as OthersUsageItem[];
+    },
+    enabled: isAdmin && activeTab === 'admin',
+  });
+
+  // Admin: Edit type state
+  const [editingTypeId, setEditingTypeId] = useState<string | null>(null);
+  const [editTypeData, setEditTypeData] = useState<{ defaultPoints: number }>({ defaultPoints: 0 });
+
+  // Admin: Promote type state
+  const [promoteData, setPromoteData] = useState<{
+    customTypeName: string;
+    category: string;
+    defaultPoints: number;
+  } | null>(null);
+
+  // Admin: Update type mutation
+  const updateTypeMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: { defaultPoints?: number; isActive?: boolean } }) => {
+      const response = await client.patch(`/admin/types/${id}`, data);
+      return response.data;
+    },
+    onSuccess: () => {
+      refetchTypes();
+      setEditingTypeId(null);
+    },
+    onError: (error: Error) => {
+      alert(error.message || 'Failed to update type');
+    },
+  });
+
+  // Admin: Promote Others to permanent type mutation
+  const promoteTypeMutation = useMutation({
+    mutationFn: async (data: { customTypeName: string; category: string; defaultPoints: number }) => {
+      const response = await client.post('/admin/types/promote', data);
+      return response.data;
+    },
+    onSuccess: (data) => {
+      alert(data.message || 'Type promoted successfully');
+      refetchTypes();
+      refetchOthersUsage();
+      setPromoteData(null);
+    },
+    onError: (error: Error & { response?: { data?: { error?: string } } }) => {
+      alert(error.response?.data?.error || error.message || 'Failed to promote type');
+    },
+  });
+
+  // Admin: Delete type mutation
+  const deleteTypeMutation = useMutation({
+    mutationFn: async (typeId: string) => {
+      const response = await client.delete(`/admin/types/${typeId}`);
+      return response.data;
+    },
+    onSuccess: () => {
+      refetchTypes();
+    },
+    onError: (error: Error & { response?: { data?: { error?: string } } }) => {
+      alert(error.response?.data?.error || error.message || 'Failed to delete type');
+    },
+  });
+
   // Admin: Reactivate user mutation
   const reactivateUserMutation = useMutation({
     mutationFn: async (userId: string) => {
@@ -383,12 +486,11 @@ export function SettingsPage() {
       const data = response.data.data;
 
       // Convert to CSV
-      const headers = ['Reference No', 'Employee', 'Type', 'Severity', 'Points', 'Status', 'Date', 'Value (SGD)'];
-      const rows = data.map((c: { referenceNo: string; employee?: { name: string }; type?: { name: string }; severity: string; points: number; status: string; incidentDate: string; valueSgd?: number }) => [
+      const headers = ['Reference No', 'Employee', 'Type', 'Points', 'Status', 'Date', 'Value (SGD)'];
+      const rows = data.map((c: { referenceNo: string; employee?: { name: string }; type?: { name: string }; points: number; status: string; incidentDate: string; valueSgd?: number }) => [
         c.referenceNo,
         c.employee?.name || 'N/A',
         c.type?.name || 'N/A',
-        c.severity,
         c.points,
         c.status,
         new Date(c.incidentDate).toLocaleDateString(),
@@ -615,7 +717,7 @@ export function SettingsPage() {
                     <label className="flex items-center justify-between py-2">
                       <div>
                         <span className="text-sm text-gray-900">Escalation Alerts</span>
-                        <p className="text-xs text-gray-500">Receive email when you reach a new escalation level</p>
+                        <p className="text-xs text-gray-500">Receive email when you reach a new escalation stage</p>
                       </div>
                       <input
                         type="checkbox"
@@ -1239,7 +1341,7 @@ export function SettingsPage() {
                             <tr>
                               <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Employee</th>
                               <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Current Points</th>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Escalation Level</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Escalation Stage</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-200">
@@ -1263,6 +1365,253 @@ export function SettingsPage() {
                       <div className="p-8 text-center text-gray-500">
                         <Clock className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                         <p>No employees currently have points</p>
+                      </div>
+                    )}
+                  </div>
+                </Card>
+
+                {/* Contravention Types Management */}
+                <Card>
+                  <div className="p-6">
+                    <div className="flex items-center gap-2 mb-4">
+                      <ListChecks className="w-5 h-5 text-indigo-500" />
+                      <h2 className="text-lg font-semibold text-gray-900">Contravention Types</h2>
+                    </div>
+
+                    <p className="text-sm text-gray-600 mb-4">
+                      Manage contravention types and their default points. Types can be edited in Supabase directly or via this interface.
+                    </p>
+
+                    {/* Types Table */}
+                    {contraventionTypes && contraventionTypes.length > 0 ? (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead className="bg-gray-50 border-b border-gray-200">
+                            <tr>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Points</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-200">
+                            {contraventionTypes.filter(t => t.isActive).map((type) => (
+                              <tr key={type.id} className="hover:bg-gray-50">
+                                <td className="px-4 py-2">
+                                  <p className="font-medium text-gray-900">{type.name}</p>
+                                  {type.isOthers && (
+                                    <span className="text-xs text-amber-600">Custom type names required</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-2 text-gray-700">{type.category}</td>
+                                <td className="px-4 py-2">
+                                  {editingTypeId === type.id ? (
+                                    <Input
+                                      type="number"
+                                      min={0}
+                                      value={editTypeData.defaultPoints}
+                                      onChange={(e) => setEditTypeData({ ...editTypeData, defaultPoints: parseInt(e.target.value) || 0 })}
+                                      className="w-20"
+                                    />
+                                  ) : (
+                                    <span className="font-medium">{type.defaultPoints} pts</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-2">
+                                  <Badge className={type.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}>
+                                    {type.isActive ? 'Active' : 'Inactive'}
+                                  </Badge>
+                                </td>
+                                <td className="px-4 py-2">
+                                  {editingTypeId === type.id ? (
+                                    <div className="flex gap-2">
+                                      <Button
+                                        variant="primary"
+                                        size="sm"
+                                        onClick={() => updateTypeMutation.mutate({
+                                          id: type.id,
+                                          data: {
+                                            defaultPoints: editTypeData.defaultPoints,
+                                          },
+                                        })}
+                                        disabled={updateTypeMutation.isPending}
+                                      >
+                                        <Save className="w-3 h-3" />
+                                      </Button>
+                                      <Button
+                                        variant="secondary"
+                                        size="sm"
+                                        onClick={() => setEditingTypeId(null)}
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </Button>
+                                    </div>
+                                  ) : (
+                                    <div className="flex gap-2">
+                                      <Button
+                                        variant="secondary"
+                                        size="sm"
+                                        onClick={() => {
+                                          setEditingTypeId(type.id);
+                                          setEditTypeData({
+                                            defaultPoints: type.defaultPoints,
+                                          });
+                                        }}
+                                      >
+                                        <Edit2 className="w-3 h-3 mr-1" />
+                                        Edit
+                                      </Button>
+                                      {!type.isOthers && (
+                                        <Button
+                                          variant="secondary"
+                                          size="sm"
+                                          onClick={() => {
+                                            if (confirm(`Delete type "${type.name}"?\n\nThis will only work if no contraventions are using this type.`)) {
+                                              deleteTypeMutation.mutate(type.id);
+                                            }
+                                          }}
+                                          disabled={deleteTypeMutation.isPending}
+                                          className="text-red-600 hover:text-red-700"
+                                        >
+                                          <X className="w-3 h-3" />
+                                        </Button>
+                                      )}
+                                    </div>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="p-8 text-center text-gray-500">
+                        <ListChecks className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                        <p>No contravention types found</p>
+                      </div>
+                    )}
+                  </div>
+                </Card>
+
+                {/* Promote "Others" Custom Types */}
+                <Card>
+                  <div className="p-6">
+                    <div className="flex items-center gap-2 mb-4">
+                      <ArrowUpCircle className="w-5 h-5 text-green-500" />
+                      <h2 className="text-lg font-semibold text-gray-900">Promote "Others" to Permanent Type</h2>
+                    </div>
+
+                    <p className="text-sm text-gray-600 mb-4">
+                      When users select "Others" type, they provide a custom type name. If a custom name becomes common,
+                      you can promote it to a permanent contravention type.
+                    </p>
+
+                    {/* Promote Form */}
+                    {promoteData && (
+                      <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+                        <h4 className="font-medium text-green-800 mb-3">Create New Type: "{promoteData.customTypeName}"</h4>
+                        <div className="grid grid-cols-3 gap-4">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Category</label>
+                            <select
+                              value={promoteData.category}
+                              onChange={(e) => setPromoteData({ ...promoteData, category: e.target.value })}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                            >
+                              <option value="DC_PROCUREMENT">DC Procurement</option>
+                              <option value="MANPOWER">Manpower</option>
+                              <option value="SIGNATORY">Signatory</option>
+                              <option value="SVP">SVP</option>
+                              <option value="OTHER">Other</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Default Points</label>
+                            <Input
+                              type="number"
+                              min={0}
+                              value={promoteData.defaultPoints}
+                              onChange={(e) => setPromoteData({ ...promoteData, defaultPoints: parseInt(e.target.value) || 0 })}
+                            />
+                          </div>
+                        </div>
+                        <div className="flex gap-2 mt-4">
+                          <Button
+                            variant="primary"
+                            onClick={() => promoteTypeMutation.mutate(promoteData)}
+                            disabled={promoteTypeMutation.isPending}
+                          >
+                            {promoteTypeMutation.isPending ? 'Creating...' : 'Create Type & Migrate'}
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            onClick={() => setPromoteData(null)}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-2">
+                          Existing contraventions with this custom name will be migrated to the new type.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Others Usage Table */}
+                    {othersUsage && othersUsage.length > 0 ? (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead className="bg-gray-50 border-b border-gray-200">
+                            <tr>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Custom Type Name</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Usage Count</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Recent Contraventions</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-200">
+                            {othersUsage.map((item) => (
+                              <tr key={item.customTypeName} className="hover:bg-gray-50">
+                                <td className="px-4 py-2 font-medium text-gray-900">{item.customTypeName}</td>
+                                <td className="px-4 py-2">
+                                  <Badge className={item.count >= 3 ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-800'}>
+                                    {item.count} time(s)
+                                  </Badge>
+                                </td>
+                                <td className="px-4 py-2 text-gray-600 text-xs">
+                                  {item.contraventions.slice(0, 2).map((c) => (
+                                    <div key={c.id}>
+                                      {c.referenceNo} - {c.employee.name}
+                                    </div>
+                                  ))}
+                                  {item.contraventions.length > 2 && (
+                                    <span className="text-gray-400">+{item.contraventions.length - 2} more</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-2">
+                                  <Button
+                                    variant="primary"
+                                    size="sm"
+                                    onClick={() => setPromoteData({
+                                      customTypeName: item.customTypeName,
+                                      category: 'DC_PROCUREMENT',
+                                      defaultPoints: 2,
+                                    })}
+                                    disabled={promoteData !== null}
+                                  >
+                                    <ArrowUpCircle className="w-3 h-3 mr-1" />
+                                    Promote
+                                  </Button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="p-8 text-center text-gray-500">
+                        <ArrowUpCircle className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                        <p>No custom "Others" type names have been used yet</p>
                       </div>
                     )}
                   </div>

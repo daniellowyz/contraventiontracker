@@ -1,5 +1,5 @@
 import prisma from '../config/database';
-import { ContraventionStatus, Severity } from '../types';
+import { ContraventionStatus } from '../types';
 import { AppError } from '../middleware/errorHandler';
 import generateReferenceNumber from '../utils/generateRefNo';
 import pointsService from './points.service';
@@ -21,6 +21,11 @@ export class ContraventionService {
       throw new AppError('Invalid contravention type', 400);
     }
 
+    // Validate customTypeName for "Others" type
+    if (contraventionType.isOthers && !data.customTypeName?.trim()) {
+      throw new AppError('Custom type name is required for "Others" contravention type', 400);
+    }
+
     // Verify employee exists
     const employee = await prisma.user.findUnique({
       where: { id: data.employeeId },
@@ -30,13 +35,8 @@ export class ContraventionService {
       throw new AppError('Employee not found', 404);
     }
 
-    // Calculate severity and points
-    const severity = contraventionType.defaultSeverity;
-    const points = pointsService.calculatePoints(
-      contraventionType.defaultPoints,
-      severity,
-      data.valueSgd
-    );
+    // Calculate points (use custom points if provided, otherwise use type default)
+    const points = data.points !== undefined ? data.points : contraventionType.defaultPoints;
 
     // Generate reference number
     const referenceNo = await generateReferenceNumber();
@@ -54,13 +54,14 @@ export class ContraventionService {
         employeeId: data.employeeId,
         loggedById,
         typeId: data.typeId,
+        teamId: data.teamId,  // Team for tracking
+        customTypeName: data.customTypeName,  // For "Others" type
         vendor: data.vendor,
         valueSgd: data.valueSgd,
         description: data.description,
         justification: data.justification,
         mitigation: data.mitigation,
         summary: data.summary,
-        severity,
         points,
         incidentDate: new Date(data.incidentDate),
         evidenceUrls: data.evidenceUrls || [],
@@ -114,7 +115,7 @@ export class ContraventionService {
           referenceNo: contravention.referenceNo,
           employeeName: employee.name,
           typeName: contraventionType.name,
-          severity: severity,
+          points: points,
         }).catch((err) => {
           console.error('Failed to send approval notification:', err);
         });
@@ -136,7 +137,6 @@ export class ContraventionService {
       contraventionId: contravention.id,
       referenceNo: contravention.referenceNo,
       typeName: contraventionType.name,
-      severity: severity,
       points: points,
     }).catch((err) => {
       console.error('Failed to send contravention notification:', err);
@@ -195,12 +195,11 @@ export class ContraventionService {
    * Get all contraventions with filters and pagination
    */
   async findAll(filters: ContraventionFiltersInput) {
-    const { page, limit, status, severity, typeId, departmentId, employeeId, dateFrom, dateTo, search } = filters;
+    const { page, limit, status, typeId, departmentId, employeeId, dateFrom, dateTo, search } = filters;
 
     const where: Record<string, unknown> = {};
 
     if (status) where.status = status;
-    if (severity) where.severity = severity;
     if (typeId) where.typeId = typeId;
     if (employeeId) where.employeeId = employeeId;
 
@@ -308,6 +307,31 @@ export class ContraventionService {
       throw new AppError('Contravention not found', 404);
     }
 
+    // Handle points adjustment (before employee reassignment in case both happen)
+    if (data.points !== undefined && data.points !== contravention.points) {
+      const pointsDiff = data.points - contravention.points;
+      const targetEmployeeId = data.employeeId || contravention.employeeId;
+
+      // Adjust the employee's total points by the difference
+      const pointsRecord = await prisma.employeePoints.findUnique({
+        where: { employeeId: targetEmployeeId },
+      });
+
+      if (pointsRecord) {
+        const newTotal = Math.max(0, pointsRecord.totalPoints + pointsDiff);
+        const newLevel = pointsService.getEscalationLevel(newTotal);
+
+        await prisma.employeePoints.update({
+          where: { employeeId: targetEmployeeId },
+          data: {
+            totalPoints: newTotal,
+            currentLevel: newLevel,
+          },
+        });
+        console.log(`Adjusted points for contravention ${contravention.referenceNo}: ${contravention.points} → ${data.points} (diff: ${pointsDiff})`);
+      }
+    }
+
     // Handle employee reassignment with points transfer
     if (data.employeeId && data.employeeId !== contravention.employeeId) {
       // Verify new employee exists
@@ -320,7 +344,8 @@ export class ContraventionService {
       }
 
       // Transfer points: remove from old employee, add to new employee
-      const points = contravention.points;
+      // Use the updated points value if provided, otherwise use the original
+      const pointsToTransfer = data.points !== undefined ? data.points : contravention.points;
 
       // Remove points from old employee
       const oldPointsRecord = await prisma.employeePoints.findUnique({
@@ -328,7 +353,7 @@ export class ContraventionService {
       });
 
       if (oldPointsRecord) {
-        const newOldTotal = Math.max(0, oldPointsRecord.totalPoints - points);
+        const newOldTotal = Math.max(0, oldPointsRecord.totalPoints - contravention.points);
         const newOldLevel = pointsService.getEscalationLevel(newOldTotal);
 
         await prisma.employeePoints.update({
@@ -343,7 +368,7 @@ export class ContraventionService {
       // Add points to new employee
       await pointsService.addPoints(
         data.employeeId,
-        points,
+        pointsToTransfer,
         `Reassigned: ${contravention.referenceNo}`,
         contravention.id
       );

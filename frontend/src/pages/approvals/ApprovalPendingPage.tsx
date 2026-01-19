@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import api from '@/api/client';
-import { ApprovalRequestStatus, Severity } from '@/types';
+import { ApprovalRequestStatus } from '@/types';
 import { UserPlus, Check, X } from 'lucide-react';
 
 interface ContraventionApproval {
@@ -21,7 +21,6 @@ interface ContraventionApproval {
     id: string;
     referenceNo: string;
     description: string;
-    severity: Severity;
     points: number;
     incidentDate: string;
     status: string;
@@ -58,13 +57,6 @@ interface ApproverRequest {
   approverRequestStatus: string;
   createdAt: string;
 }
-
-const severityColors: Record<Severity, 'default' | 'warning' | 'danger' | 'info'> = {
-  LOW: 'default',
-  MEDIUM: 'warning',
-  HIGH: 'danger',
-  CRITICAL: 'info',
-};
 
 export function ApprovalPendingPage() {
   const { user, isAdmin } = useAuthStore();
@@ -262,9 +254,6 @@ export function ApprovalPendingPage() {
                       >
                         {approval.contravention.referenceNo}
                       </Link>
-                      <Badge variant={severityColors[approval.contravention.severity]}>
-                        {approval.contravention.severity}
-                      </Badge>
                       <Badge variant="default">{approval.contravention.points} pts</Badge>
                     </div>
                     <p className="text-gray-700 mb-2">{approval.contravention.description}</p>

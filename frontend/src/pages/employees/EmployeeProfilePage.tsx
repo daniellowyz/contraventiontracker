@@ -5,7 +5,7 @@ import { Header } from '@/components/layout/Header';
 import { Card, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { formatDate, getSeverityColor, getStatusColor, getLevelName, getLevelColor } from '@/lib/utils';
+import { formatDate, getStatusColor, getLevelName, getLevelColor } from '@/lib/utils';
 import { User, AlertTriangle, GraduationCap, ArrowLeft } from 'lucide-react';
 
 export function EmployeeProfilePage() {
@@ -99,13 +99,13 @@ export function EmployeeProfilePage() {
                 </div>
                 {pointsSummary.pointsToNextLevel && (
                   <p className="text-xs text-gray-500 mt-1">
-                    {pointsSummary.pointsToNextLevel} points to next level
+                    {pointsSummary.pointsToNextLevel} points to next stage
                   </p>
                 )}
               </div>
 
               <div className="pt-4 border-t">
-                <p className="text-sm text-gray-600 mb-2">Current Level</p>
+                <p className="text-sm text-gray-600 mb-2">Current Stage</p>
                 {pointsSummary.currentLevel ? (
                   <Badge className={getLevelColor(pointsSummary.currentLevel)}>
                     {getLevelName(pointsSummary.currentLevel)}
@@ -193,7 +193,6 @@ export function EmployeeProfilePage() {
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Reference</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Severity</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Points</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
@@ -208,9 +207,6 @@ export function EmployeeProfilePage() {
                         </Link>
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-500">{c.type.name}</td>
-                      <td className="px-4 py-3">
-                        <Badge className={getSeverityColor(c.severity)}>{c.severity}</Badge>
-                      </td>
                       <td className="px-4 py-3 text-sm font-medium text-gray-900">+{c.points}</td>
                       <td className="px-4 py-3">
                         <Badge className={getStatusColor(c.status)}>{c.status}</Badge>

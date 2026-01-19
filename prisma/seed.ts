@@ -38,30 +38,118 @@ async function main() {
   }
   console.log('Departments created');
 
-  // Create Contravention Types
+  // Create Contravention Types (Updated January 2026)
+  // Reference: User-provided contravention type list with points
   const contraventionTypes = [
-    { category: 'DC_PROCUREMENT', name: 'Missing AOR', defaultSeverity: 'HIGH' as Severity, defaultPoints: 3 },
-    { category: 'SVP', name: 'Different vendor on AOR versus purchase', defaultSeverity: 'HIGH' as Severity, defaultPoints: 3 },
-    { category: 'SVP', name: 'Late Personal Claims', defaultSeverity: 'LOW' as Severity, defaultPoints: 1 },
-    { category: 'DC_PROCUREMENT', name: 'Ownership Lapse', defaultSeverity: 'MEDIUM' as Severity, defaultPoints: 2 },
-    { category: 'DC_PROCUREMENT', name: 'Process-driven exception', defaultSeverity: 'LOW' as Severity, defaultPoints: 0 },
-    { category: 'DC_PROCUREMENT', name: 'Multiple Contraventions', defaultSeverity: 'CRITICAL' as Severity, defaultPoints: 5 },
-    { category: 'MANPOWER', name: 'Insufficient AOR value for manpower blanket', defaultSeverity: 'HIGH' as Severity, defaultPoints: 3 },
-    { category: 'DC_PROCUREMENT', name: 'No approval before purchase', defaultSeverity: 'CRITICAL' as Severity, defaultPoints: 5 },
-    { category: 'SIGNATORY', name: 'Signatory Contravention', defaultSeverity: 'CRITICAL' as Severity, defaultPoints: 5 },
-    { category: 'DC_PROCUREMENT', name: 'Vendor AOR differs from actual vendor', defaultSeverity: 'HIGH' as Severity, defaultPoints: 3 },
-    { category: 'MANPOWER', name: 'Manpower extension without PCPO approval', defaultSeverity: 'HIGH' as Severity, defaultPoints: 3 },
-    { category: 'DC_PROCUREMENT', name: 'Others', defaultSeverity: 'MEDIUM' as Severity, defaultPoints: 2 },
+    // 3 points - AOR issues
+    {
+      category: 'DC_PROCUREMENT',
+      name: 'No/Incorrect Approval of Requirement (AOR) before Purchase',
+      defaultSeverity: 'HIGH' as Severity,
+      defaultPoints: 3,
+      isOthers: false,
+    },
+    // 4 points - Vendor mismatch (significant)
+    {
+      category: 'DC_PROCUREMENT',
+      name: 'Vendor on AOR Differs from Actual Vendor Buy (e.g. Vendor, Date, Value)',
+      defaultSeverity: 'HIGH' as Severity,
+      defaultPoints: 4,
+      isOthers: false,
+    },
+    // 5 points - Contract oversight lapse
+    {
+      category: 'DC_PROCUREMENT',
+      name: 'Lapse in Contract Oversight Resulting in Contravention',
+      defaultSeverity: 'CRITICAL' as Severity,
+      defaultPoints: 5,
+      isOthers: false,
+    },
+    // 3 points - Manpower extension
+    {
+      category: 'MANPOWER',
+      name: 'Manpower extension without PCPO approval',
+      defaultSeverity: 'HIGH' as Severity,
+      defaultPoints: 3,
+      isOthers: false,
+    },
+    // 2 points - Signatory issue
+    {
+      category: 'SIGNATORY',
+      name: 'Inappropriate Signatory',
+      defaultSeverity: 'MEDIUM' as Severity,
+      defaultPoints: 2,
+      isOthers: false,
+    },
+    // 1 point - Minor vendor mismatch (same item)
+    {
+      category: 'DC_PROCUREMENT',
+      name: 'Vendor differs from the AOR; but item purchased remains the same',
+      defaultSeverity: 'LOW' as Severity,
+      defaultPoints: 1,
+      isOthers: false,
+    },
+    // 1 point - Late claims
+    {
+      category: 'SVP',
+      name: 'Late Claims >90 days',
+      defaultSeverity: 'LOW' as Severity,
+      defaultPoints: 1,
+      isOthers: false,
+    },
+    // Multiple Contraventions - varies based on categories
+    {
+      category: 'MULTIPLE',
+      name: 'Multiple Contraventions',
+      description: 'Points split based on individual contravention categories',
+      defaultSeverity: 'CRITICAL' as Severity,
+      defaultPoints: 5,  // Base points, actual determined by sub-contraventions
+      isOthers: false,
+    },
+    // 0 points - Others (admin can adjust points)
+    {
+      category: 'OTHER',
+      name: 'Others',
+      description: 'Other contraventions not covered by standard types. Admin can adjust points.',
+      defaultSeverity: 'LOW' as Severity,
+      defaultPoints: 0,
+      isOthers: true,  // Special flag for "Others" type
+    },
   ];
 
   for (const type of contraventionTypes) {
     await prisma.contraventionType.upsert({
       where: { name: type.name },
-      update: type,
+      update: {
+        category: type.category,
+        defaultSeverity: type.defaultSeverity,
+        defaultPoints: type.defaultPoints,
+        description: type.description,
+        isOthers: type.isOthers,
+      },
       create: type,
     });
   }
-  console.log('Contravention types created');
+
+  // Deactivate old types that are no longer used
+  const oldTypeNames = [
+    'Missing AOR',
+    'Different vendor on AOR versus purchase',
+    'Late Personal Claims',
+    'Ownership Lapse',
+    'Process-driven exception',
+    'Insufficient AOR value for manpower blanket',
+    'No approval before purchase',
+    'Signatory Contravention',
+    'Vendor AOR differs from actual vendor',
+  ];
+
+  await prisma.contraventionType.updateMany({
+    where: { name: { in: oldTypeNames } },
+    data: { isActive: false },
+  });
+
+  console.log('Contravention types created/updated');
 
   // Create the single training course (triggered at 5 points)
   await prisma.course.upsert({

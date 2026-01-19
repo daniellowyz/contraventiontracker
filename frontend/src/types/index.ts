@@ -1,8 +1,7 @@
 // Enums
 export type Role = 'ADMIN' | 'APPROVER' | 'USER';
-export type Severity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 export type ContraventionStatus = 'PENDING_APPROVAL' | 'PENDING_UPLOAD' | 'PENDING_REVIEW' | 'COMPLETED' | 'REJECTED';
-export type EscalationLevel = 'LEVEL_1' | 'LEVEL_2' | 'LEVEL_3' | 'LEVEL_4' | 'LEVEL_5';
+export type EscalationLevel = 'LEVEL_1' | 'LEVEL_2' | 'LEVEL_3';
 export type TrainingStatus = 'ASSIGNED' | 'IN_PROGRESS' | 'COMPLETED' | 'OVERDUE' | 'WAIVED';
 export type ApprovalRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
@@ -33,8 +32,10 @@ export interface ContraventionType {
   id: string;
   name: string;
   category: string;
-  defaultSeverity: Severity;
+  description?: string;
   defaultPoints: number;
+  isActive: boolean;
+  isOthers: boolean;  // True for "Others" type - requires custom description
 }
 
 // Contravention
@@ -48,6 +49,7 @@ export interface Contravention {
     department?: { name: string };
   };
   type: ContraventionType;
+  customTypeName?: string;  // For "Others" type - custom contravention name
   team?: {
     id: string;
     name: string;
@@ -59,7 +61,6 @@ export interface Contravention {
   justification?: string;
   mitigation?: string;
   summary?: string;
-  severity: Severity;
   points: number;
   status: ContraventionStatus;
   incidentDate: string;
@@ -151,11 +152,11 @@ export interface DashboardStats {
     totalContraventions: number;
     pendingAcknowledgment: number;
     thisMonth: number;
-    criticalIssues: number;
+    highPointsIssues: number;
     totalValueAffected: number;
   };
   byStatus: Record<ContraventionStatus, number>;
-  bySeverity: Record<Severity, number>;
+  byPoints: Record<string, number>;
   employeesAtRisk: {
     id: string;
     name: string;

@@ -21,7 +21,7 @@ import {
 interface Escalation {
   id: string;
   employeeId: string;
-  level: 'LEVEL_1' | 'LEVEL_2' | 'LEVEL_3' | 'LEVEL_4' | 'LEVEL_5';
+  level: 'LEVEL_1' | 'LEVEL_2' | 'LEVEL_3';
   triggeredAt: string;
   triggerPoints: number;
   actionsRequired: string[];
@@ -37,10 +37,10 @@ interface Escalation {
 }
 
 const LEVEL_OPTIONS = [
-  { value: '', label: 'All Levels' },
-  { value: 'LEVEL_1', label: 'Level 1 - Verbal Advisory (1-2 pts)' },
-  { value: 'LEVEL_2', label: 'Level 2 - Mandatory Training (3-4 pts)' },
-  { value: 'LEVEL_3', label: 'Level 3 - Performance Impact (5+ pts)' },
+  { value: '', label: 'All Stages' },
+  { value: 'LEVEL_1', label: 'Stage 1 - Notify Manager (5 pts)' },
+  { value: 'LEVEL_2', label: 'Stage 2 - Training Required (10 pts)' },
+  { value: 'LEVEL_3', label: 'Stage 3 - Procurement Paused (>15 pts)' },
 ];
 
 const COMPLETION_OPTIONS = [
@@ -52,25 +52,25 @@ const COMPLETION_OPTIONS = [
 const getLevelConfig = (level: string) => {
   const configs: Record<string, { name: string; color: string; bgColor: string; icon: React.ReactNode; description: string }> = {
     LEVEL_1: {
-      name: 'Level 1 - Verbal Advisory',
+      name: 'Stage 1 - Notify Manager',
       color: 'text-yellow-700',
       bgColor: 'bg-yellow-100',
       icon: <Clock className="w-5 h-5 text-yellow-600" />,
-      description: '1-2 points: Finance verbal advisory on prevention',
+      description: '5 points: Notify reporting manager',
     },
     LEVEL_2: {
-      name: 'Level 2 - Mandatory Training',
+      name: 'Stage 2 - Training Required',
       color: 'text-orange-700',
       bgColor: 'bg-orange-100',
       icon: <FileWarning className="w-5 h-5 text-orange-600" />,
-      description: '3-4 points: Complete training within 30 days',
+      description: '10 points: Notify Dept Head & Hong + Mandatory Training',
     },
     LEVEL_3: {
-      name: 'Level 3 - Performance Impact',
+      name: 'Stage 3 - Procurement Paused',
       color: 'text-red-700',
       bgColor: 'bg-red-100',
       icon: <AlertTriangle className="w-5 h-5 text-red-600" />,
-      description: '5+ points: Affects performance review',
+      description: '>15 points: Procurement rights paused + Session with Finance',
     },
   };
   return configs[level] || configs.LEVEL_1;
@@ -144,7 +144,7 @@ export function EscalationsPage() {
     <div>
       <Header
         title="Escalations Management"
-        subtitle="Track and manage employee escalation levels based on contravention points"
+        subtitle="Track and manage employee escalation stages based on contravention points"
       />
 
       <div className="p-8">
@@ -176,29 +176,29 @@ export function EscalationsPage() {
               <Clock className="w-8 h-8 text-yellow-500" />
             </div>
             <div className="text-2xl font-bold text-gray-900">{stats.level1}</div>
-            <div className="text-sm text-gray-500">Level 1</div>
+            <div className="text-sm text-gray-500">Stage 1</div>
           </Card>
           <Card className="text-center">
             <div className="flex items-center justify-center mb-2">
               <FileWarning className="w-8 h-8 text-orange-500" />
             </div>
             <div className="text-2xl font-bold text-gray-900">{stats.level2}</div>
-            <div className="text-sm text-gray-500">Level 2</div>
+            <div className="text-sm text-gray-500">Stage 2</div>
           </Card>
           <Card className="text-center">
             <div className="flex items-center justify-center mb-2">
               <AlertTriangle className="w-8 h-8 text-red-500" />
             </div>
             <div className="text-2xl font-bold text-gray-900">{stats.level3}</div>
-            <div className="text-sm text-gray-500">Level 3</div>
+            <div className="text-sm text-gray-500">Stage 3</div>
           </Card>
         </div>
 
-        {/* Escalation Levels Reference */}
+        {/* Stages of Correction Reference */}
         <Card className="mb-6">
           <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
             <Shield className="w-5 h-5 text-blue-500" />
-            Escalation Levels Reference
+            Stages of Correction Reference
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {['LEVEL_1', 'LEVEL_2', 'LEVEL_3'].map((level) => {
@@ -223,7 +223,7 @@ export function EscalationsPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <div className="w-64">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Level</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Stage</label>
                 <Select
                   options={LEVEL_OPTIONS}
                   value={levelFilter}
@@ -241,7 +241,7 @@ export function EscalationsPage() {
             </div>
             <Button
               onClick={() => {
-                if (confirm('This will recalculate all employee escalation levels based on the current 3-level system. Continue?')) {
+                if (confirm('This will recalculate all employee escalation stages based on the current 3-stage system. Continue?')) {
                   recalculateMutation.mutate();
                 }
               }}

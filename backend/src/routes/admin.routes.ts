@@ -67,14 +67,13 @@ router.get('/types', authenticate, async (req: AuthenticatedRequest, res: Respon
 // POST /api/admin/types - Create contravention type (admin only)
 router.post('/types', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
   try {
-    const { category, name, description, defaultSeverity, defaultPoints } = req.body;
+    const { category, name, description, defaultPoints } = req.body;
 
     const type = await prisma.contraventionType.create({
       data: {
         category,
         name,
         description,
-        defaultSeverity,
         defaultPoints,
       },
     });
@@ -88,20 +87,70 @@ router.post('/types', authenticate, requireAdmin, async (req: AuthenticatedReque
 // PATCH /api/admin/types/:id - Update contravention type (admin only)
 router.patch('/types/:id', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
   try {
-    const { name, description, defaultSeverity, defaultPoints, isActive } = req.body;
+    const { name, description, defaultPoints, isActive } = req.body;
 
     const type = await prisma.contraventionType.update({
       where: { id: req.params.id },
       data: {
         ...(name && { name }),
         ...(description !== undefined && { description }),
-        ...(defaultSeverity && { defaultSeverity }),
         ...(defaultPoints !== undefined && { defaultPoints }),
         ...(isActive !== undefined && { isActive }),
       },
     });
 
     res.json({ success: true, data: type });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// DELETE /api/admin/types/:id - Delete contravention type (admin only)
+router.delete('/types/:id', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const typeId = req.params.id;
+
+    // Check if type exists
+    const type = await prisma.contraventionType.findUnique({
+      where: { id: typeId },
+    });
+
+    if (!type) {
+      throw new AppError('Contravention type not found', 404);
+    }
+
+    // Prevent deleting the "Others" type
+    if (type.isOthers) {
+      throw new AppError('Cannot delete the "Others" type', 400);
+    }
+
+    // Check if any contraventions use this type
+    const contraventionCount = await prisma.contravention.count({
+      where: { typeId },
+    });
+
+    if (contraventionCount > 0) {
+      throw new AppError(`Cannot delete type: ${contraventionCount} contravention(s) are using this type`, 400);
+    }
+
+    // Delete the type
+    await prisma.contraventionType.delete({
+      where: { id: typeId },
+    });
+
+    // Log the action
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user!.userId,
+        action: 'DELETE_TYPE',
+        entityType: 'ContraventionType',
+        entityId: typeId,
+        oldValues: { name: type.name, category: type.category },
+        newValues: {},
+      },
+    });
+
+    res.json({ success: true, message: 'Type deleted successfully' });
   } catch (error) {
     next(error);
   }
@@ -638,6 +687,289 @@ router.get('/users', authenticate, requireAdmin, async (req: AuthenticatedReques
   }
 });
 
+// GET /api/admin/users/duplicates - Find duplicate users (ogp vs open email domains)
+router.get('/users/duplicates', authenticate, requireAdmin, async (_req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    // Find users with @ogp.gov.sg emails
+    const ogpUsers = await prisma.user.findMany({
+      where: {
+        email: { endsWith: '@ogp.gov.sg' },
+        isActive: true,
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        employeeId: true,
+        _count: { select: { contraventions: true } },
+      },
+    });
+
+    // For each ogp user, check if there's a matching open.gov.sg user
+    const duplicates = [];
+    for (const ogpUser of ogpUsers) {
+      const baseName = ogpUser.email.replace('@ogp.gov.sg', '');
+      const openEmail = `${baseName}@open.gov.sg`;
+
+      const openUser = await prisma.user.findFirst({
+        where: {
+          email: openEmail,
+          isActive: true,
+        },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          employeeId: true,
+          _count: { select: { contraventions: true } },
+        },
+      });
+
+      if (openUser) {
+        duplicates.push({
+          ogpUser: {
+            id: ogpUser.id,
+            email: ogpUser.email,
+            name: ogpUser.name,
+            employeeId: ogpUser.employeeId,
+            contraventionCount: ogpUser._count.contraventions,
+          },
+          openUser: {
+            id: openUser.id,
+            email: openUser.email,
+            name: openUser.name,
+            employeeId: openUser.employeeId,
+            contraventionCount: openUser._count.contraventions,
+          },
+        });
+      }
+    }
+
+    res.json({ success: true, data: duplicates });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/admin/users/inactive - Get inactive/deactivated users (admin only)
+router.get('/users/inactive', authenticate, requireAdmin, async (_req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const inactiveUsers = await prisma.user.findMany({
+      where: {
+        isActive: false,
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        employeeId: true,
+        isActive: true,
+        _count: { select: { contraventions: true } },
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    res.json({
+      success: true,
+      data: inactiveUsers.map((u) => ({
+        id: u.id,
+        email: u.email,
+        name: u.name,
+        employeeId: u.employeeId,
+        isActive: u.isActive,
+        contraventionCount: u._count.contraventions,
+      })),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/admin/users/merge - Merge two users (transfer contraventions from source to target, deactivate source)
+router.post('/users/merge', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const { sourceId, targetId } = req.body;
+
+    if (!sourceId || !targetId) {
+      throw new AppError('Source and target user IDs are required', 400);
+    }
+
+    if (sourceId === targetId) {
+      throw new AppError('Cannot merge a user with themselves', 400);
+    }
+
+    // Verify both users exist
+    const [sourceUser, targetUser] = await Promise.all([
+      prisma.user.findUnique({ where: { id: sourceId } }),
+      prisma.user.findUnique({ where: { id: targetId } }),
+    ]);
+
+    if (!sourceUser) {
+      throw new AppError('Source user not found', 404);
+    }
+    if (!targetUser) {
+      throw new AppError('Target user not found', 404);
+    }
+
+    // Transfer all contraventions from source to target
+    const contraventionsUpdated = await prisma.contravention.updateMany({
+      where: { employeeId: sourceId },
+      data: { employeeId: targetId },
+    });
+
+    // Transfer logged contraventions (where they were the logger)
+    await prisma.contravention.updateMany({
+      where: { loggedById: sourceId },
+      data: { loggedById: targetId },
+    });
+
+    // Transfer acknowledgedBy
+    await prisma.contravention.updateMany({
+      where: { acknowledgedById: sourceId },
+      data: { acknowledgedById: targetId },
+    });
+
+    // Transfer training records
+    await prisma.trainingRecord.updateMany({
+      where: { employeeId: sourceId },
+      data: { employeeId: targetId },
+    });
+
+    // Transfer escalations
+    await prisma.escalation.updateMany({
+      where: { employeeId: sourceId },
+      data: { employeeId: targetId },
+    });
+
+    // Transfer disputes (submittedBy)
+    await prisma.dispute.updateMany({
+      where: { submittedById: sourceId },
+      data: { submittedById: targetId },
+    });
+
+    // Transfer points record if source has one
+    const sourcePointsRecord = await prisma.employeePoints.findUnique({
+      where: { employeeId: sourceId },
+    });
+
+    if (sourcePointsRecord) {
+      // Check if target has a points record
+      const targetPointsRecord = await prisma.employeePoints.findUnique({
+        where: { employeeId: targetId },
+      });
+
+      if (targetPointsRecord) {
+        // Merge points: add source points to target
+        await prisma.employeePoints.update({
+          where: { employeeId: targetId },
+          data: {
+            totalPoints: targetPointsRecord.totalPoints + sourcePointsRecord.totalPoints,
+          },
+        });
+        // Delete source points record
+        await prisma.employeePoints.delete({
+          where: { employeeId: sourceId },
+        });
+      } else {
+        // Move the points record to target
+        await prisma.employeePoints.update({
+          where: { employeeId: sourceId },
+          data: { employeeId: targetId },
+        });
+      }
+    }
+
+    // Deactivate the source user
+    await prisma.user.update({
+      where: { id: sourceId },
+      data: { isActive: false },
+    });
+
+    // Log the merge action
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user!.userId,
+        action: 'MERGE_USERS',
+        entityType: 'User',
+        entityId: targetId,
+        oldValues: {
+          sourceUserId: sourceId,
+          sourceEmail: sourceUser.email,
+          sourceName: sourceUser.name,
+        },
+        newValues: {
+          targetUserId: targetId,
+          targetEmail: targetUser.email,
+          targetName: targetUser.name,
+          contraventionsTransferred: contraventionsUpdated.count,
+        },
+      },
+    });
+
+    res.json({
+      success: true,
+      message: `Successfully merged ${sourceUser.email} into ${targetUser.email}. ${contraventionsUpdated.count} contraventions transferred.`,
+      data: {
+        contraventionsTransferred: contraventionsUpdated.count,
+        sourceDeactivated: true,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// PATCH /api/admin/users/:id/status - Update user active status (admin only)
+router.patch('/users/:id/status', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const { isActive } = req.body;
+
+    if (typeof isActive !== 'boolean') {
+      throw new AppError('isActive must be a boolean', 400);
+    }
+
+    const userId = req.params.id;
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new AppError('User not found', 404);
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: { isActive },
+      select: {
+        id: true,
+        employeeId: true,
+        email: true,
+        name: true,
+        role: true,
+        isActive: true,
+        department: { select: { id: true, name: true } },
+      },
+    });
+
+    // Log the action
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user!.userId,
+        action: isActive ? 'REACTIVATE_USER' : 'DEACTIVATE_USER',
+        entityType: 'User',
+        entityId: userId,
+        oldValues: { isActive: user.isActive },
+        newValues: { isActive },
+      },
+    });
+
+    res.json({ success: true, data: updatedUser });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // PATCH /api/admin/users/:id/role - Update user role (admin only)
 router.patch('/users/:id/role', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
   try {
@@ -719,6 +1051,22 @@ router.get('/approver-requests', authenticate, requireAdmin, async (req: Authent
     });
 
     res.json({ success: true, data: requests });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/admin/approver-requests/count - Get count of pending approver requests (admin only)
+router.get('/approver-requests/count', authenticate, requireAdmin, async (_req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const count = await prisma.user.count({
+      where: {
+        requestedApprover: true,
+        approverRequestStatus: 'PENDING',
+      },
+    });
+
+    res.json({ success: true, data: { count } });
   } catch (error) {
     next(error);
   }
@@ -1037,6 +1385,140 @@ router.get('/otp/lookup', authenticate, requireAdmin, async (req: AuthenticatedR
         expiresAt: otpRecord.expiresAt,
         attempts: otpRecord.attempts,
         note: 'OTP is hashed and cannot be recovered. Check server console for development OTPs.',
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ========================================
+// "Others" Type Management Endpoints
+// ========================================
+
+// GET /api/admin/types/others-usage - Get all "Others" type contraventions grouped by customTypeName
+router.get('/types/others-usage', authenticate, requireAdmin, async (_req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    // Find the "Others" type
+    const othersType = await prisma.contraventionType.findFirst({
+      where: { isOthers: true },
+    });
+
+    if (!othersType) {
+      return res.json({ success: true, data: [] });
+    }
+
+    // Get all contraventions with this type that have customTypeName
+    const contraventions = await prisma.contravention.findMany({
+      where: {
+        typeId: othersType.id,
+        customTypeName: { not: null },
+      },
+      select: {
+        customTypeName: true,
+        points: true,
+      },
+    });
+
+    // Group by customTypeName and count
+    const usageMap = new Map<string, { count: number; totalPoints: number }>();
+    contraventions.forEach((c) => {
+      const name = c.customTypeName!;
+      const existing = usageMap.get(name) || { count: 0, totalPoints: 0 };
+      usageMap.set(name, {
+        count: existing.count + 1,
+        totalPoints: existing.totalPoints + c.points,
+      });
+    });
+
+    // Convert to array and sort by count
+    const usage = Array.from(usageMap.entries())
+      .map(([name, data]) => ({
+        customTypeName: name,
+        count: data.count,
+        totalPoints: data.totalPoints,
+        avgPoints: Math.round(data.totalPoints / data.count * 10) / 10,
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    res.json({ success: true, data: usage });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/admin/types/promote - Create a new permanent type from a custom "Others" name
+router.post('/types/promote', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const { customTypeName, category, name, defaultPoints } = req.body;
+
+    if (!customTypeName || !category || !name || defaultPoints === undefined) {
+      throw new AppError('Missing required fields', 400);
+    }
+
+    // Check if type with this name already exists
+    const existingType = await prisma.contraventionType.findFirst({
+      where: { name },
+    });
+
+    if (existingType) {
+      throw new AppError('A contravention type with this name already exists', 400);
+    }
+
+    // Find the "Others" type
+    const othersType = await prisma.contraventionType.findFirst({
+      where: { isOthers: true },
+    });
+
+    if (!othersType) {
+      throw new AppError('Others type not found', 404);
+    }
+
+    // Create the new type
+    const newType = await prisma.contraventionType.create({
+      data: {
+        category,
+        name,
+        defaultPoints,
+        isActive: true,
+        isOthers: false,
+      },
+    });
+
+    // Update all existing contraventions with this customTypeName to use the new type
+    const updated = await prisma.contravention.updateMany({
+      where: {
+        typeId: othersType.id,
+        customTypeName: customTypeName,
+      },
+      data: {
+        typeId: newType.id,
+        customTypeName: null,  // Clear the custom name since it's now a proper type
+      },
+    });
+
+    // Log this action
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user!.userId,
+        action: 'PROMOTE_TYPE',
+        entityType: 'ContraventionType',
+        entityId: newType.id,
+        oldValues: { customTypeName },
+        newValues: {
+          typeName: name,
+          category,
+          defaultPoints,
+          contraventionsUpdated: updated.count,
+        },
+      },
+    });
+
+    res.status(201).json({
+      success: true,
+      data: {
+        newType,
+        contraventionsUpdated: updated.count,
       },
     });
   } catch (error) {

@@ -9,17 +9,15 @@ import { Badge } from '@/components/ui/Badge';
 import { getLevelName, getLevelColor } from '@/lib/utils';
 import { Eye, User, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 
-type SortField = 'points' | 'contraventions' | 'level' | null;
+type SortField = 'points' | 'contraventions' | 'stage' | null;
 type SortDirection = 'asc' | 'desc';
 
-// Level order for sorting (higher level = more severe)
-const LEVEL_ORDER: Record<string, number> = {
+// Stage order for sorting (higher stage = more severe)
+const STAGE_ORDER: Record<string, number> = {
   'LEVEL_0': 0,
   'LEVEL_1': 1,
   'LEVEL_2': 2,
   'LEVEL_3': 3,
-  'LEVEL_4': 4,
-  'LEVEL_5': 5,
 };
 
 export function EmployeesListPage() {
@@ -58,10 +56,10 @@ export function EmployeesListPage() {
         case 'contraventions':
           comparison = a.contraventionCount - b.contraventionCount;
           break;
-        case 'level':
-          const levelA = LEVEL_ORDER[a.currentLevel || 'LEVEL_0'] || 0;
-          const levelB = LEVEL_ORDER[b.currentLevel || 'LEVEL_0'] || 0;
-          comparison = levelA - levelB;
+        case 'stage':
+          const stageA = STAGE_ORDER[a.currentLevel || 'LEVEL_0'] || 0;
+          const stageB = STAGE_ORDER[b.currentLevel || 'LEVEL_0'] || 0;
+          comparison = stageA - stageB;
           break;
       }
 
@@ -106,11 +104,11 @@ export function EmployeesListPage() {
                     </th>
                     <th
                       className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"
-                      onClick={() => handleSort('level')}
+                      onClick={() => handleSort('stage')}
                     >
                       <div className="flex items-center gap-1">
-                        Level
-                        <SortIcon field="level" />
+                        Stage
+                        <SortIcon field="stage" />
                       </div>
                     </th>
                     <th

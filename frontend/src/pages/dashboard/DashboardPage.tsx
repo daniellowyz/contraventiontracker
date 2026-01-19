@@ -8,11 +8,11 @@ import { formatCurrency, getLevelName, getLevelColor } from '@/lib/utils';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { AlertTriangle, Clock, FileWarning, DollarSign } from 'lucide-react';
 
-const SEVERITY_COLORS = {
-  LOW: '#22c55e',
-  MEDIUM: '#eab308',
-  HIGH: '#f97316',
-  CRITICAL: '#ef4444',
+const POINTS_COLORS = {
+  '1-2': '#22c55e',
+  '3-5': '#eab308',
+  '6-10': '#f97316',
+  '11+': '#ef4444',
 };
 
 export function DashboardPage() {
@@ -38,10 +38,12 @@ export function DashboardPage() {
     navigate(`/contraventions?dateFrom=${dateFrom}&dateTo=${dateTo}`);
   };
 
-  // Handle pie chart click - navigate to contraventions filtered by severity
-  const handlePieClick = (data: { name: string; value: number }) => {
+  // Handle pie chart click - navigate to contraventions filtered by points
+  const handlePointsClick = (data: { name: string; value: number }) => {
     if (data.value === 0) return;
-    navigate(`/contraventions?severity=${data.name}`);
+    // Points filtering would need to be implemented in the contraventions list page
+    // For now, just navigate to the contraventions page
+    navigate('/contraventions');
   };
 
   if (isLoading) {
@@ -81,11 +83,12 @@ export function DashboardPage() {
 
   if (!stats) return null;
 
-  const severityData = Object.entries(stats.bySeverity).map(([name, value]) => ({
-    name,
+  // Convert points data to chart format
+  const pointsData = stats.byPoints ? Object.entries(stats.byPoints).map(([range, value]) => ({
+    name: `${range} pts`,
     value,
-    color: SEVERITY_COLORS[name as keyof typeof SEVERITY_COLORS],
-  }));
+    color: POINTS_COLORS[range as keyof typeof POINTS_COLORS] || '#6b7280',
+  })) : [];
 
   return (
     <div>
@@ -119,8 +122,8 @@ export function DashboardPage() {
               <AlertTriangle className="w-6 h-6 text-red-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">Critical Issues</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.summary.criticalIssues}</p>
+              <p className="text-sm text-gray-500">High Points Issues</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.summary.highPointsIssues}</p>
             </div>
           </Card>
 
@@ -177,36 +180,42 @@ export function DashboardPage() {
             </div>
           </Card>
 
-          {/* By Severity */}
+          {/* By Points */}
           <Card>
-            <CardTitle className="mb-6">By Severity</CardTitle>
+            <CardTitle className="mb-6">By Points</CardTitle>
             <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={severityData}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={80}
-                    label={({ name, value }) => `${name}: ${value}`}
-                    onClick={(data) => handlePieClick(data)}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    {severityData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} style={{ cursor: 'pointer' }} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{
-                      borderRadius: '8px',
-                      border: '1px solid #e5e7eb',
-                      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
-                    }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+              {pointsData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={pointsData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={80}
+                      label={({ name, value }) => `${name}: ${value}`}
+                      onClick={(data) => handlePointsClick(data)}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      {pointsData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} style={{ cursor: 'pointer' }} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        borderRadius: '8px',
+                        border: '1px solid #e5e7eb',
+                        boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-full text-gray-500 text-sm">
+                  No data available
+                </div>
+              )}
             </div>
           </Card>
         </div>

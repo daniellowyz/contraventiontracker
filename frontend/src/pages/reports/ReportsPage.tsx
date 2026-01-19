@@ -73,7 +73,7 @@ export function ReportsPage() {
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Employees</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contraventions</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Points</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">By Severity</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">By Points</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
@@ -85,18 +85,11 @@ export function ReportsPage() {
                         <td className="px-4 py-3 text-sm text-gray-900">{dept.totalPoints}</td>
                         <td className="px-4 py-3">
                           <div className="flex gap-1">
-                            {dept.bySeverity.CRITICAL > 0 && (
-                              <Badge variant="danger">{dept.bySeverity.CRITICAL} Crit</Badge>
-                            )}
-                            {dept.bySeverity.HIGH > 0 && (
-                              <Badge variant="warning">{dept.bySeverity.HIGH} High</Badge>
-                            )}
-                            {dept.bySeverity.MEDIUM > 0 && (
-                              <Badge variant="default">{dept.bySeverity.MEDIUM} Med</Badge>
-                            )}
-                            {dept.bySeverity.LOW > 0 && (
-                              <Badge variant="success">{dept.bySeverity.LOW} Low</Badge>
-                            )}
+                            {dept.byPoints && Object.entries(dept.byPoints).map(([pointRange, count]) => (
+                              count > 0 && (
+                                <Badge key={pointRange} variant="default">{count} ({pointRange}pts)</Badge>
+                              )
+                            ))}
                           </div>
                         </td>
                       </tr>

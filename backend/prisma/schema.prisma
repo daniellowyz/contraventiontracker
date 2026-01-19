@@ -23,13 +23,6 @@ enum ApprovalRequestStatus {
   REJECTED
 }
 
-enum Severity {
-  LOW
-  MEDIUM
-  HIGH
-  CRITICAL
-}
-
 enum ContraventionStatus {
   PENDING_UPLOAD    // Waiting for approval PDF to be uploaded
   PENDING_REVIEW    // PDF uploaded, waiting for admin review
@@ -148,9 +141,9 @@ model ContraventionType {
   category        String          // DC_PROCUREMENT, MANPOWER, SVP, SVP_VCC, SIGNATORY
   name            String          @unique
   description     String?
-  defaultSeverity Severity
   defaultPoints   Int
   isActive        Boolean         @default(true)
+  isOthers        Boolean         @default(false)  // True for "Others" type that allows custom names
   contraventions  Contravention[]
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
@@ -173,6 +166,7 @@ model Contravention {
   // What
   typeId          String
   type            ContraventionType   @relation(fields: [typeId], references: [id])
+  customTypeName  String?             // For "Others" type - custom contravention name
   vendor          String?
   valueSgd        Decimal?            @db.Decimal(15, 2)
   description     String              @db.Text
@@ -181,7 +175,6 @@ model Contravention {
   summary         String?             @db.Text
 
   // Classification
-  severity        Severity
   points          Int
 
   // Status tracking

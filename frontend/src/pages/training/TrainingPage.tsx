@@ -474,7 +474,7 @@ export function TrainingPage() {
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Employee</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Department</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Points</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Level</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stage</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Training</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
                       </tr>

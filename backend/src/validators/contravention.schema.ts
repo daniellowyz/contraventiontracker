@@ -3,6 +3,8 @@ import { z } from 'zod';
 export const createContraventionSchema = z.object({
   employeeId: z.string().min(1, 'Employee ID is required'),
   typeId: z.string().min(1, 'Contravention type is required'),
+  teamId: z.string().optional(),  // Team for tracking
+  customTypeName: z.string().optional(),  // For "Others" type - custom contravention name
   vendor: z.string().optional(),
   valueSgd: z.number().optional(),
   description: z.string().min(1, 'Description is required'),
@@ -15,6 +17,7 @@ export const createContraventionSchema = z.object({
   evidenceUrls: z.array(z.string().url()).optional(),
   authorizerEmail: z.string().email('Invalid email format').optional(),
   approvalPdfUrl: z.string().url('Invalid URL format').optional(),
+  points: z.number().int().min(0).optional(), // Admin can override default points
 });
 
 export const updateContraventionSchema = z.object({
@@ -22,8 +25,9 @@ export const updateContraventionSchema = z.object({
   vendor: z.string().optional(),
   valueSgd: z.number().optional(),
   description: z.string().optional(),
+  justification: z.string().optional(), // Admin can edit justification
+  mitigation: z.string().optional(), // Admin can edit mitigation
   summary: z.string().optional(),
-  severity: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).optional(),
   points: z.number().int().min(0).optional(),
   status: z.enum(['PENDING_UPLOAD', 'PENDING_REVIEW', 'COMPLETED']).optional(),
   evidenceUrls: z.array(z.string().url()).optional(),
@@ -45,7 +49,6 @@ export const resolveDisputeSchema = z.object({
 
 export const contraventionFiltersSchema = z.object({
   status: z.enum(['PENDING_UPLOAD', 'PENDING_REVIEW', 'COMPLETED']).optional(),
-  severity: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).optional(),
   typeId: z.string().optional(),
   departmentId: z.string().optional(),
   employeeId: z.string().optional(),

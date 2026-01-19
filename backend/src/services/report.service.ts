@@ -29,10 +29,10 @@ export class ReportService {
       },
     });
 
-    // Get critical issues (not completed)
-    const criticalIssues = await prisma.contravention.count({
+    // Get high points issues (5+ points, not completed)
+    const highPointsIssues = await prisma.contravention.count({
       where: {
-        severity: 'CRITICAL',
+        points: { gte: 5 },
         status: { not: 'COMPLETED' },
       },
     });
@@ -57,27 +57,27 @@ export class ReportService {
       byStatus[s.status] = s._count;
     });
 
-    // Get severity breakdown
-    const severityCounts = await prisma.contravention.groupBy({
-      by: ['severity'],
-      _count: true,
+    // Get points breakdown
+    const allContraventionsForPoints = await prisma.contravention.findMany({
+      select: { points: true },
     });
 
-    const bySeverity: Record<string, number> = {
-      LOW: 0,
-      MEDIUM: 0,
-      HIGH: 0,
-      CRITICAL: 0,
+    const byPoints: Record<string, number> = {
+      '1-2': 0,
+      '3-4': 0,
+      '5+': 0,
     };
-    severityCounts.forEach((s) => {
-      bySeverity[s.severity] = s._count;
+    allContraventionsForPoints.forEach((c) => {
+      if (c.points >= 5) byPoints['5+']++;
+      else if (c.points >= 3) byPoints['3-4']++;
+      else byPoints['1-2']++;
     });
 
-    // Get employees at risk (Level 3+)
+    // Get employees at risk (Stage 2+ - 10 or more points)
     const employeesAtRisk = await prisma.employeePoints.findMany({
       where: {
         currentLevel: {
-          in: ['LEVEL_3', 'LEVEL_4', 'LEVEL_5'],
+          in: ['LEVEL_2', 'LEVEL_3'],
         },
       },
       include: {
@@ -125,11 +125,11 @@ export class ReportService {
         totalContraventions,
         pendingAcknowledgment,
         thisMonth,
-        criticalIssues,
+        highPointsIssues,
         totalValueAffected: Number(valueSum._sum.valueSgd) || 0,
       },
       byStatus: byStatus as DashboardStats['byStatus'],
-      bySeverity: bySeverity as DashboardStats['bySeverity'],
+      byPoints: byPoints as DashboardStats['byPoints'],
       employeesAtRisk: employeesAtRisk.map((ep) => ({
         id: ep.employee.id,
         name: ep.employee.name,
@@ -149,7 +149,7 @@ export class ReportService {
         employees: {
           include: {
             contraventions: {
-              select: { id: true, severity: true, points: true },
+              select: { id: true, points: true },
             },
           },
         },
@@ -166,11 +166,10 @@ export class ReportService {
         employeeCount: dept.employees.length,
         contraventionCount: allContraventions.length,
         totalPoints,
-        bySeverity: {
-          LOW: allContraventions.filter((c) => c.severity === 'LOW').length,
-          MEDIUM: allContraventions.filter((c) => c.severity === 'MEDIUM').length,
-          HIGH: allContraventions.filter((c) => c.severity === 'HIGH').length,
-          CRITICAL: allContraventions.filter((c) => c.severity === 'CRITICAL').length,
+        byPoints: {
+          '1-2': allContraventions.filter((c) => c.points >= 1 && c.points <= 2).length,
+          '3-4': allContraventions.filter((c) => c.points >= 3 && c.points <= 4).length,
+          '5+': allContraventions.filter((c) => c.points >= 5).length,
         },
       };
     });
@@ -217,7 +216,7 @@ export class ReportService {
           select: {
             id: true,
             referenceNo: true,
-            severity: true,
+            points: true,
             incidentDate: true,
             type: { select: { name: true } },
           },
@@ -273,7 +272,6 @@ export class ReportService {
       Category: c.type.category,
       Vendor: c.vendor || '',
       'Value (S$)': c.valueSgd ? Number(c.valueSgd) : '',
-      Severity: c.severity,
       Points: c.points,
       Status: c.status,
       'Incident Date': formatDate(c.incidentDate),

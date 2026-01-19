@@ -8,6 +8,7 @@ import {
   contraventionFiltersSchema,
 } from '../validators/contravention.schema';
 import { AuthenticatedRequest } from '../types';
+import { AppError } from '../middleware/errorHandler';
 
 const router = Router();
 
@@ -27,14 +28,22 @@ router.get(
   }
 );
 
-// POST /api/contraventions - Create new contravention (admin only)
+// POST /api/contraventions - Create new contravention
+// Users can create contraventions for themselves, admins can create for anyone
 router.post(
   '/',
   authenticate,
-  requireAdmin,
   validateBody(createContraventionSchema),
   async (req: AuthenticatedRequest, res: Response, next) => {
     try {
+      const isAdmin = req.user!.role === 'ADMIN';
+      const employeeId = req.body.employeeId;
+
+      // Non-admins can only create contraventions for themselves
+      if (!isAdmin && employeeId !== req.user!.userId) {
+        throw new AppError('You can only create contraventions for yourself', 403);
+      }
+
       const contravention = await contraventionService.create(req.body, req.user!.userId);
       res.status(201).json({ success: true, data: contravention });
     } catch (error) {

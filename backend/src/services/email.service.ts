@@ -173,7 +173,6 @@ export const emailService = {
     employeeName: string;
     referenceNo: string;
     typeName: string;
-    severity: string;
     points: number;
     contraventionId: string;
   }): Promise<EmailResult> {
@@ -185,7 +184,6 @@ export const emailService = {
         employeeName: params.employeeName,
         referenceNo: params.referenceNo,
         typeName: params.typeName,
-        severity: params.severity,
         points: params.points,
         contraventionId: params.contraventionId,
       });
@@ -214,10 +212,6 @@ export const emailService = {
             <tr>
               <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: bold;">Type</td>
               <td style="padding: 8px; border: 1px solid #e5e7eb;">${params.typeName}</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: bold;">Severity</td>
-              <td style="padding: 8px; border: 1px solid #e5e7eb;">${params.severity}</td>
             </tr>
             <tr>
               <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: bold;">Points</td>
@@ -543,7 +537,7 @@ export const emailService = {
     referenceNo: string;
     employeeName: string;
     typeName: string;
-    severity: string;
+    points: number;
     contraventionId: string;
   }): Promise<EmailResult> {
     // Try to send via Google Apps Script webhook first
@@ -555,21 +549,13 @@ export const emailService = {
         referenceNo: params.referenceNo,
         employeeName: params.employeeName,
         typeName: params.typeName,
-        severity: params.severity,
+        points: params.points,
         contraventionId: params.contraventionId,
         appUrl: EMAIL_CONFIG.APP_URL,
       });
     }
 
     const approvalUrl = `${EMAIL_CONFIG.APP_URL}/approvals`;
-
-    const severityColors: Record<string, string> = {
-      LOW: '#22c55e',
-      MEDIUM: '#eab308',
-      HIGH: '#f97316',
-      CRITICAL: '#dc2626',
-    };
-    const severityColor = severityColors[params.severity] || '#6b7280';
 
     return this.send({
       to: params.approverEmail,
@@ -597,12 +583,8 @@ export const emailService = {
               <td style="padding: 8px; border: 1px solid #e5e7eb;">${params.typeName}</td>
             </tr>
             <tr>
-              <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: bold;">Severity</td>
-              <td style="padding: 8px; border: 1px solid #e5e7eb;">
-                <span style="background-color: ${severityColor}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;">
-                  ${params.severity}
-                </span>
-              </td>
+              <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: bold;">Points</td>
+              <td style="padding: 8px; border: 1px solid #e5e7eb;">${params.points}</td>
             </tr>
           </table>
 

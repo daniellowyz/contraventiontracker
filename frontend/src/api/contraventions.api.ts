@@ -3,7 +3,6 @@ import { ApiResponse, PaginatedResponse, Contravention, ContraventionType } from
 
 export interface ContraventionFilters {
   status?: string;
-  severity?: string;
   typeId?: string;
   departmentId?: string;
   employeeId?: string;
@@ -20,6 +19,7 @@ export interface CreateContraventionInput {
   employeeId: string;
   typeId: string;
   teamId: string;  // Required team for tracking
+  customTypeName?: string;  // For "Others" type - custom contravention name (required when type.isOthers)
   vendor?: string;
   valueSgd?: number;
   description: string;
@@ -31,6 +31,7 @@ export interface CreateContraventionInput {
   supportingDocs?: string[];  // Supporting documentation URLs
   authorizerEmail?: string; // Email of the approver to seek contravention approval
   approvalPdfUrl?: string; // URL of the uploaded approval PDF
+  points?: number; // Admin can adjust points (especially for "Others" type)
 }
 
 // Input for users editing their own contraventions (more restrictive)
@@ -125,5 +126,22 @@ export const contraventionsApi = {
   getTypes: async () => {
     const response = await client.get<ApiResponse<ContraventionType[]>>('/admin/types');
     return response.data.data!;
+  },
+
+  // Admin: Promote a custom "Others" type name to a permanent type
+  promoteToType: async (customTypeName: string, name: string, category: string, defaultPoints: number) => {
+    const response = await client.post<ApiResponse<ContraventionType>>('/admin/types/promote', {
+      customTypeName,
+      name,
+      category,
+      defaultPoints,
+    });
+    return response.data.data!;
+  },
+
+  // Admin: Delete a contravention type
+  deleteType: async (typeId: string) => {
+    const response = await client.delete<ApiResponse>(`/admin/types/${typeId}`);
+    return response.data;
   },
 };

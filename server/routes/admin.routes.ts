@@ -982,6 +982,152 @@ router.patch('/types/:id', authenticate, requireAdmin, async (req: Authenticated
   }
 });
 
+// GET /api/admin/types/others-usage - Get all "Others" type contraventions grouped by customTypeName
+router.get('/types/others-usage', authenticate, requireAdmin, async (_req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    // Find the "Others" type
+    const othersType = await prisma.contraventionType.findFirst({
+      where: { isOthers: true },
+    });
+
+    if (!othersType) {
+      return res.json({
+        success: true,
+        data: [],
+        message: 'No "Others" type found',
+      });
+    }
+
+    // Get all contraventions with customTypeName, grouped by the name
+    const contraventions = await prisma.contravention.findMany({
+      where: {
+        typeId: othersType.id,
+        customTypeName: { not: null },
+      },
+      select: {
+        id: true,
+        customTypeName: true,
+        referenceNo: true,
+        points: true,
+        severity: true,
+        createdAt: true,
+        employee: { select: { name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Group by customTypeName
+    const grouped = contraventions.reduce((acc, c) => {
+      const name = c.customTypeName || 'Unspecified';
+      if (!acc[name]) {
+        acc[name] = {
+          customTypeName: name,
+          count: 0,
+          contraventions: [],
+        };
+      }
+      acc[name].count++;
+      acc[name].contraventions.push(c);
+      return acc;
+    }, {} as Record<string, { customTypeName: string; count: number; contraventions: typeof contraventions }>);
+
+    // Convert to array sorted by count (descending)
+    const result = Object.values(grouped).sort((a, b) => b.count - a.count);
+
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/admin/types/promote - Create a new permanent type from a custom "Others" name
+router.post('/types/promote', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const { customTypeName, category, defaultSeverity, defaultPoints, description } = req.body as {
+      customTypeName: string;
+      category: string;
+      defaultSeverity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+      defaultPoints: number;
+      description?: string;
+    };
+
+    if (!customTypeName || !category || !defaultSeverity || defaultPoints === undefined) {
+      throw new AppError('Missing required fields: customTypeName, category, defaultSeverity, defaultPoints', 400);
+    }
+
+    // Check if a type with this name already exists
+    const existing = await prisma.contraventionType.findUnique({
+      where: { name: customTypeName },
+    });
+
+    if (existing) {
+      throw new AppError(`A type with the name "${customTypeName}" already exists`, 409);
+    }
+
+    // Create the new type
+    const newType = await prisma.contraventionType.create({
+      data: {
+        name: customTypeName,
+        category,
+        defaultSeverity,
+        defaultPoints,
+        description: description || `Promoted from "Others" type`,
+        isOthers: false,
+        isActive: true,
+      },
+    });
+
+    // Find the "Others" type
+    const othersType = await prisma.contraventionType.findFirst({
+      where: { isOthers: true },
+    });
+
+    // Optionally migrate existing contraventions with this customTypeName to the new type
+    if (othersType) {
+      const migrated = await prisma.contravention.updateMany({
+        where: {
+          typeId: othersType.id,
+          customTypeName: customTypeName,
+        },
+        data: {
+          typeId: newType.id,
+          customTypeName: null, // Clear the custom name since it's now a proper type
+        },
+      });
+
+      // Log the action
+      await prisma.auditLog.create({
+        data: {
+          entityType: 'CONTRAVENTION_TYPE',
+          entityId: newType.id,
+          action: 'PROMOTE_FROM_OTHERS',
+          userId: req.user!.userId,
+          newValues: {
+            name: customTypeName,
+            category,
+            defaultPoints,
+            migratedContraventions: migrated.count,
+          },
+        },
+      });
+
+      res.status(201).json({
+        success: true,
+        data: newType,
+        message: `Created new type "${customTypeName}" and migrated ${migrated.count} existing contravention(s)`,
+      });
+    } else {
+      res.status(201).json({
+        success: true,
+        data: newType,
+        message: `Created new type "${customTypeName}"`,
+      });
+    }
+  } catch (error) {
+    next(error);
+  }
+});
+
 // GET /api/admin/departments - List departments
 router.get('/departments', authenticate, async (req: AuthenticatedRequest, res: Response, next) => {
   try {

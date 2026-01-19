@@ -46,6 +46,11 @@ export class ContraventionService {
       throw new AppError('Invalid contravention type', 400);
     }
 
+    // Validate customTypeName for "Others" type
+    if (contraventionType.isOthers && !data.customTypeName?.trim()) {
+      throw new AppError('Custom type name is required for "Others" contravention type', 400);
+    }
+
     // Verify employee exists
     const employee = await prisma.user.findUnique({
       where: { id: data.employeeId },
@@ -74,6 +79,7 @@ export class ContraventionService {
         loggedById,
         typeId: data.typeId,
         teamId: data.teamId,  // Optional team for tracking
+        customTypeName: data.customTypeName,  // For "Others" type
         vendor: data.vendor,
         valueSgd: data.valueSgd,
         description: data.description,
