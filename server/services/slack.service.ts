@@ -78,23 +78,6 @@ export interface ApprovalRequest {
   approvalPdfUrl?: string;
 }
 
-export interface NewContraventionAnnouncement {
-  referenceNo: string;
-  employeeName: string;
-  teamName: string;
-  typeName: string;
-  severity: string;
-  points: number;
-  valueSgd?: number;
-  vendor?: string;
-  incidentDate: string;
-  description: string;
-  justification: string;
-  mitigation: string;
-  contraventionId: string;
-  loggedByName: string;
-}
-
 export interface RejectionAnnouncement {
   referenceNo: string;
   employeeName: string;
@@ -106,15 +89,26 @@ export interface RejectionAnnouncement {
   loggedByName: string;
 }
 
+export interface OpsNotification {
+  type: 'pending_review' | 'new_approver_request' | 'approver_request_processed';
+  title: string;
+  message: string;
+  fields?: Array<{ label: string; value: string }>;
+  actionUrl?: string;
+  actionText?: string;
+}
+
 export class SlackService {
   private token: string | undefined;
-  private channelId: string | undefined;
+  private managementChannelId: string | undefined; // For approved contraventions (management visibility)
+  private opsChannelId: string | undefined; // For ops team (admin action items)
   private baseUrl = 'https://slack.com/api';
   private appUrl: string;
 
   constructor() {
     this.token = process.env.SLACK_BOT_TOKEN || process.env.SLACK_TOKEN;
-    this.channelId = process.env.SLACK_CHANNEL_ID;
+    this.managementChannelId = process.env.SLACK_CHANNEL_ID; // Existing channel for management
+    this.opsChannelId = process.env.SLACK_OPS_CHANNEL_ID || 'C09NTF4LTC5'; // Ops channel for admin notifications
     this.appUrl = process.env.APP_URL || 'https://contraventiontracker.hack2026.gov.sg';
   }
 
@@ -293,11 +287,12 @@ export class SlackService {
   }
 
   /**
-   * Announce a confirmed contravention to the designated channel
+   * Announce an APPROVED contravention to the management channel
+   * This is called only when a contravention is fully approved (not during creation)
    */
-  async announceContravention(data: ContraventionAnnouncement): Promise<void> {
-    if (!this.token || !this.channelId) {
-      console.log('[SlackService] Slack not configured, skipping announcement');
+  async announceApprovedContravention(data: ContraventionAnnouncement): Promise<void> {
+    if (!this.token || !this.managementChannelId) {
+      console.log('[SlackService] Slack not configured, skipping approved contravention announcement');
       return;
     }
 
@@ -309,7 +304,7 @@ export class SlackService {
         type: 'header',
         text: {
           type: 'plain_text',
-          text: `${severityEmoji} New Contravention Confirmed`,
+          text: `${severityEmoji} Contravention Approved`,
           emoji: true,
         },
       },
@@ -369,13 +364,13 @@ export class SlackService {
       },
     ];
 
-    const text = `New contravention confirmed: ${data.referenceNo} - ${data.typeName} (${data.severity})`;
+    const text = `Contravention approved: ${data.referenceNo} - ${data.typeName} (${data.severity})`;
 
     try {
-      await this.postMessage(this.channelId, blocks, text);
-      console.log(`[SlackService] Announced contravention ${data.referenceNo} to channel`);
+      await this.postMessage(this.managementChannelId, blocks, text);
+      console.log(`[SlackService] Announced approved contravention ${data.referenceNo} to management channel`);
     } catch (error) {
-      console.error('[SlackService] Failed to announce contravention:', error);
+      console.error('[SlackService] Failed to announce approved contravention:', error);
     }
   }
 
@@ -790,26 +785,46 @@ export class SlackService {
   }
 
   /**
-   * Post announcement to the notification channel
+   * Post announcement to the management channel
    */
-  async postToChannel(text: string): Promise<void> {
-    if (!this.token || !this.channelId) {
-      console.log('[SlackService] Channel not configured, skipping post');
+  async postToManagementChannel(text: string): Promise<void> {
+    if (!this.token || !this.managementChannelId) {
+      console.log('[SlackService] Management channel not configured, skipping post');
       return;
     }
 
-    await this.postMessage(this.channelId, [], text);
+    await this.postMessage(this.managementChannelId, [], text);
   }
 
   /**
-   * Get the configured channel ID
+   * Post announcement to the ops channel
    */
-  getChannelId(): string | undefined {
-    return this.channelId;
+  async postToOpsChannel(text: string): Promise<void> {
+    if (!this.token || !this.opsChannelId) {
+      console.log('[SlackService] Ops channel not configured, skipping post');
+      return;
+    }
+
+    await this.postMessage(this.opsChannelId, [], text);
   }
 
   /**
-   * Send approver role request notification to channel with interactive buttons
+   * Get the configured management channel ID
+   */
+  getManagementChannelId(): string | undefined {
+    return this.managementChannelId;
+  }
+
+  /**
+   * Get the configured ops channel ID
+   */
+  getOpsChannelId(): string | undefined {
+    return this.opsChannelId;
+  }
+
+  /**
+   * Send approver role request notification to the ops channel
+   * This notifies admins that a new user is requesting approver permissions
    */
   async sendApproverRoleRequestToChannel(data: {
     requestingUserId: string;
@@ -817,13 +832,13 @@ export class SlackService {
     requestingUserEmail: string;
     position: string;
   }): Promise<void> {
-    if (!this.token) {
+    if (!this.token || !this.opsChannelId) {
       console.log('[SlackService] Slack not configured, skipping approver request notification');
       return;
     }
 
-    // Use the dedicated approver requests channel
-    const channelId = 'C0A7JK9NRRA'; // #hfpg-contraventiontracker
+    // Use the ops channel for admin notifications
+    const channelId = this.opsChannelId;
 
     const blocks = [
       {
@@ -963,48 +978,31 @@ export class SlackService {
   }
 
   /**
-   * Announce a new contravention to the team channel for visibility
+   * Notify ops channel when a contravention is pending admin review
+   * This is sent to the ops channel for admin team visibility
    */
-  async announceNewContravention(data: NewContraventionAnnouncement): Promise<void> {
-    if (!this.token || !this.channelId) {
-      console.log('[SlackService] Slack not configured, skipping new contravention announcement');
+  async notifyPendingAdminReview(data: {
+    referenceNo: string;
+    employeeName: string;
+    typeName: string;
+    severity: string;
+    reason: string; // Why it went to admin review (e.g., "Rejected by approver", "Escalated")
+    contraventionId: string;
+  }): Promise<void> {
+    if (!this.token || !this.opsChannelId) {
+      console.log('[SlackService] Slack not configured, skipping pending review notification');
       return;
     }
 
-    const severityEmoji: Record<string, string> = {
-      'LOW': '🟢',
-      'MEDIUM': '🟡',
-      'HIGH': '🟠',
-      'CRITICAL': '🔴',
-    };
-
-    const emoji = severityEmoji[data.severity] || '⚪';
-    const formattedDate = new Date(data.incidentDate).toLocaleDateString('en-SG', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    });
-
-    // Format value if present
-    const valueStr = data.valueSgd
-      ? `$${data.valueSgd.toLocaleString('en-SG', { minimumFractionDigits: 2 })}`
-      : null;
-
-    // Build the details line
-    let detailsLine = `${emoji} ${data.severity} • ${data.points} pts`;
-    if (valueStr) {
-      detailsLine += ` • ${valueStr}`;
-    }
-    if (data.vendor) {
-      detailsLine += ` • ${data.vendor}`;
-    }
+    const severityEmoji = this.getSeverityEmoji(data.severity);
+    const viewUrl = `${this.appUrl}/contraventions/${data.contraventionId}`;
 
     const blocks = [
       {
         type: 'header',
         text: {
           type: 'plain_text',
-          text: `📋 New Contravention: ${data.referenceNo}`,
+          text: `${severityEmoji} Contravention Pending Admin Review`,
           emoji: true,
         },
       },
@@ -1012,42 +1010,36 @@ export class SlackService {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*${data.employeeName}* • ${data.teamName}\n📅 ${formattedDate}`,
+          text: `A contravention requires admin attention.`,
         },
+      },
+      {
+        type: 'section',
+        fields: [
+          {
+            type: 'mrkdwn',
+            text: `*Reference:*\n${data.referenceNo}`,
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Employee:*\n${data.employeeName}`,
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Type:*\n${data.typeName}`,
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Severity:*\n${data.severity}`,
+          },
+        ],
       },
       {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*Type:* ${data.typeName}\n${detailsLine}`,
+          text: `*Reason for review:*\n${data.reason}`,
         },
-      },
-      {
-        type: 'divider',
-      },
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `*What happened:*\n${data.description}`,
-        },
-      },
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `*Why it happened:*\n${data.justification}`,
-        },
-      },
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `*How we'll prevent this:*\n${data.mitigation}`,
-        },
-      },
-      {
-        type: 'divider',
       },
       {
         type: 'actions',
@@ -1056,40 +1048,36 @@ export class SlackService {
             type: 'button',
             text: {
               type: 'plain_text',
-              text: 'View Details',
+              text: 'Review Now',
               emoji: true,
             },
-            url: `${this.appUrl}/contraventions/${data.contraventionId}`,
-            action_id: 'view_contravention_details',
+            style: 'primary',
+            url: viewUrl,
+            action_id: 'review_contravention',
           },
         ],
       },
       {
-        type: 'context',
-        elements: [
-          {
-            type: 'mrkdwn',
-            text: `_Logged by ${data.loggedByName}_`,
-          },
-        ],
+        type: 'divider',
       },
     ];
 
-    const text = `New contravention ${data.referenceNo} logged for ${data.employeeName} - ${data.typeName}`;
+    const text = `Contravention ${data.referenceNo} requires admin review - ${data.reason}`;
 
     try {
-      await this.postMessage(this.channelId, blocks, text);
-      console.log(`[SlackService] Announced new contravention ${data.referenceNo} to channel`);
+      await this.postMessage(this.opsChannelId, blocks, text);
+      console.log(`[SlackService] Notified ops channel about pending review for ${data.referenceNo}`);
     } catch (error) {
-      console.error('[SlackService] Failed to announce new contravention:', error);
+      console.error('[SlackService] Failed to notify pending review:', error);
     }
   }
 
   /**
-   * Announce a rejected contravention to the team channel
+   * Announce a rejected contravention to the ops channel
+   * This is for ops visibility when contraventions are rejected
    */
   async announceRejection(data: RejectionAnnouncement): Promise<void> {
-    if (!this.token || !this.channelId) {
+    if (!this.token || !this.opsChannelId) {
       console.log('[SlackService] Slack not configured, skipping rejection announcement');
       return;
     }
@@ -1156,8 +1144,8 @@ export class SlackService {
     const text = `Contravention ${data.referenceNo} for ${data.employeeName} was rejected by ${data.rejectedBy}`;
 
     try {
-      await this.postMessage(this.channelId, blocks, text);
-      console.log(`[SlackService] Announced rejection of ${data.referenceNo} to channel`);
+      await this.postMessage(this.opsChannelId, blocks, text);
+      console.log(`[SlackService] Announced rejection of ${data.referenceNo} to ops channel`);
     } catch (error) {
       console.error('[SlackService] Failed to announce rejection:', error);
     }

@@ -138,31 +138,9 @@ export class ContraventionService {
       console.error('Failed to load notification service:', err);
     });
 
-    // Announce new contravention to team Slack channel for visibility
-    getSlackService().then((slackSvc) => {
-      if (slackSvc && slackSvc.isConfigured()) {
-        slackSvc.announceNewContravention({
-          referenceNo,
-          employeeName: employee.name,
-          teamName: contravention.team?.name || 'Personal',
-          typeName: contraventionType.name,
-          severity,
-          points,
-          valueSgd: data.valueSgd,
-          vendor: data.vendor,
-          incidentDate: data.incidentDate,
-          description: data.description,
-          justification: data.justification,
-          mitigation: data.mitigation,
-          contraventionId: contravention.id,
-          loggedByName: contravention.loggedBy?.name || 'System',
-        }).catch((err: Error) => {
-          console.error('Failed to announce contravention to Slack:', err);
-        });
-      }
-    }).catch((err: Error) => {
-      console.error('Failed to load Slack service:', err);
-    });
+    // Note: We no longer announce new contraventions on creation
+    // Only APPROVED contraventions are announced to the management Slack channel
+    // This is done in markComplete() after admin approval
 
     // Send webhook to Google Apps Script if approver email is provided
     if (data.authorizerEmail) {
@@ -489,6 +467,24 @@ export class ContraventionService {
       },
     });
 
+    // Notify ops channel when transitioning to PENDING_REVIEW
+    if (newStatus === 'PENDING_REVIEW' && contravention.status !== 'PENDING_REVIEW') {
+      getSlackService().then(async (slackSvc) => {
+        if (slackSvc && slackSvc.isConfigured()) {
+          await slackSvc.notifyPendingAdminReview({
+            referenceNo: contravention.referenceNo,
+            employeeName: updated.employee.name,
+            typeName: updated.type.name,
+            severity: contravention.severity,
+            reason: 'Approval document uploaded - awaiting admin final review',
+            contraventionId: id,
+          });
+        }
+      }).catch((err) => {
+        console.error('Failed to notify ops channel:', err);
+      });
+    }
+
     return updated;
   }
 
@@ -537,10 +533,10 @@ export class ContraventionService {
       });
     }
 
-    // Announce to Slack channel
+    // Announce APPROVED contravention to management Slack channel
     getSlackService().then(async (slackSvc) => {
       if (slackSvc && slackSvc.isConfigured()) {
-        await slackSvc.announceContravention({
+        await slackSvc.announceApprovedContravention({
           referenceNo: contravention.referenceNo,
           employeeName: updated.employee.name,
           typeName: updated.type.name,
@@ -557,7 +553,7 @@ export class ContraventionService {
         });
       }
     }).catch((err) => {
-      console.error('Failed to announce contravention to Slack:', err);
+      console.error('Failed to announce approved contravention to Slack:', err);
     });
 
     return updated;

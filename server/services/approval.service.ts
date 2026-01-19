@@ -311,6 +311,21 @@ export class ApprovalService {
           status: 'PENDING_REVIEW',
         },
       });
+
+      // Notify ops channel that there's a contravention pending admin review
+      const slackService = await getSlackService();
+      if (slackService && slackService.isConfigured()) {
+        slackService.notifyPendingAdminReview({
+          referenceNo: updatedApproval.contravention.referenceNo,
+          employeeName: updatedApproval.contravention.employee.name,
+          typeName: updatedApproval.contravention.type.name,
+          severity: updatedApproval.contravention.severity,
+          reason: `Approved by ${reviewer.name} - awaiting admin final review`,
+          contraventionId: updatedApproval.contravention.id,
+        }).catch((err) => {
+          console.error('Failed to notify ops channel:', err);
+        });
+      }
     } else if (status === 'REJECTED') {
       // Rejected: update status to REJECTED
       await prisma.contravention.update({
