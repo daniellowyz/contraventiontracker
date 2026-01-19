@@ -39,7 +39,7 @@ import {
   Paperclip
 } from 'lucide-react';
 import { Severity, ContraventionStatus } from '@/types';
-import { uploadApprovalPdf } from '@/lib/supabase';
+import { uploadApprovalPdf, uploadSupportingDoc, supabase } from '@/lib/supabase';
 
 const SEVERITY_OPTIONS = [
   { value: 'LOW', label: 'Low' },
@@ -102,6 +102,11 @@ export function ContraventionDetailPage() {
   const [newTeamName, setNewTeamName] = useState('');
   const [isPersonalEdit, setIsPersonalEdit] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // File upload for supporting docs in user edit/resubmit
+  const [pendingSupportingDocs, setPendingSupportingDocs] = useState<File[]>([]);
+  const [isUploadingDocs, setIsUploadingDocs] = useState(false);
+  const supportingDocsInputRef = useRef<HTMLInputElement>(null);
 
   // Departed member handling for reassignment
   const [isDepartedMember, setIsDepartedMember] = useState(false);
@@ -316,12 +321,39 @@ export function ContraventionDetailPage() {
     }
   };
 
-  const handleUserEditSave = () => {
+  const handleUserEditSave = async () => {
     if (!userEditData.description?.trim()) {
       setError('Description is required');
       return;
     }
-    userEditMutation.mutate(userEditData);
+
+    // Upload pending supporting documents first
+    let updatedData = { ...userEditData };
+    if (pendingSupportingDocs.length > 0 && supabase && contravention) {
+      try {
+        setIsUploadingDocs(true);
+        const uploadedUrls: string[] = [];
+        for (const file of pendingSupportingDocs) {
+          const url = await uploadSupportingDoc(file, contravention.referenceNo);
+          if (url) {
+            uploadedUrls.push(url);
+          }
+        }
+        updatedData = {
+          ...updatedData,
+          supportingDocs: [...(updatedData.supportingDocs || []), ...uploadedUrls],
+        };
+      } catch (uploadError) {
+        setError(uploadError instanceof Error ? uploadError.message : 'Failed to upload supporting documents');
+        setIsUploadingDocs(false);
+        return;
+      } finally {
+        setIsUploadingDocs(false);
+      }
+    }
+
+    userEditMutation.mutate(updatedData);
+    setPendingSupportingDocs([]);
   };
 
   const handleUserEditCancel = () => {
@@ -348,7 +380,7 @@ export function ContraventionDetailPage() {
     }
   };
 
-  const handleResubmitSave = () => {
+  const handleResubmitSave = async () => {
     if (!resubmitData.description?.trim()) {
       setError('Description is required');
       return;
@@ -365,13 +397,66 @@ export function ContraventionDetailPage() {
       setError('Please select an approver');
       return;
     }
-    resubmitMutation.mutate(resubmitData);
+
+    // Upload pending supporting documents first
+    let updatedData = { ...resubmitData };
+    if (pendingSupportingDocs.length > 0 && supabase && contravention) {
+      try {
+        setIsUploadingDocs(true);
+        const uploadedUrls: string[] = [];
+        for (const file of pendingSupportingDocs) {
+          const url = await uploadSupportingDoc(file, contravention.referenceNo);
+          if (url) {
+            uploadedUrls.push(url);
+          }
+        }
+        updatedData = {
+          ...updatedData,
+          supportingDocs: [...(updatedData.supportingDocs || []), ...uploadedUrls],
+        };
+      } catch (uploadError) {
+        setError(uploadError instanceof Error ? uploadError.message : 'Failed to upload supporting documents');
+        setIsUploadingDocs(false);
+        return;
+      } finally {
+        setIsUploadingDocs(false);
+      }
+    }
+
+    resubmitMutation.mutate(updatedData);
+    setPendingSupportingDocs([]);
   };
 
   const handleResubmitCancel = () => {
     setIsResubmitting(false);
     setResubmitData({ description: '', justification: '', mitigation: '' });
+    setPendingSupportingDocs([]);
     setError('');
+  };
+
+  // Supporting docs file handlers
+  const handleSupportingDocSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      setPendingSupportingDocs((prev) => [...prev, ...Array.from(files)]);
+      if (supportingDocsInputRef.current) {
+        supportingDocsInputRef.current.value = '';
+      }
+    }
+  };
+
+  const removePendingDoc = (index: number) => {
+    setPendingSupportingDocs((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const removeExistingDoc = (index: number, isUserEdit: boolean) => {
+    if (isUserEdit) {
+      const currentDocs = userEditData.supportingDocs || [];
+      setUserEditData({ ...userEditData, supportingDocs: currentDocs.filter((_, i) => i !== index) });
+    } else {
+      const currentDocs = resubmitData.supportingDocs || [];
+      setResubmitData({ ...resubmitData, supportingDocs: currentDocs.filter((_, i) => i !== index) });
+    }
   };
 
   // Handler for creating departed member during reassignment
@@ -883,6 +968,82 @@ export function ContraventionDetailPage() {
                         placeholder="Brief summary"
                       />
                     </div>
+
+                    {/* Supporting Documents */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+                        <Paperclip className="w-4 h-4" />
+                        Supporting Documents
+                      </label>
+
+                      {/* Existing uploaded documents */}
+                      {userEditData.supportingDocs && userEditData.supportingDocs.length > 0 && (
+                        <div className="mb-3 space-y-2">
+                          <p className="text-xs font-medium text-gray-600">Current:</p>
+                          {userEditData.supportingDocs.map((url, index) => (
+                            <div key={index} className="flex items-center gap-2 p-2 bg-green-50 rounded-lg">
+                              <Paperclip className="w-4 h-4 text-green-600 flex-shrink-0" />
+                              <a
+                                href={url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm text-blue-600 hover:text-blue-800 truncate flex-1"
+                              >
+                                Document {index + 1}
+                                <ExternalLink className="w-3 h-3 inline ml-1" />
+                              </a>
+                              <button
+                                type="button"
+                                onClick={() => removeExistingDoc(index, true)}
+                                className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Pending files to upload */}
+                      {pendingSupportingDocs.length > 0 && (
+                        <div className="mb-3 space-y-2">
+                          <p className="text-xs font-medium text-gray-600">Pending upload:</p>
+                          {pendingSupportingDocs.map((file, index) => (
+                            <div key={index} className="flex items-center gap-2 p-2 bg-amber-50 rounded-lg">
+                              <Paperclip className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                              <span className="text-sm text-gray-700 truncate flex-1">{file.name}</span>
+                              <span className="text-xs text-gray-500">{(file.size / 1024).toFixed(1)} KB</span>
+                              <button
+                                type="button"
+                                onClick={() => removePendingDoc(index)}
+                                className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => supportingDocsInputRef.current?.click()}
+                        disabled={isUploadingDocs}
+                      >
+                        {isUploadingDocs ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Uploading...
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-4 h-4 mr-2" />
+                            Add Files
+                          </>
+                        )}
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </Card>
@@ -981,11 +1142,97 @@ export function ContraventionDetailPage() {
                         An approval request will be sent to the selected approver.
                       </p>
                     </div>
+
+                    {/* Supporting Documents */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+                        <Paperclip className="w-4 h-4" />
+                        Supporting Documents
+                      </label>
+
+                      {/* Existing uploaded documents */}
+                      {resubmitData.supportingDocs && resubmitData.supportingDocs.length > 0 && (
+                        <div className="mb-3 space-y-2">
+                          <p className="text-xs font-medium text-gray-600">Current:</p>
+                          {resubmitData.supportingDocs.map((url, index) => (
+                            <div key={index} className="flex items-center gap-2 p-2 bg-green-50 rounded-lg">
+                              <Paperclip className="w-4 h-4 text-green-600 flex-shrink-0" />
+                              <a
+                                href={url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm text-blue-600 hover:text-blue-800 truncate flex-1"
+                              >
+                                Document {index + 1}
+                                <ExternalLink className="w-3 h-3 inline ml-1" />
+                              </a>
+                              <button
+                                type="button"
+                                onClick={() => removeExistingDoc(index, false)}
+                                className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Pending files to upload */}
+                      {pendingSupportingDocs.length > 0 && (
+                        <div className="mb-3 space-y-2">
+                          <p className="text-xs font-medium text-gray-600">Pending upload:</p>
+                          {pendingSupportingDocs.map((file, index) => (
+                            <div key={index} className="flex items-center gap-2 p-2 bg-amber-50 rounded-lg">
+                              <Paperclip className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                              <span className="text-sm text-gray-700 truncate flex-1">{file.name}</span>
+                              <span className="text-xs text-gray-500">{(file.size / 1024).toFixed(1)} KB</span>
+                              <button
+                                type="button"
+                                onClick={() => removePendingDoc(index)}
+                                className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* File input - shared with User Edit Form */}
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => supportingDocsInputRef.current?.click()}
+                        disabled={isUploadingDocs}
+                      >
+                        {isUploadingDocs ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Uploading...
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-4 h-4 mr-2" />
+                            Add Files
+                          </>
+                        )}
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </Card>
             )}
 
+            {/* Hidden file input shared by both edit forms */}
+            <input
+              ref={supportingDocsInputRef}
+              type="file"
+              multiple
+              accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif"
+              onChange={handleSupportingDocSelect}
+              className="hidden"
+            />
           </div>
 
           {/* Sidebar */}

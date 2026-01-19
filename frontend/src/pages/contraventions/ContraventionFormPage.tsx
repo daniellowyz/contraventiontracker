@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { contraventionsApi, CreateContraventionInput } from '@/api/contraventions.api';
@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { ArrowLeft, Save, Upload, Loader2, Plus, UserX, Paperclip, Trash2, ExternalLink } from 'lucide-react';
 import { Severity } from '@/types';
-import { uploadApprovalPdf, supabase } from '@/lib/supabase';
+import { uploadApprovalPdf, uploadSupportingDoc, supabase } from '@/lib/supabase';
 
 const SEVERITY_OPTIONS = [
   { value: 'LOW', label: 'Low' },
@@ -65,7 +65,9 @@ export function ContraventionFormPage() {
     supportingDocs: [],
   });
 
-  const [newDocUrl, setNewDocUrl] = useState('');
+  const [pendingSupportingDocs, setPendingSupportingDocs] = useState<File[]>([]);
+  const [isUploadingDocs, setIsUploadingDocs] = useState(false);
+  const supportingDocsInputRef = useRef<HTMLInputElement>(null);
 
   const [approvalFile, setApprovalFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -146,24 +148,23 @@ export function ContraventionFormPage() {
     setError('');
   };
 
-  const addSupportingDoc = () => {
-    if (newDocUrl.trim()) {
-      // Basic URL validation
-      try {
-        new URL(newDocUrl.trim());
-        setFormData((prev) => ({
-          ...prev,
-          supportingDocs: [...prev.supportingDocs, newDocUrl.trim()],
-        }));
-        setNewDocUrl('');
-        setError('');
-      } catch {
-        setError('Please enter a valid URL');
+  const handleSupportingDocSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      // Add selected files to pending list
+      setPendingSupportingDocs((prev) => [...prev, ...Array.from(files)]);
+      // Reset input
+      if (supportingDocsInputRef.current) {
+        supportingDocsInputRef.current.value = '';
       }
     }
   };
 
-  const removeSupportingDoc = (index: number) => {
+  const removePendingDoc = (index: number) => {
+    setPendingSupportingDocs((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const removeUploadedDoc = (index: number) => {
     setFormData((prev) => ({
       ...prev,
       supportingDocs: prev.supportingDocs.filter((_, i) => i !== index),
@@ -248,9 +249,30 @@ export function ContraventionFormPage() {
     if (formData.summary.trim()) {
       submitData.summary = formData.summary.trim();
     }
+    // Upload pending supporting documents first
+    const allSupportingDocs = [...formData.supportingDocs];
+    if (pendingSupportingDocs.length > 0 && supabase) {
+      try {
+        setIsUploadingDocs(true);
+        const tempRefNo = `CONTRA-${Date.now()}`;
+        for (const file of pendingSupportingDocs) {
+          const url = await uploadSupportingDoc(file, tempRefNo);
+          if (url) {
+            allSupportingDocs.push(url);
+          }
+        }
+      } catch (uploadError) {
+        setError(uploadError instanceof Error ? uploadError.message : 'Failed to upload supporting documents');
+        setIsUploadingDocs(false);
+        return;
+      } finally {
+        setIsUploadingDocs(false);
+      }
+    }
+
     // Add supporting documents if any
-    if (formData.supportingDocs.length > 0) {
-      submitData.supportingDocs = formData.supportingDocs;
+    if (allSupportingDocs.length > 0) {
+      submitData.supportingDocs = allSupportingDocs;
     }
     // Only send approver email if requesting approval
     if (formData.approvalStatus === 'needs_approval' && formData.approverEmail) {
@@ -783,27 +805,28 @@ export function ContraventionFormPage() {
                   Supporting Documents (Optional)
                 </label>
                 <p className="text-xs text-gray-500 mb-2">
-                  Add links to supporting documents (e.g., invoices, emails, quotations). You can upload files to a file sharing service and paste the links here.
+                  Upload supporting documents (e.g., invoices, emails, quotations). Accepted formats: PDF, Word, Excel, images.
                 </p>
 
-                {/* Existing documents list */}
+                {/* Already uploaded documents */}
                 {formData.supportingDocs.length > 0 && (
                   <div className="mb-3 space-y-2">
+                    <p className="text-xs font-medium text-gray-600">Uploaded:</p>
                     {formData.supportingDocs.map((url, index) => (
-                      <div key={index} className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                        <Paperclip className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                      <div key={index} className="flex items-center gap-2 p-2 bg-green-50 rounded-lg">
+                        <Paperclip className="w-4 h-4 text-green-600 flex-shrink-0" />
                         <a
                           href={url}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-sm text-blue-600 hover:text-blue-800 truncate flex-1"
                         >
-                          {url}
+                          Document {index + 1}
                           <ExternalLink className="w-3 h-3 inline ml-1" />
                         </a>
                         <button
                           type="button"
-                          onClick={() => removeSupportingDoc(index)}
+                          onClick={() => removeUploadedDoc(index)}
                           className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -813,30 +836,61 @@ export function ContraventionFormPage() {
                   </div>
                 )}
 
-                {/* Add new document URL */}
-                <div className="flex gap-2">
-                  <Input
-                    type="url"
-                    value={newDocUrl}
-                    onChange={(e) => setNewDocUrl(e.target.value)}
-                    placeholder="https://..."
-                    className="flex-1"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        addSupportingDoc();
-                      }
-                    }}
-                  />
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={addSupportingDoc}
-                  >
-                    <Plus className="w-4 h-4 mr-1" />
-                    Add
-                  </Button>
-                </div>
+                {/* Pending files to upload */}
+                {pendingSupportingDocs.length > 0 && (
+                  <div className="mb-3 space-y-2">
+                    <p className="text-xs font-medium text-gray-600">Pending upload:</p>
+                    {pendingSupportingDocs.map((file, index) => (
+                      <div key={index} className="flex items-center gap-2 p-2 bg-amber-50 rounded-lg">
+                        <Paperclip className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                        <span className="text-sm text-gray-700 truncate flex-1">
+                          {file.name}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          {(file.size / 1024).toFixed(1)} KB
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removePendingDoc(index)}
+                          className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* File input */}
+                <input
+                  ref={supportingDocsInputRef}
+                  type="file"
+                  multiple
+                  accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif"
+                  onChange={handleSupportingDocSelect}
+                  className="hidden"
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => supportingDocsInputRef.current?.click()}
+                  disabled={isUploadingDocs}
+                >
+                  {isUploadingDocs ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4 mr-2" />
+                      Select Files
+                    </>
+                  )}
+                </Button>
+                <p className="text-xs text-gray-500 mt-1">
+                  Files will be uploaded when you create the contravention.
+                </p>
               </div>
             </div>
 
@@ -848,8 +902,13 @@ export function ContraventionFormPage() {
               >
                 Cancel
               </Button>
-              <Button type="submit" isLoading={createMutation.isPending || isUploading} disabled={isUploading}>
-                {isUploading ? (
+              <Button type="submit" isLoading={createMutation.isPending || isUploading || isUploadingDocs} disabled={isUploading || isUploadingDocs}>
+                {isUploadingDocs ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Uploading Documents...
+                  </>
+                ) : isUploading ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     Uploading PDF...
