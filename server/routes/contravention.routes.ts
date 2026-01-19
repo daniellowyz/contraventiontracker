@@ -28,11 +28,10 @@ router.get(
   }
 );
 
-// POST /api/contraventions - Create new contravention (admin only)
+// POST /api/contraventions - Create new contravention (any authenticated user)
 router.post(
   '/',
   authenticate,
-  requireAdmin,
   validateBody(createContraventionSchema),
   async (req: AuthenticatedRequest, res: Response, next) => {
     try {
