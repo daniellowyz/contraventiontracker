@@ -858,17 +858,8 @@ export function ContraventionFormPage() {
                   </div>
                 )}
 
-                {/* File input - using label htmlFor pattern for better browser compatibility */}
-                <input
-                  id="supporting-docs-input"
-                  type="file"
-                  multiple
-                  accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif"
-                  onChange={handleSupportingDocSelect}
-                  className="sr-only"
-                />
+                {/* File input - input must be INSIDE the label for proper click handling */}
                 <label
-                  htmlFor="supporting-docs-input"
                   className={`inline-flex items-center justify-center font-medium rounded-lg transition-colors px-4 py-2 text-sm cursor-pointer ${
                     isUploadingDocs
                       ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
@@ -886,6 +877,13 @@ export function ContraventionFormPage() {
                       Select Files
                     </>
                   )}
+                  <input
+                    type="file"
+                    multiple
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif"
+                    onChange={handleSupportingDocSelect}
+                    className="sr-only"
+                  />
                 </label>
                 <p className="text-xs text-gray-500 mt-1">
                   Files will be uploaded when you create the contravention.

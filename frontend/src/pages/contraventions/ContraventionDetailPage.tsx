@@ -1006,17 +1006,8 @@ export function ContraventionDetailPage() {
                         </div>
                       )}
 
-                      {/* File input - using label htmlFor pattern for better browser compatibility */}
-                      <input
-                        id="edit-supporting-docs-input"
-                        type="file"
-                        multiple
-                        accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif"
-                        onChange={handleSupportingDocSelect}
-                        className="sr-only"
-                      />
+                      {/* File input - input must be INSIDE the label for proper click handling */}
                       <label
-                        htmlFor="edit-supporting-docs-input"
                         className={`inline-flex items-center justify-center font-medium rounded-lg transition-colors px-4 py-2 text-sm cursor-pointer ${
                           isUploadingDocs
                             ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
@@ -1034,6 +1025,13 @@ export function ContraventionDetailPage() {
                             Add Files
                           </>
                         )}
+                        <input
+                          type="file"
+                          multiple
+                          accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif"
+                          onChange={handleSupportingDocSelect}
+                          className="sr-only"
+                        />
                       </label>
                     </div>
 
