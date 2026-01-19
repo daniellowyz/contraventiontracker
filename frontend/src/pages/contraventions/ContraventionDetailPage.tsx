@@ -1,9 +1,10 @@
 import { useState, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { contraventionsApi, CreateContraventionInput } from '@/api/contraventions.api';
+import { contraventionsApi, CreateContraventionInput, UserUpdateContraventionInput, ResubmitContraventionInput } from '@/api/contraventions.api';
 import { employeesApi, EmployeeListItem } from '@/api/employees.api';
 import { teamsApi, Team } from '@/api/teams.api';
+import { approversApi } from '@/api/approvers.api';
 import { useAuthStore } from '@/stores/authStore';
 import { Header } from '@/components/layout/Header';
 import { Card } from '@/components/ui/Card';
@@ -33,7 +34,9 @@ import {
   UserX,
   XCircle,
   UserCheck,
-  ClipboardCheck
+  ClipboardCheck,
+  RotateCcw,
+  Paperclip
 } from 'lucide-react';
 import { Severity, ContraventionStatus } from '@/types';
 import { uploadApprovalPdf } from '@/lib/supabase';
@@ -86,7 +89,11 @@ export function ContraventionDetailPage() {
   const isAdmin = user?.role === 'ADMIN';
 
   const [isEditing, setIsEditing] = useState(false);
+  const [isUserEditing, setIsUserEditing] = useState(false); // User edit mode (non-admin)
+  const [isResubmitting, setIsResubmitting] = useState(false); // Resubmit mode for rejected contraventions
   const [editData, setEditData] = useState<Partial<CreateContraventionInput> & { severity?: Severity; employeeId?: string; teamId?: string; status?: ContraventionStatus }>({});
+  const [userEditData, setUserEditData] = useState<UserUpdateContraventionInput>({});
+  const [resubmitData, setResubmitData] = useState<ResubmitContraventionInput>({ description: '', justification: '', mitigation: '' });
   const [error, setError] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
@@ -123,6 +130,18 @@ export function ContraventionDetailPage() {
     enabled: isAdmin,
   });
 
+  // Fetch approvers for resubmit
+  const { data: approvers } = useQuery({
+    queryKey: ['approvers'],
+    queryFn: () => approversApi.getAll(),
+    enabled: isResubmitting,
+  });
+
+  // Check if current user can edit this contravention (non-admin edit)
+  const canUserEdit = contravention &&
+    user?.userId === contravention.loggedBy?.id &&
+    ['PENDING_APPROVAL', 'REJECTED'].includes(contravention.status);
+
   // Update mutation
   const updateMutation = useMutation({
     mutationFn: (data: Partial<CreateContraventionInput>) => contraventionsApi.update(id!, data),
@@ -148,6 +167,36 @@ export function ContraventionDetailPage() {
     onError: (err: Error) => {
       setError(err.message || 'Failed to delete contravention');
       setIsDeleting(false);
+    },
+  });
+
+  // User edit mutation (for users editing their own contraventions)
+  const userEditMutation = useMutation({
+    mutationFn: (data: UserUpdateContraventionInput) => contraventionsApi.userUpdate(id!, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contravention', id] });
+      queryClient.invalidateQueries({ queryKey: ['contraventions'] });
+      setIsUserEditing(false);
+      setUserEditData({});
+      setError('');
+    },
+    onError: (err: Error) => {
+      setError(err.message || 'Failed to update contravention');
+    },
+  });
+
+  // Resubmit mutation (for resubmitting rejected contraventions)
+  const resubmitMutation = useMutation({
+    mutationFn: (data: ResubmitContraventionInput) => contraventionsApi.resubmit(id!, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contravention', id] });
+      queryClient.invalidateQueries({ queryKey: ['contraventions'] });
+      setIsResubmitting(false);
+      setResubmitData({ description: '', justification: '', mitigation: '' });
+      setError('');
+    },
+    onError: (err: Error) => {
+      setError(err.message || 'Failed to resubmit contravention');
     },
   });
 
@@ -247,6 +296,82 @@ export function ContraventionDetailPage() {
     setIsDepartedMember(false);
     setDepartedEmail('');
     setDepartedName('');
+  };
+
+  // User edit mode handlers
+  const handleUserEdit = () => {
+    if (contravention) {
+      setUserEditData({
+        vendor: contravention.vendor || '',
+        valueSgd: contravention.valueSgd,
+        description: contravention.description,
+        justification: contravention.justification || '',
+        mitigation: contravention.mitigation || '',
+        summary: contravention.summary || '',
+        evidenceUrls: contravention.evidenceUrls || [],
+        supportingDocs: contravention.supportingDocs || [],
+        authorizerEmail: contravention.authorizerEmail || '',
+      });
+      setIsUserEditing(true);
+    }
+  };
+
+  const handleUserEditSave = () => {
+    if (!userEditData.description?.trim()) {
+      setError('Description is required');
+      return;
+    }
+    userEditMutation.mutate(userEditData);
+  };
+
+  const handleUserEditCancel = () => {
+    setIsUserEditing(false);
+    setUserEditData({});
+    setError('');
+  };
+
+  // Resubmit handlers
+  const handleResubmit = () => {
+    if (contravention) {
+      setResubmitData({
+        vendor: contravention.vendor || undefined,
+        valueSgd: contravention.valueSgd,
+        description: contravention.description,
+        justification: contravention.justification || '',
+        mitigation: contravention.mitigation || '',
+        summary: contravention.summary || undefined,
+        evidenceUrls: contravention.evidenceUrls || [],
+        supportingDocs: contravention.supportingDocs || [],
+        authorizerEmail: contravention.authorizerEmail || '',
+      });
+      setIsResubmitting(true);
+    }
+  };
+
+  const handleResubmitSave = () => {
+    if (!resubmitData.description?.trim()) {
+      setError('Description is required');
+      return;
+    }
+    if (!resubmitData.justification?.trim()) {
+      setError('Justification is required');
+      return;
+    }
+    if (!resubmitData.mitigation?.trim()) {
+      setError('Mitigation measures are required');
+      return;
+    }
+    if (!resubmitData.authorizerEmail?.trim()) {
+      setError('Please select an approver');
+      return;
+    }
+    resubmitMutation.mutate(resubmitData);
+  };
+
+  const handleResubmitCancel = () => {
+    setIsResubmitting(false);
+    setResubmitData({ description: '', justification: '', mitigation: '' });
+    setError('');
   };
 
   // Handler for creating departed member during reassignment
@@ -385,12 +510,28 @@ export function ContraventionDetailPage() {
         subtitle={contravention.type.name}
         actions={
           <div className="flex gap-2">
-            {isAdmin && !isEditing && (
+            {/* Admin edit button */}
+            {isAdmin && !isEditing && !isUserEditing && !isResubmitting && (
               <Button onClick={handleEdit}>
                 <Edit2 className="w-4 h-4 mr-2" />
                 Edit
               </Button>
             )}
+            {/* User edit button (for their own contraventions) */}
+            {!isAdmin && canUserEdit && !isUserEditing && !isResubmitting && (
+              <Button onClick={handleUserEdit}>
+                <Edit2 className="w-4 h-4 mr-2" />
+                Edit
+              </Button>
+            )}
+            {/* Resubmit button for rejected contraventions */}
+            {canUserEdit && contravention.status === 'REJECTED' && !isUserEditing && !isResubmitting && (
+              <Button variant="primary" onClick={handleResubmit}>
+                <RotateCcw className="w-4 h-4 mr-2" />
+                Resubmit
+              </Button>
+            )}
+            {/* Admin editing controls */}
             {isEditing && (
               <>
                 <Button variant="secondary" onClick={handleCancel}>
@@ -400,6 +541,32 @@ export function ContraventionDetailPage() {
                 <Button onClick={handleSave} isLoading={updateMutation.isPending}>
                   <Save className="w-4 h-4 mr-2" />
                   Save Changes
+                </Button>
+              </>
+            )}
+            {/* User editing controls */}
+            {isUserEditing && (
+              <>
+                <Button variant="secondary" onClick={handleUserEditCancel}>
+                  <X className="w-4 h-4 mr-2" />
+                  Cancel
+                </Button>
+                <Button onClick={handleUserEditSave} isLoading={userEditMutation.isPending}>
+                  <Save className="w-4 h-4 mr-2" />
+                  Save Changes
+                </Button>
+              </>
+            )}
+            {/* Resubmit controls */}
+            {isResubmitting && (
+              <>
+                <Button variant="secondary" onClick={handleResubmitCancel}>
+                  <X className="w-4 h-4 mr-2" />
+                  Cancel
+                </Button>
+                <Button onClick={handleResubmitSave} isLoading={resubmitMutation.isPending}>
+                  <Save className="w-4 h-4 mr-2" />
+                  Resubmit for Approval
                 </Button>
               </>
             )}
@@ -554,6 +721,47 @@ export function ContraventionDetailPage() {
                     </div>
                   )}
 
+                  {/* Justification */}
+                  {!isEditing && contravention.justification && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-500">Justification for Non-Compliance</label>
+                      <p className="text-gray-900 whitespace-pre-wrap">{contravention.justification}</p>
+                    </div>
+                  )}
+
+                  {/* Mitigation */}
+                  {!isEditing && contravention.mitigation && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-500">Mitigation Measures</label>
+                      <p className="text-gray-900 whitespace-pre-wrap">{contravention.mitigation}</p>
+                    </div>
+                  )}
+
+                  {/* Supporting Documents */}
+                  {!isEditing && contravention.supportingDocs && contravention.supportingDocs.length > 0 && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-500 flex items-center gap-2">
+                        <Paperclip className="w-4 h-4" />
+                        Supporting Documents
+                      </label>
+                      <div className="mt-2 space-y-2">
+                        {contravention.supportingDocs.map((url, index) => (
+                          <a
+                            key={index}
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 px-3 py-2 bg-gray-50 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors text-sm"
+                          >
+                            <FileText className="w-4 h-4" />
+                            <span>Document {index + 1}</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Authorizer Email */}
                   {contravention.authorizerEmail && (
                     <div>
@@ -591,6 +799,192 @@ export function ContraventionDetailPage() {
                 </div>
               </div>
             </Card>
+
+            {/* User Edit Form */}
+            {isUserEditing && (
+              <Card>
+                <div className="p-6">
+                  <h2 className="text-lg font-semibold text-gray-900 mb-4">Edit Contravention</h2>
+                  <p className="text-sm text-gray-500 mb-4">
+                    Update the details below. You can only edit contraventions that are pending approval or have been rejected.
+                  </p>
+
+                  <div className="space-y-4">
+                    {/* Description */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Description <span className="text-red-500">*</span>
+                      </label>
+                      <textarea
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[100px]"
+                        value={userEditData.description || ''}
+                        onChange={(e) => setUserEditData({ ...userEditData, description: e.target.value })}
+                        placeholder="Detailed description..."
+                      />
+                    </div>
+
+                    {/* Justification */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Justification for Non-Compliance
+                      </label>
+                      <textarea
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[100px]"
+                        value={userEditData.justification || ''}
+                        onChange={(e) => setUserEditData({ ...userEditData, justification: e.target.value })}
+                        placeholder="Explain why proper procedures were not followed..."
+                      />
+                    </div>
+
+                    {/* Mitigation */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Mitigation Measures
+                      </label>
+                      <textarea
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[100px]"
+                        value={userEditData.mitigation || ''}
+                        onChange={(e) => setUserEditData({ ...userEditData, mitigation: e.target.value })}
+                        placeholder="Describe steps to prevent this from happening again..."
+                      />
+                    </div>
+
+                    {/* Vendor */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Vendor</label>
+                      <Input
+                        type="text"
+                        value={userEditData.vendor || ''}
+                        onChange={(e) => setUserEditData({ ...userEditData, vendor: e.target.value })}
+                        placeholder="Vendor name"
+                      />
+                    </div>
+
+                    {/* Value */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Value (SGD)</label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={userEditData.valueSgd || ''}
+                        onChange={(e) => setUserEditData({ ...userEditData, valueSgd: e.target.value ? parseFloat(e.target.value) : undefined })}
+                        placeholder="0.00"
+                      />
+                    </div>
+
+                    {/* Summary */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Summary</label>
+                      <Input
+                        type="text"
+                        value={userEditData.summary || ''}
+                        onChange={(e) => setUserEditData({ ...userEditData, summary: e.target.value })}
+                        placeholder="Brief summary"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            )}
+
+            {/* Resubmit Form */}
+            {isResubmitting && (
+              <Card>
+                <div className="p-6">
+                  <h2 className="text-lg font-semibold text-gray-900 mb-4">Resubmit Contravention</h2>
+                  <p className="text-sm text-gray-500 mb-4">
+                    Update your contravention details and select an approver to resubmit for approval.
+                  </p>
+
+                  <div className="space-y-4">
+                    {/* Description */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Description <span className="text-red-500">*</span>
+                      </label>
+                      <textarea
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[100px]"
+                        value={resubmitData.description || ''}
+                        onChange={(e) => setResubmitData({ ...resubmitData, description: e.target.value })}
+                        placeholder="Detailed description..."
+                      />
+                    </div>
+
+                    {/* Justification */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Justification for Non-Compliance <span className="text-red-500">*</span>
+                      </label>
+                      <textarea
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[100px]"
+                        value={resubmitData.justification || ''}
+                        onChange={(e) => setResubmitData({ ...resubmitData, justification: e.target.value })}
+                        placeholder="Explain why proper procedures were not followed..."
+                      />
+                    </div>
+
+                    {/* Mitigation */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Mitigation Measures <span className="text-red-500">*</span>
+                      </label>
+                      <textarea
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[100px]"
+                        value={resubmitData.mitigation || ''}
+                        onChange={(e) => setResubmitData({ ...resubmitData, mitigation: e.target.value })}
+                        placeholder="Describe steps to prevent this from happening again..."
+                      />
+                    </div>
+
+                    {/* Vendor */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Vendor</label>
+                      <Input
+                        type="text"
+                        value={resubmitData.vendor || ''}
+                        onChange={(e) => setResubmitData({ ...resubmitData, vendor: e.target.value })}
+                        placeholder="Vendor name"
+                      />
+                    </div>
+
+                    {/* Value */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Value (SGD)</label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={resubmitData.valueSgd || ''}
+                        onChange={(e) => setResubmitData({ ...resubmitData, valueSgd: e.target.value ? parseFloat(e.target.value) : undefined })}
+                        placeholder="0.00"
+                      />
+                    </div>
+
+                    {/* Approver Selection */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Select Approver <span className="text-red-500">*</span>
+                      </label>
+                      <Select
+                        options={[
+                          { value: '', label: 'Select an approver...' },
+                          ...(approvers?.map((approver) => ({
+                            value: approver.email,
+                            label: `${approver.name}${approver.position ? ` - ${approver.position}` : ''} (${approver.role})`,
+                          })) || []),
+                        ]}
+                        value={resubmitData.authorizerEmail || ''}
+                        onChange={(e) => setResubmitData({ ...resubmitData, authorizerEmail: e.target.value })}
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        An approval request will be sent to the selected approver.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            )}
 
           </div>
 

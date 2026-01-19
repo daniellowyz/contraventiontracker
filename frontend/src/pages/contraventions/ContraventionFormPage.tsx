@@ -11,7 +11,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { ArrowLeft, Save, Upload, Loader2, Plus, UserX } from 'lucide-react';
+import { ArrowLeft, Save, Upload, Loader2, Plus, UserX, Paperclip, Trash2, ExternalLink } from 'lucide-react';
 import { Severity } from '@/types';
 import { uploadApprovalPdf, supabase } from '@/lib/supabase';
 
@@ -47,6 +47,7 @@ export function ContraventionFormPage() {
     severity: Severity;
     approvalStatus: string;
     approverEmail: string;
+    supportingDocs: string[];
   }>({
     employeeId: '',
     typeId: '',
@@ -61,7 +62,10 @@ export function ContraventionFormPage() {
     severity: 'MEDIUM',
     approvalStatus: '',
     approverEmail: '',
+    supportingDocs: [],
   });
+
+  const [newDocUrl, setNewDocUrl] = useState('');
 
   const [approvalFile, setApprovalFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -142,6 +146,30 @@ export function ContraventionFormPage() {
     setError('');
   };
 
+  const addSupportingDoc = () => {
+    if (newDocUrl.trim()) {
+      // Basic URL validation
+      try {
+        new URL(newDocUrl.trim());
+        setFormData((prev) => ({
+          ...prev,
+          supportingDocs: [...prev.supportingDocs, newDocUrl.trim()],
+        }));
+        setNewDocUrl('');
+        setError('');
+      } catch {
+        setError('Please enter a valid URL');
+      }
+    }
+  };
+
+  const removeSupportingDoc = (index: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      supportingDocs: prev.supportingDocs.filter((_, i) => i !== index),
+    }));
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -219,6 +247,10 @@ export function ContraventionFormPage() {
     }
     if (formData.summary.trim()) {
       submitData.summary = formData.summary.trim();
+    }
+    // Add supporting documents if any
+    if (formData.supportingDocs.length > 0) {
+      submitData.supportingDocs = formData.supportingDocs;
     }
     // Only send approver email if requesting approval
     if (formData.approvalStatus === 'needs_approval' && formData.approverEmail) {
@@ -742,6 +774,69 @@ export function ContraventionFormPage() {
                 <p className="mt-1 text-xs text-gray-500">
                   Describe steps to prevent this from happening again.
                 </p>
+              </div>
+
+              {/* Supporting Documents */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+                  <Paperclip className="w-4 h-4" />
+                  Supporting Documents (Optional)
+                </label>
+                <p className="text-xs text-gray-500 mb-2">
+                  Add links to supporting documents (e.g., invoices, emails, quotations). You can upload files to a file sharing service and paste the links here.
+                </p>
+
+                {/* Existing documents list */}
+                {formData.supportingDocs.length > 0 && (
+                  <div className="mb-3 space-y-2">
+                    {formData.supportingDocs.map((url, index) => (
+                      <div key={index} className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
+                        <Paperclip className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-blue-600 hover:text-blue-800 truncate flex-1"
+                        >
+                          {url}
+                          <ExternalLink className="w-3 h-3 inline ml-1" />
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => removeSupportingDoc(index)}
+                          className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Add new document URL */}
+                <div className="flex gap-2">
+                  <Input
+                    type="url"
+                    value={newDocUrl}
+                    onChange={(e) => setNewDocUrl(e.target.value)}
+                    placeholder="https://..."
+                    className="flex-1"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addSupportingDoc();
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={addSupportingDoc}
+                  >
+                    <Plus className="w-4 h-4 mr-1" />
+                    Add
+                  </Button>
+                </div>
               </div>
             </div>
 
