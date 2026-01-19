@@ -131,6 +131,32 @@ export class ContraventionService {
       console.error('Failed to load notification service:', err);
     });
 
+    // Announce new contravention to team Slack channel for visibility
+    getSlackService().then((slackSvc) => {
+      if (slackSvc && slackSvc.isConfigured()) {
+        slackSvc.announceNewContravention({
+          referenceNo,
+          employeeName: employee.name,
+          teamName: contravention.team?.name || 'Personal',
+          typeName: contraventionType.name,
+          severity,
+          points,
+          valueSgd: data.valueSgd,
+          vendor: data.vendor,
+          incidentDate: data.incidentDate,
+          description: data.description,
+          justification: data.justification,
+          mitigation: data.mitigation,
+          contraventionId: contravention.id,
+          loggedByName: contravention.loggedBy?.name || 'System',
+        }).catch((err: Error) => {
+          console.error('Failed to announce contravention to Slack:', err);
+        });
+      }
+    }).catch((err: Error) => {
+      console.error('Failed to load Slack service:', err);
+    });
+
     // Send webhook to Google Apps Script if approver email is provided
     if (data.authorizerEmail) {
       // Look up the approver by email and send notification

@@ -78,6 +78,23 @@ export interface ApprovalRequest {
   approvalPdfUrl?: string;
 }
 
+export interface NewContraventionAnnouncement {
+  referenceNo: string;
+  employeeName: string;
+  teamName: string;
+  typeName: string;
+  severity: string;
+  points: number;
+  valueSgd?: number;
+  vendor?: string;
+  incidentDate: string;
+  description: string;
+  justification: string;
+  mitigation: string;
+  contraventionId: string;
+  loggedByName: string;
+}
+
 export class SlackService {
   private token: string | undefined;
   private channelId: string | undefined;
@@ -931,6 +948,129 @@ export class SlackService {
       }
     } catch (error) {
       console.error('[SlackService] Error updating approver request message:', error);
+    }
+  }
+
+  /**
+   * Announce a new contravention to the team channel for visibility
+   */
+  async announceNewContravention(data: NewContraventionAnnouncement): Promise<void> {
+    if (!this.token || !this.channelId) {
+      console.log('[SlackService] Slack not configured, skipping new contravention announcement');
+      return;
+    }
+
+    const severityEmoji: Record<string, string> = {
+      'LOW': '🟢',
+      'MEDIUM': '🟡',
+      'HIGH': '🟠',
+      'CRITICAL': '🔴',
+    };
+
+    const emoji = severityEmoji[data.severity] || '⚪';
+    const formattedDate = new Date(data.incidentDate).toLocaleDateString('en-SG', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+
+    // Format value if present
+    const valueStr = data.valueSgd
+      ? `$${data.valueSgd.toLocaleString('en-SG', { minimumFractionDigits: 2 })}`
+      : null;
+
+    // Build the details line
+    let detailsLine = `${emoji} ${data.severity} • ${data.points} pts`;
+    if (valueStr) {
+      detailsLine += ` • ${valueStr}`;
+    }
+    if (data.vendor) {
+      detailsLine += ` • ${data.vendor}`;
+    }
+
+    const blocks = [
+      {
+        type: 'header',
+        text: {
+          type: 'plain_text',
+          text: `📋 New Contravention: ${data.referenceNo}`,
+          emoji: true,
+        },
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*${data.employeeName}* • ${data.teamName}\n📅 ${formattedDate}`,
+        },
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*Type:* ${data.typeName}\n${detailsLine}`,
+        },
+      },
+      {
+        type: 'divider',
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*What happened:*\n${data.description}`,
+        },
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*Why it happened:*\n${data.justification}`,
+        },
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*How we'll prevent this:*\n${data.mitigation}`,
+        },
+      },
+      {
+        type: 'divider',
+      },
+      {
+        type: 'actions',
+        elements: [
+          {
+            type: 'button',
+            text: {
+              type: 'plain_text',
+              text: 'View Details',
+              emoji: true,
+            },
+            url: `${this.appUrl}/contraventions/${data.contraventionId}`,
+            action_id: 'view_contravention_details',
+          },
+        ],
+      },
+      {
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: `_Logged by ${data.loggedByName}_`,
+          },
+        ],
+      },
+    ];
+
+    const text = `New contravention ${data.referenceNo} logged for ${data.employeeName} - ${data.typeName}`;
+
+    try {
+      await this.postMessage(this.channelId, blocks, text);
+      console.log(`[SlackService] Announced new contravention ${data.referenceNo} to channel`);
+    } catch (error) {
+      console.error('[SlackService] Failed to announce new contravention:', error);
     }
   }
 
