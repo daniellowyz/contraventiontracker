@@ -636,9 +636,9 @@ export function ContraventionDetailPage() {
                   <X className="w-4 h-4 mr-2" />
                   Cancel
                 </Button>
-                <Button onClick={handleUserEditSave} isLoading={userEditMutation.isPending}>
+                <Button onClick={handleUserEditSave} isLoading={userEditMutation.isPending || isUploadingDocs}>
                   <Save className="w-4 h-4 mr-2" />
-                  Save Changes
+                  Update
                 </Button>
               </>
             )}
@@ -649,7 +649,7 @@ export function ContraventionDetailPage() {
                   <X className="w-4 h-4 mr-2" />
                   Cancel
                 </Button>
-                <Button onClick={handleResubmitSave} isLoading={resubmitMutation.isPending}>
+                <Button onClick={handleResubmitSave} isLoading={resubmitMutation.isPending || isUploadingDocs}>
                   <Save className="w-4 h-4 mr-2" />
                   Resubmit for Approval
                 </Button>
@@ -1225,14 +1225,16 @@ export function ContraventionDetailPage() {
             )}
 
             {/* Hidden file input shared by both edit forms */}
-            <input
-              ref={supportingDocsInputRef}
-              type="file"
-              multiple
-              accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif"
-              onChange={handleSupportingDocSelect}
-              className="hidden"
-            />
+            {(isUserEditing || isResubmitting) && (
+              <input
+                ref={supportingDocsInputRef}
+                type="file"
+                multiple
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif"
+                onChange={handleSupportingDocSelect}
+                className="hidden"
+              />
+            )}
           </div>
 
           {/* Sidebar */}
