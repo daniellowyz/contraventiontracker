@@ -6,8 +6,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ============== ENUMS ==============
@@ -32,9 +33,11 @@ enum Severity {
 }
 
 enum ContraventionStatus {
-  PENDING_UPLOAD    // Waiting for approval PDF to be uploaded
+  PENDING_APPROVAL  // Waiting for approver to review
+  PENDING_UPLOAD    // Approved, waiting for approval PDF to be uploaded
   PENDING_REVIEW    // PDF uploaded, waiting for admin review
   COMPLETED         // Admin has verified and marked complete
+  REJECTED          // Approver rejected the contravention
 }
 
 enum DisputeStatus {

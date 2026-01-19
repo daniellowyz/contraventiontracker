@@ -30,7 +30,10 @@ import {
   Users,
   RefreshCw,
   Plus,
-  UserX
+  UserX,
+  XCircle,
+  UserCheck,
+  ClipboardCheck
 } from 'lucide-react';
 import { Severity, ContraventionStatus } from '@/types';
 import { uploadApprovalPdf } from '@/lib/supabase';
@@ -43,9 +46,11 @@ const SEVERITY_OPTIONS = [
 ];
 
 const STATUS_OPTIONS = [
-  { value: 'PENDING_UPLOAD', label: 'Pending Approval' },
+  { value: 'PENDING_APPROVAL', label: 'Pending Approver Review' },
+  { value: 'PENDING_UPLOAD', label: 'Pending PDF Upload' },
   { value: 'PENDING_REVIEW', label: 'Admin Review' },
   { value: 'COMPLETED', label: 'Completed' },
+  { value: 'REJECTED', label: 'Rejected' },
 ];
 
 type BadgeVariant = 'default' | 'success' | 'warning' | 'danger' | 'info';
@@ -58,15 +63,19 @@ const severityColors: Record<Severity, BadgeVariant> = {
 };
 
 const statusColors: Record<ContraventionStatus, BadgeVariant> = {
-  PENDING_UPLOAD: 'warning',
+  PENDING_APPROVAL: 'warning',
+  PENDING_UPLOAD: 'info',
   PENDING_REVIEW: 'info',
   COMPLETED: 'success',
+  REJECTED: 'danger',
 };
 
 const statusLabels: Record<ContraventionStatus, string> = {
-  PENDING_UPLOAD: 'Pending Approval',
+  PENDING_APPROVAL: 'Pending Approver Review',
+  PENDING_UPLOAD: 'Pending PDF Upload',
   PENDING_REVIEW: 'Admin Review',
   COMPLETED: 'Completed',
+  REJECTED: 'Rejected',
 };
 
 export function ContraventionDetailPage() {
@@ -873,11 +882,60 @@ export function ContraventionDetailPage() {
               </Card>
             )}
 
-            {/* Timeline */}
+            {/* Workflow Status */}
             <Card>
               <div className="p-6">
-                <h3 className="text-sm font-semibold text-gray-900 mb-4">Timeline</h3>
+                <h3 className="text-sm font-semibold text-gray-900 mb-4">Workflow Status</h3>
+
+                {/* Current Status Banner */}
+                <div className={`p-3 rounded-lg mb-4 ${
+                  contravention.status === 'COMPLETED' ? 'bg-green-50 border border-green-200' :
+                  contravention.status === 'REJECTED' ? 'bg-red-50 border border-red-200' :
+                  'bg-amber-50 border border-amber-200'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    {contravention.status === 'COMPLETED' ? (
+                      <CheckCircle className="w-5 h-5 text-green-600" />
+                    ) : contravention.status === 'REJECTED' ? (
+                      <XCircle className="w-5 h-5 text-red-600" />
+                    ) : (
+                      <Clock className="w-5 h-5 text-amber-600" />
+                    )}
+                    <div>
+                      <p className={`text-sm font-medium ${
+                        contravention.status === 'COMPLETED' ? 'text-green-800' :
+                        contravention.status === 'REJECTED' ? 'text-red-800' :
+                        'text-amber-800'
+                      }`}>
+                        {statusLabels[contravention.status]}
+                      </p>
+                      {contravention.status === 'PENDING_APPROVAL' && contravention.approvalRequests?.[0] && (
+                        <p className="text-xs text-amber-700">
+                          Waiting for {contravention.approvalRequests[0].approver?.name || contravention.authorizerEmail}
+                        </p>
+                      )}
+                      {contravention.status === 'PENDING_UPLOAD' && (
+                        <p className="text-xs text-amber-700">
+                          Approved - awaiting PDF upload
+                        </p>
+                      )}
+                      {contravention.status === 'PENDING_REVIEW' && (
+                        <p className="text-xs text-amber-700">
+                          Awaiting admin final review
+                        </p>
+                      )}
+                      {contravention.status === 'REJECTED' && contravention.approvalRequests?.[0]?.reviewNotes && (
+                        <p className="text-xs text-red-700 mt-1">
+                          Reason: {contravention.approvalRequests[0].reviewNotes}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Timeline */}
                 <div className="space-y-4">
+                  {/* Created */}
                   <div className="flex items-start gap-3">
                     <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
                       <FileText className="w-4 h-4 text-blue-600" />
@@ -889,39 +947,85 @@ export function ContraventionDetailPage() {
                     </div>
                   </div>
 
-                  {contravention.acknowledgedAt && (
+                  {/* Approval Request Sent */}
+                  {contravention.approvalRequests && contravention.approvalRequests.length > 0 && (
                     <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-                        <CheckCircle className="w-4 h-4 text-green-600" />
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                        contravention.approvalRequests[0].status === 'APPROVED' ? 'bg-green-100' :
+                        contravention.approvalRequests[0].status === 'REJECTED' ? 'bg-red-100' :
+                        'bg-amber-100'
+                      }`}>
+                        {contravention.approvalRequests[0].status === 'APPROVED' ? (
+                          <UserCheck className="w-4 h-4 text-green-600" />
+                        ) : contravention.approvalRequests[0].status === 'REJECTED' ? (
+                          <XCircle className="w-4 h-4 text-red-600" />
+                        ) : (
+                          <Clock className="w-4 h-4 text-amber-600" />
+                        )}
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-gray-900">Acknowledged</p>
-                        <p className="text-xs text-gray-500">{formatDateTime(contravention.acknowledgedAt)}</p>
-                        {contravention.acknowledgedBy && (
-                          <p className="text-xs text-gray-500">by {contravention.acknowledgedBy.name}</p>
+                        <p className="text-sm font-medium text-gray-900">
+                          {contravention.approvalRequests[0].status === 'APPROVED' ? 'Approved' :
+                           contravention.approvalRequests[0].status === 'REJECTED' ? 'Rejected' :
+                           'Pending Approval'}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {contravention.approvalRequests[0].status === 'PENDING'
+                            ? `Assigned to ${contravention.approvalRequests[0].approver?.name}`
+                            : contravention.approvalRequests[0].reviewedAt
+                              ? formatDateTime(contravention.approvalRequests[0].reviewedAt)
+                              : ''}
+                        </p>
+                        {contravention.approvalRequests[0].reviewedBy && (
+                          <p className="text-xs text-gray-500">
+                            by {contravention.approvalRequests[0].reviewedBy.name}
+                          </p>
+                        )}
+                        {contravention.approvalRequests[0].reviewNotes && (
+                          <p className="text-xs text-gray-600 mt-1 italic">
+                            "{contravention.approvalRequests[0].reviewNotes}"
+                          </p>
                         )}
                       </div>
                     </div>
                   )}
 
-                  {contravention.resolvedDate && (
+                  {/* PDF Uploaded */}
+                  {contravention.approvalPdfUrl && (
                     <div className="flex items-start gap-3">
                       <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-                        <CheckCircle className="w-4 h-4 text-green-600" />
+                        <FileCheck className="w-4 h-4 text-green-600" />
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-gray-900">Resolved</p>
-                        <p className="text-xs text-gray-500">{formatDateTime(contravention.resolvedDate)}</p>
+                        <p className="text-sm font-medium text-gray-900">PDF Uploaded</p>
+                        <p className="text-xs text-gray-500">Approval document attached</p>
                       </div>
                     </div>
                   )}
 
-                  <div className="flex items-start gap-3">
+                  {/* Completed */}
+                  {contravention.status === 'COMPLETED' && (
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                        <ClipboardCheck className="w-4 h-4 text-green-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">Completed</p>
+                        <p className="text-xs text-gray-500">Admin verified and closed</p>
+                        {contravention.resolvedDate && (
+                          <p className="text-xs text-gray-500">{formatDateTime(contravention.resolvedDate)}</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Last Updated */}
+                  <div className="flex items-start gap-3 pt-2 border-t border-gray-100">
                     <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
-                      <Clock className="w-4 h-4 text-gray-600" />
+                      <Clock className="w-4 h-4 text-gray-500" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-900">Last Updated</p>
+                      <p className="text-sm text-gray-600">Last Updated</p>
                       <p className="text-xs text-gray-500">{formatDateTime(contravention.updatedAt)}</p>
                     </div>
                   </div>

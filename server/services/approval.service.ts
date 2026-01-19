@@ -1,6 +1,34 @@
 import prisma from '../config/database';
 import { AppError } from '../middleware/errorHandler';
 
+// Lazy import Slack service
+let slackServiceModule: typeof import('./slack.service') | null = null;
+async function getSlackService() {
+  if (!slackServiceModule) {
+    try {
+      slackServiceModule = await import('./slack.service');
+    } catch (err) {
+      console.error('Failed to load Slack service:', err);
+      return null;
+    }
+  }
+  return slackServiceModule.default;
+}
+
+// Lazy import notification service
+let notificationServiceModule: typeof import('./notification.service') | null = null;
+async function getNotificationService() {
+  if (!notificationServiceModule) {
+    try {
+      notificationServiceModule = await import('./notification.service');
+    } catch (err) {
+      console.error('Failed to load notification service:', err);
+      return null;
+    }
+  }
+  return notificationServiceModule.notificationService;
+}
+
 export class ApprovalService {
   /**
    * Get pending approvals for a specific approver
@@ -241,6 +269,19 @@ export class ApprovalService {
                 category: true,
               },
             },
+            loggedBy: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+            team: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
           },
         },
         approver: {
@@ -260,13 +301,27 @@ export class ApprovalService {
       },
     });
 
-    // If approved, update the contravention status to PENDING_REVIEW
+    // Update contravention status based on approval decision
     if (status === 'APPROVED') {
+      // Approved: move to PENDING_UPLOAD (waiting for PDF upload)
       await prisma.contravention.update({
         where: { id: approval.contraventionId },
         data: {
-          status: 'PENDING_REVIEW',
+          status: 'PENDING_UPLOAD',
         },
+      });
+    } else if (status === 'REJECTED') {
+      // Rejected: update status to REJECTED
+      await prisma.contravention.update({
+        where: { id: approval.contraventionId },
+        data: {
+          status: 'REJECTED',
+        },
+      });
+
+      // Notify the submitter about the rejection
+      this.notifyRejection(updatedApproval, reviewer.name, notes).catch((err) => {
+        console.error('Failed to send rejection notification:', err);
       });
     }
 
@@ -298,6 +353,60 @@ export class ApprovalService {
     });
 
     return approvers;
+  }
+
+  /**
+   * Send notification about rejection to the submitter
+   */
+  private async notifyRejection(
+    approval: {
+      contravention: {
+        id: string;
+        referenceNo: string;
+        employee: { name: string };
+        type: { name: string; category: string };
+        loggedBy: { id: string; name: string; email: string };
+        team?: { name: string } | null;
+      };
+      reviewedBy: { name: string } | null;
+    },
+    reviewerName: string,
+    notes?: string
+  ) {
+    const { contravention } = approval;
+    const loggedBy = contravention.loggedBy;
+
+    // Send in-app notification
+    const notificationService = await getNotificationService();
+    if (notificationService) {
+      await notificationService.createNotification({
+        userId: loggedBy.id,
+        type: 'CONTRAVENTION_REJECTED',
+        title: `Contravention ${contravention.referenceNo} Rejected`,
+        message: `Your contravention for ${contravention.employee.name} (${contravention.type.name}) was rejected by ${reviewerName}.${notes ? ` Reason: ${notes}` : ''}`,
+        data: {
+          contraventionId: contravention.id,
+          referenceNo: contravention.referenceNo,
+          rejectedBy: reviewerName,
+          reason: notes || null,
+        },
+      });
+    }
+
+    // Send Slack notification to team channel
+    const slackService = await getSlackService();
+    if (slackService && slackService.isConfigured()) {
+      await slackService.announceRejection({
+        referenceNo: contravention.referenceNo,
+        employeeName: contravention.employee.name,
+        teamName: contravention.team?.name || 'Personal',
+        typeName: contravention.type.name,
+        rejectedBy: reviewerName,
+        reason: notes,
+        contraventionId: contravention.id,
+        loggedByName: loggedBy.name,
+      });
+    }
   }
 }
 

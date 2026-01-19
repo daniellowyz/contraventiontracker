@@ -1,7 +1,7 @@
 // Enums
 export type Role = 'ADMIN' | 'APPROVER' | 'USER';
 export type Severity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
-export type ContraventionStatus = 'PENDING_UPLOAD' | 'PENDING_REVIEW' | 'COMPLETED';
+export type ContraventionStatus = 'PENDING_APPROVAL' | 'PENDING_UPLOAD' | 'PENDING_REVIEW' | 'COMPLETED' | 'REJECTED';
 export type EscalationLevel = 'LEVEL_1' | 'LEVEL_2' | 'LEVEL_3' | 'LEVEL_4' | 'LEVEL_5';
 export type TrainingStatus = 'ASSIGNED' | 'IN_PROGRESS' | 'COMPLETED' | 'OVERDUE' | 'WAIVED';
 export type ApprovalRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
@@ -67,6 +67,7 @@ export interface Contravention {
   loggedBy: { id: string; name: string };
   approvalPdfUrl?: string;
   authorizerEmail?: string;
+  approvalRequests?: ContraventionApproval[];
   createdAt: string;
   updatedAt: string;
 }

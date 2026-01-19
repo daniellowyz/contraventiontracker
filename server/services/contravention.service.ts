@@ -86,8 +86,13 @@ export class ContraventionService {
         evidenceUrls: data.evidenceUrls || [],
         authorizerEmail: data.authorizerEmail,
         approvalPdfUrl: data.approvalPdfUrl,
-        // If PDF is already uploaded, go to PENDING_REVIEW, otherwise PENDING_UPLOAD
-        status: data.approvalPdfUrl ? 'PENDING_REVIEW' : 'PENDING_UPLOAD',
+        // Status depends on whether approver is selected and if PDF is uploaded
+        // If approver selected: PENDING_APPROVAL -> (approved) -> PENDING_UPLOAD -> PENDING_REVIEW -> COMPLETED
+        // If no approver and PDF uploaded: PENDING_REVIEW
+        // If no approver and no PDF: PENDING_UPLOAD
+        status: data.authorizerEmail
+          ? 'PENDING_APPROVAL'
+          : (data.approvalPdfUrl ? 'PENDING_REVIEW' : 'PENDING_UPLOAD'),
       },
       include: {
         employee: {
@@ -348,6 +353,17 @@ export class ContraventionService {
         },
         acknowledgedBy: {
           select: { id: true, name: true },
+        },
+        approvalRequests: {
+          include: {
+            approver: {
+              select: { id: true, name: true, email: true },
+            },
+            reviewedBy: {
+              select: { id: true, name: true },
+            },
+          },
+          orderBy: { createdAt: 'desc' },
         },
       },
     });

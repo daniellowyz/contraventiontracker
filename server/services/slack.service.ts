@@ -95,6 +95,17 @@ export interface NewContraventionAnnouncement {
   loggedByName: string;
 }
 
+export interface RejectionAnnouncement {
+  referenceNo: string;
+  employeeName: string;
+  teamName: string;
+  typeName: string;
+  rejectedBy: string;
+  reason?: string;
+  contraventionId: string;
+  loggedByName: string;
+}
+
 export class SlackService {
   private token: string | undefined;
   private channelId: string | undefined;
@@ -1071,6 +1082,84 @@ export class SlackService {
       console.log(`[SlackService] Announced new contravention ${data.referenceNo} to channel`);
     } catch (error) {
       console.error('[SlackService] Failed to announce new contravention:', error);
+    }
+  }
+
+  /**
+   * Announce a rejected contravention to the team channel
+   */
+  async announceRejection(data: RejectionAnnouncement): Promise<void> {
+    if (!this.token || !this.channelId) {
+      console.log('[SlackService] Slack not configured, skipping rejection announcement');
+      return;
+    }
+
+    const blocks = [
+      {
+        type: 'header',
+        text: {
+          type: 'plain_text',
+          text: `❌ Contravention Rejected: ${data.referenceNo}`,
+          emoji: true,
+        },
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*${data.employeeName}* • ${data.teamName}\n*Type:* ${data.typeName}`,
+        },
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*Rejected by:* ${data.rejectedBy}`,
+        },
+      },
+      ...(data.reason ? [{
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*Reason:*\n${data.reason}`,
+        },
+      }] : []),
+      {
+        type: 'divider',
+      },
+      {
+        type: 'actions',
+        elements: [
+          {
+            type: 'button',
+            text: {
+              type: 'plain_text',
+              text: 'View Details',
+              emoji: true,
+            },
+            url: `${this.appUrl}/contraventions/${data.contraventionId}`,
+            action_id: 'view_rejected_contravention',
+          },
+        ],
+      },
+      {
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: `_Originally logged by ${data.loggedByName}_`,
+          },
+        ],
+      },
+    ];
+
+    const text = `Contravention ${data.referenceNo} for ${data.employeeName} was rejected by ${data.rejectedBy}`;
+
+    try {
+      await this.postMessage(this.channelId, blocks, text);
+      console.log(`[SlackService] Announced rejection of ${data.referenceNo} to channel`);
+    } catch (error) {
+      console.error('[SlackService] Failed to announce rejection:', error);
     }
   }
 
