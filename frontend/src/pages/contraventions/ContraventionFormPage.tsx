@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { ArrowLeft, Save, Upload, Loader2, Plus, UserX, Paperclip, Trash2, ExternalLink, Link } from 'lucide-react';
 import { Severity } from '@/types';
-import { uploadApprovalPdf, supabase } from '@/lib/supabase';
+import { uploadApprovalPdf, uploadSupportingDoc, supabase } from '@/lib/supabase';
 
 const SEVERITY_OPTIONS = [
   { value: 'LOW', label: 'Low' },
@@ -66,6 +66,8 @@ export function ContraventionFormPage() {
   });
 
   const [newDocUrl, setNewDocUrl] = useState('');
+  const [pendingSupportingDocs, setPendingSupportingDocs] = useState<File[]>([]);
+  const [isUploadingDocs, setIsUploadingDocs] = useState(false);
 
   const [approvalFile, setApprovalFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -157,13 +159,13 @@ export function ContraventionFormPage() {
   };
 
   const removePendingDoc = (index: number) => {
-    setPendingSupportingDocs((prev) => prev.filter((_, i) => i !== index));
+    setPendingSupportingDocs((prev) => prev.filter((_: File, i: number) => i !== index));
   };
 
   const removeUploadedDoc = (index: number) => {
     setFormData((prev) => ({
       ...prev,
-      supportingDocs: prev.supportingDocs.filter((_, i) => i !== index),
+      supportingDocs: prev.supportingDocs.filter((_: string, i: number) => i !== index),
     }));
   };
 
@@ -836,7 +838,7 @@ export function ContraventionFormPage() {
                 {pendingSupportingDocs.length > 0 && (
                   <div className="mb-3 space-y-2">
                     <p className="text-xs font-medium text-gray-600">Pending upload:</p>
-                    {pendingSupportingDocs.map((file, index) => (
+                    {pendingSupportingDocs.map((file: File, index: number) => (
                       <div key={index} className="flex items-center gap-2 p-2 bg-amber-50 rounded-lg">
                         <Paperclip className="w-4 h-4 text-amber-600 flex-shrink-0" />
                         <span className="text-sm text-gray-700 truncate flex-1">
