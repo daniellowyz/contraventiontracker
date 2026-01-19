@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { contraventionsApi, CreateContraventionInput } from '@/api/contraventions.api';
@@ -67,7 +67,6 @@ export function ContraventionFormPage() {
 
   const [pendingSupportingDocs, setPendingSupportingDocs] = useState<File[]>([]);
   const [isUploadingDocs, setIsUploadingDocs] = useState(false);
-  const supportingDocsInputRef = useRef<HTMLInputElement>(null);
 
   const [approvalFile, setApprovalFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -153,10 +152,8 @@ export function ContraventionFormPage() {
     if (files && files.length > 0) {
       // Add selected files to pending list
       setPendingSupportingDocs((prev) => [...prev, ...Array.from(files)]);
-      // Reset input
-      if (supportingDocsInputRef.current) {
-        supportingDocsInputRef.current.value = '';
-      }
+      // Reset input so the same file can be selected again
+      e.target.value = '';
     }
   };
 
@@ -861,20 +858,22 @@ export function ContraventionFormPage() {
                   </div>
                 )}
 
-                {/* File input */}
+                {/* File input - using label htmlFor pattern for better browser compatibility */}
                 <input
-                  ref={supportingDocsInputRef}
+                  id="supporting-docs-input"
                   type="file"
                   multiple
                   accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif"
                   onChange={handleSupportingDocSelect}
-                  className="hidden"
+                  className="sr-only"
                 />
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => supportingDocsInputRef.current?.click()}
-                  disabled={isUploadingDocs}
+                <label
+                  htmlFor="supporting-docs-input"
+                  className={`inline-flex items-center justify-center font-medium rounded-lg transition-colors px-4 py-2 text-sm cursor-pointer ${
+                    isUploadingDocs
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
+                  }`}
                 >
                   {isUploadingDocs ? (
                     <>
@@ -887,7 +886,7 @@ export function ContraventionFormPage() {
                       Select Files
                     </>
                   )}
-                </Button>
+                </label>
                 <p className="text-xs text-gray-500 mt-1">
                   Files will be uploaded when you create the contravention.
                 </p>

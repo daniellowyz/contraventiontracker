@@ -104,7 +104,6 @@ export function ContraventionDetailPage() {
   // File upload for supporting docs in user edit/resubmit
   const [pendingSupportingDocs, setPendingSupportingDocs] = useState<File[]>([]);
   const [isUploadingDocs, setIsUploadingDocs] = useState(false);
-  const supportingDocsInputRef = useRef<HTMLInputElement>(null);
 
   // Departed member handling for reassignment
   const [isDepartedMember, setIsDepartedMember] = useState(false);
@@ -424,9 +423,8 @@ export function ContraventionDetailPage() {
     const files = e.target.files;
     if (files && files.length > 0) {
       setPendingSupportingDocs((prev) => [...prev, ...Array.from(files)]);
-      if (supportingDocsInputRef.current) {
-        supportingDocsInputRef.current.value = '';
-      }
+      // Reset input so the same file can be selected again
+      e.target.value = '';
     }
   };
 
@@ -1008,11 +1006,22 @@ export function ContraventionDetailPage() {
                         </div>
                       )}
 
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        onClick={() => supportingDocsInputRef.current?.click()}
-                        disabled={isUploadingDocs}
+                      {/* File input - using label htmlFor pattern for better browser compatibility */}
+                      <input
+                        id="edit-supporting-docs-input"
+                        type="file"
+                        multiple
+                        accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif"
+                        onChange={handleSupportingDocSelect}
+                        className="sr-only"
+                      />
+                      <label
+                        htmlFor="edit-supporting-docs-input"
+                        className={`inline-flex items-center justify-center font-medium rounded-lg transition-colors px-4 py-2 text-sm cursor-pointer ${
+                          isUploadingDocs
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                            : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
+                        }`}
                       >
                         {isUploadingDocs ? (
                           <>
@@ -1025,7 +1034,7 @@ export function ContraventionDetailPage() {
                             Add Files
                           </>
                         )}
-                      </Button>
+                      </label>
                     </div>
 
                     {/* Approver Selection - only show for rejected contraventions */}
@@ -1056,17 +1065,6 @@ export function ContraventionDetailPage() {
               </Card>
             )}
 
-            {/* Hidden file input for user edit form */}
-            {isUserEditing && (
-              <input
-                ref={supportingDocsInputRef}
-                type="file"
-                multiple
-                accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif"
-                onChange={handleSupportingDocSelect}
-                className="hidden"
-              />
-            )}
           </div>
 
           {/* Sidebar */}

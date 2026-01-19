@@ -88,9 +88,10 @@ export class ContraventionService {
         authorizerEmail: data.authorizerEmail,
         approvalPdfUrl: data.approvalPdfUrl,
         // Status depends on whether approver is selected and if PDF is uploaded
-        // If approver selected: PENDING_APPROVAL -> (approved) -> PENDING_UPLOAD -> PENDING_REVIEW -> COMPLETED
-        // If no approver and PDF uploaded: PENDING_REVIEW
-        // If no approver and no PDF: PENDING_UPLOAD
+        // If approver selected (system approval): PENDING_APPROVAL -> (approved) -> PENDING_REVIEW -> COMPLETED
+        //   (System approval acts as evidence, no PDF upload needed)
+        // If no approver and PDF uploaded (external approval): PENDING_REVIEW
+        // If no approver and no PDF (external approval pending): PENDING_UPLOAD
         status: data.authorizerEmail
           ? 'PENDING_APPROVAL'
           : (data.approvalPdfUrl ? 'PENDING_REVIEW' : 'PENDING_UPLOAD'),

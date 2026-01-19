@@ -303,11 +303,12 @@ export class ApprovalService {
 
     // Update contravention status based on approval decision
     if (status === 'APPROVED') {
-      // Approved: move to PENDING_UPLOAD (waiting for PDF upload)
+      // Approved via system: skip PENDING_UPLOAD and go directly to PENDING_REVIEW
+      // The system approval acts as evidence, so no PDF upload is needed
       await prisma.contravention.update({
         where: { id: approval.contraventionId },
         data: {
-          status: 'PENDING_UPLOAD',
+          status: 'PENDING_REVIEW',
         },
       });
     } else if (status === 'REJECTED') {
