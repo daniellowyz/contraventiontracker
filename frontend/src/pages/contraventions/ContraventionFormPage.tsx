@@ -11,9 +11,9 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { ArrowLeft, Save, Upload, Loader2, Plus, UserX, Paperclip, Trash2, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Save, Upload, Loader2, Plus, UserX, Paperclip, Trash2, ExternalLink, Link } from 'lucide-react';
 import { Severity } from '@/types';
-import { uploadApprovalPdf, uploadSupportingDoc, supabase } from '@/lib/supabase';
+import { uploadApprovalPdf, supabase } from '@/lib/supabase';
 
 const SEVERITY_OPTIONS = [
   { value: 'LOW', label: 'Low' },
@@ -65,8 +65,7 @@ export function ContraventionFormPage() {
     supportingDocs: [],
   });
 
-  const [pendingSupportingDocs, setPendingSupportingDocs] = useState<File[]>([]);
-  const [isUploadingDocs, setIsUploadingDocs] = useState(false);
+  const [newDocUrl, setNewDocUrl] = useState('');
 
   const [approvalFile, setApprovalFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);

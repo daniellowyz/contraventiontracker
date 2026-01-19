@@ -12,7 +12,7 @@ export const supabase = supabaseUrl && supabaseAnonKey
   : null;
 
 export const APPROVAL_BUCKET = 'approval-documents';
-export const SUPPORTING_DOCS_BUCKET = 'approval-documents'; // Using same bucket, different folder
+export const SUPPORTING_DOCS_BUCKET = 'supporting-documents';
 
 export async function uploadApprovalPdf(file: File, referenceNo: string): Promise<string | null> {
   if (!supabase) {
@@ -74,7 +74,7 @@ export async function uploadSupportingDoc(file: File, referenceNo: string): Prom
 
   const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
   const fileName = `${referenceNo}-${Date.now()}-${sanitizedFileName}`;
-  const filePath = `supporting-docs/${fileName}`;
+  const filePath = fileName;
 
   const { error } = await supabase.storage
     .from(SUPPORTING_DOCS_BUCKET)
