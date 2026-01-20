@@ -60,13 +60,9 @@ export class ContraventionService {
       throw new AppError('Employee not found', 404);
     }
 
-    // Calculate severity and points
+    // Get severity and points from contravention type
     const severity = contraventionType.defaultSeverity;
-    const points = pointsService.calculatePoints(
-      contraventionType.defaultPoints,
-      severity,
-      data.valueSgd
-    );
+    const points = contraventionType.defaultPoints;
 
     // Generate reference number
     const referenceNo = await generateReferenceNumber();
@@ -249,12 +245,11 @@ export class ContraventionService {
    * Get all contraventions with filters and pagination
    */
   async findAll(filters: ContraventionFiltersInput) {
-    const { page, limit, status, severity, typeId, departmentId, employeeId, teamId, loggedById, dateFrom, dateTo, search } = filters;
+    const { page, limit, status, typeId, departmentId, employeeId, teamId, loggedById, dateFrom, dateTo, search } = filters;
 
     const where: Record<string, unknown> = {};
 
     if (status) where.status = status;
-    if (severity) where.severity = severity;
     if (typeId) where.typeId = typeId;
     if (employeeId) where.employeeId = employeeId;
     if (teamId) where.teamId = teamId;

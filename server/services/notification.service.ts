@@ -61,7 +61,7 @@ export const notificationService = {
     contraventionId: string;
     referenceNo: string;
     typeName: string;
-    severity: string;
+    severity?: string;  // Optional - for backwards compatibility
     points: number;
   }) {
     // Create in-app notification
@@ -69,7 +69,7 @@ export const notificationService = {
       userId: params.employeeUserId,
       type: 'CONTRAVENTION_LOGGED',
       title: 'New Contravention Logged',
-      message: `A ${params.severity.toLowerCase()} severity contravention (${params.typeName}) has been logged against you. ${params.points} points have been added.`,
+      message: `A contravention (${params.typeName}) has been logged against you. ${params.points} points have been added.`,
       link: `/contraventions/${params.contraventionId}`,
     });
 
@@ -79,7 +79,7 @@ export const notificationService = {
       employeeName: params.employeeName,
       referenceNo: params.referenceNo,
       typeName: params.typeName,
-      severity: params.severity,
+      severity: params.severity || 'N/A',
       points: params.points,
       contraventionId: params.contraventionId,
     });
@@ -313,7 +313,7 @@ export const notificationService = {
     employeeName: string;
     submitterName: string;
     typeName: string;
-    severity: string;
+    severity?: string;  // Optional - for backwards compatibility
   }) {
     // Create in-app notification
     const notification = await this.create({
@@ -331,7 +331,7 @@ export const notificationService = {
       referenceNo: params.referenceNo,
       employeeName: params.employeeName,
       typeName: params.typeName,
-      severity: params.severity,
+      severity: params.severity || 'N/A',
       contraventionId: params.contraventionId,
     });
 

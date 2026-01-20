@@ -30,7 +30,6 @@ export const updateContraventionSchema = z.object({
   justification: z.string().optional(),
   mitigation: z.string().optional(),
   summary: z.string().optional(),
-  severity: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).optional(),
   points: z.number().int().min(0).optional(),
   status: z.enum(['PENDING_APPROVAL', 'PENDING_UPLOAD', 'PENDING_REVIEW', 'COMPLETED', 'REJECTED']).optional(),
   evidenceUrls: z.array(z.string().url()).optional(),
@@ -75,7 +74,6 @@ export const markCompleteSchema = z.object({
 
 export const contraventionFiltersSchema = z.object({
   status: z.enum(['PENDING_APPROVAL', 'PENDING_UPLOAD', 'PENDING_REVIEW', 'COMPLETED', 'REJECTED']).optional(),
-  severity: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).optional(),
   typeId: z.string().optional(),
   departmentId: z.string().optional(),
   employeeId: z.string().optional(),

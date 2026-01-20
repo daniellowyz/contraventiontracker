@@ -59,7 +59,7 @@ export interface ContraventionAnnouncement {
   employeeName: string;
   teamName: string;
   typeName: string;
-  severity: string;
+  severity?: string;  // Optional - for backwards compatibility
   points: number;
   valueSgd?: number;
   vendor?: string;
@@ -75,7 +75,7 @@ export interface ApprovalRequest {
   referenceNo: string;
   employeeName: string;
   typeName: string;
-  severity: string;
+  severity?: string;  // Optional - for backwards compatibility
   requesterName: string;
   approverEmail: string;
   contraventionId: string;
@@ -308,7 +308,7 @@ export class SlackService {
       'CRITICAL': ':red_circle:',
     };
 
-    const emoji = severityEmoji[data.severity] || ':white_circle:';
+    const emoji = data.severity ? (severityEmoji[data.severity] || ':white_circle:') : ':memo:';
     const viewUrl = `${this.appUrl}/contraventions/${data.contraventionId}`;
 
     // Format value if present
@@ -317,7 +317,7 @@ export class SlackService {
       : null;
 
     // Build the details line
-    let detailsLine = `${emoji} ${data.severity} • ${data.points} pts`;
+    let detailsLine = `${emoji} ${data.points} pts`;
     if (valueStr) {
       detailsLine += ` • ${valueStr}`;
     }
@@ -418,7 +418,7 @@ export class SlackService {
       return;
     }
 
-    const severityEmoji = this.getSeverityEmoji(data.severity);
+    const severityEmoji = data.severity ? this.getSeverityEmoji(data.severity) : ':memo:';
     const viewUrl = `${this.appUrl}/contraventions/${data.contraventionId}`;
 
     const blocks = [
@@ -454,7 +454,7 @@ export class SlackService {
           },
           {
             type: 'mrkdwn',
-            text: `*Severity:*\n${data.severity}`,
+            text: `*Points:*\nSee details`,
           },
         ],
       },
@@ -1013,7 +1013,7 @@ export class SlackService {
     referenceNo: string;
     employeeName: string;
     typeName: string;
-    severity: string;
+    severity?: string;  // Optional - for backwards compatibility
     reason: string; // Why it went to admin review (e.g., "Rejected by approver", "Escalated")
     contraventionId: string;
   }): Promise<void> {
@@ -1022,7 +1022,7 @@ export class SlackService {
       return;
     }
 
-    const severityEmoji = this.getSeverityEmoji(data.severity);
+    const severityEmoji = data.severity ? this.getSeverityEmoji(data.severity) : ':memo:';
     const viewUrl = `${this.appUrl}/contraventions/${data.contraventionId}`;
 
     const blocks = [
@@ -1058,7 +1058,7 @@ export class SlackService {
           },
           {
             type: 'mrkdwn',
-            text: `*Severity:*\n${data.severity}`,
+            text: `*Status:*\nPending Review`,
           },
         ],
       },
