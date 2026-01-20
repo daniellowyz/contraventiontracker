@@ -45,6 +45,22 @@ router.post(
   }
 );
 
+// GET /api/contraventions/pending-review-count - Get count of contraventions pending admin review (admin only)
+// NOTE: This must be BEFORE /:id route to avoid being caught by the parameter route
+router.get(
+  '/pending-review-count',
+  authenticate,
+  requireAdmin,
+  async (_req: AuthenticatedRequest, res: Response, next) => {
+    try {
+      const count = await contraventionService.getPendingReviewCount();
+      res.json({ success: true, data: { count } });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 // GET /api/contraventions/:id - Get single contravention
 router.get('/:id', authenticate, async (req: AuthenticatedRequest, res: Response, next) => {
   try {
@@ -161,21 +177,6 @@ router.post(
         req.body
       );
       res.json({ success: true, data: contravention });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-
-// GET /api/contraventions/pending-review-count - Get count of contraventions pending admin review (admin only)
-router.get(
-  '/pending-review-count',
-  authenticate,
-  requireAdmin,
-  async (_req: AuthenticatedRequest, res: Response, next) => {
-    try {
-      const count = await contraventionService.getPendingReviewCount();
-      res.json({ success: true, data: { count } });
     } catch (error) {
       next(error);
     }
