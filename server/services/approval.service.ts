@@ -319,7 +319,6 @@ export class ApprovalService {
           referenceNo: updatedApproval.contravention.referenceNo,
           employeeName: updatedApproval.contravention.employee.name,
           typeName: updatedApproval.contravention.type.name,
-          severity: updatedApproval.contravention.severity,
           reason: `Approved by ${reviewer.name} - awaiting admin final review`,
           contraventionId: updatedApproval.contravention.id,
         }).catch((err) => {

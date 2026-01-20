@@ -60,8 +60,7 @@ export class ContraventionService {
       throw new AppError('Employee not found', 404);
     }
 
-    // Get severity and points from contravention type
-    const severity = contraventionType.defaultSeverity;
+    // Get points from contravention type (severity is now derived from type, not stored)
     const points = contraventionType.defaultPoints;
 
     // Generate reference number
@@ -82,7 +81,6 @@ export class ContraventionService {
         justification: data.justification,
         mitigation: data.mitigation,
         summary: data.summary,
-        severity,
         points,
         incidentDate: new Date(data.incidentDate),
         evidenceUrls: data.evidenceUrls || [],
@@ -130,7 +128,6 @@ export class ContraventionService {
           contraventionId: contravention.id,
           referenceNo,
           typeName: contraventionType.name,
-          severity,
           points,
         }).catch((err: Error) => {
           console.error('Failed to send contravention notification:', err);
@@ -174,7 +171,6 @@ export class ContraventionService {
               employeeName: employee.name,
               submitterName: contravention.loggedBy?.name || 'A user',
               typeName: contraventionType.name,
-              severity,
             }).catch((err: Error) => {
               console.error('Failed to send approval notification:', err);
             });
@@ -476,7 +472,6 @@ export class ContraventionService {
             referenceNo: contravention.referenceNo,
             employeeName: updated.employee.name,
             typeName: updated.type.name,
-            severity: contravention.severity,
             reason: 'Approval document uploaded - awaiting admin final review',
             contraventionId: id,
           });
@@ -544,7 +539,6 @@ export class ContraventionService {
           employeeName: updated.employee.name,
           teamName: updated.team?.name || 'Personal',
           typeName: updated.type.name,
-          severity: contravention.severity,
           points: contravention.points,
           valueSgd: contravention.valueSgd ? Number(contravention.valueSgd) : undefined,
           vendor: contravention.vendor || undefined,
@@ -736,7 +730,6 @@ export class ContraventionService {
           employeeName: contravention.employee.name,
           submitterName: contravention.loggedBy?.name || 'A user',
           typeName: contravention.type.name,
-          severity: contravention.severity,
         }).catch((err: Error) => {
           console.error('Failed to send resubmission approval notification:', err);
         });

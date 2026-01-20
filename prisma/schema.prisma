@@ -187,8 +187,7 @@ model Contravention {
   mitigation      String?             @db.Text  // Mitigation measures to prevent recurrence
   summary         String?             @db.Text
 
-  // Classification
-  severity        Severity
+  // Classification (severity removed from DB - now derived from type)
   points          Int
 
   // Status tracking
