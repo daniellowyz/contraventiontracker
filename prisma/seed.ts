@@ -1,4 +1,4 @@
-import { PrismaClient, Severity } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import bcrypt from 'bcryptjs';
@@ -45,7 +45,6 @@ async function main() {
     {
       category: 'DC_PROCUREMENT',
       name: 'No/Incorrect Approval of Requirement (AOR) before Purchase',
-      defaultSeverity: 'HIGH' as Severity,
       defaultPoints: 3,
       isOthers: false,
     },
@@ -53,7 +52,6 @@ async function main() {
     {
       category: 'DC_PROCUREMENT',
       name: 'Vendor on AOR Differs from Actual Vendor Buy (e.g. Vendor, Date, Value)',
-      defaultSeverity: 'HIGH' as Severity,
       defaultPoints: 4,
       isOthers: false,
     },
@@ -61,7 +59,6 @@ async function main() {
     {
       category: 'DC_PROCUREMENT',
       name: 'Lapse in Contract Oversight Resulting in Contravention',
-      defaultSeverity: 'CRITICAL' as Severity,
       defaultPoints: 5,
       isOthers: false,
     },
@@ -69,7 +66,6 @@ async function main() {
     {
       category: 'MANPOWER',
       name: 'Manpower extension without PCPO approval',
-      defaultSeverity: 'HIGH' as Severity,
       defaultPoints: 3,
       isOthers: false,
     },
@@ -77,7 +73,6 @@ async function main() {
     {
       category: 'SIGNATORY',
       name: 'Inappropriate Signatory',
-      defaultSeverity: 'MEDIUM' as Severity,
       defaultPoints: 2,
       isOthers: false,
     },
@@ -85,7 +80,6 @@ async function main() {
     {
       category: 'DC_PROCUREMENT',
       name: 'Vendor differs from the AOR; but item purchased remains the same',
-      defaultSeverity: 'LOW' as Severity,
       defaultPoints: 1,
       isOthers: false,
     },
@@ -93,7 +87,6 @@ async function main() {
     {
       category: 'SVP',
       name: 'Late Claims >90 days',
-      defaultSeverity: 'LOW' as Severity,
       defaultPoints: 1,
       isOthers: false,
     },
@@ -102,7 +95,6 @@ async function main() {
       category: 'MULTIPLE',
       name: 'Multiple Contraventions',
       description: 'Points split based on individual contravention categories',
-      defaultSeverity: 'CRITICAL' as Severity,
       defaultPoints: 5,  // Base points, actual determined by sub-contraventions
       isOthers: false,
     },
@@ -111,7 +103,6 @@ async function main() {
       category: 'OTHER',
       name: 'Others',
       description: 'Other contraventions not covered by standard types. Admin can adjust points.',
-      defaultSeverity: 'LOW' as Severity,
       defaultPoints: 0,
       isOthers: true,  // Special flag for "Others" type
     },
@@ -122,7 +113,6 @@ async function main() {
       where: { name: type.name },
       update: {
         category: type.category,
-        defaultSeverity: type.defaultSeverity,
         defaultPoints: type.defaultPoints,
         description: type.description,
         isOthers: type.isOthers,

@@ -27,18 +27,18 @@ export const POINTS_CONFIG = {
 
 // Contravention Type Defaults
 export const CONTRAVENTION_TYPES = [
-  { category: 'DC_PROCUREMENT', name: 'Missing AOR', defaultSeverity: 'HIGH', defaultPoints: 3 },
-  { category: 'SVP', name: 'Different vendor on AOR versus purchase', defaultSeverity: 'HIGH', defaultPoints: 3 },
-  { category: 'SVP', name: 'Late Personal Claims', defaultSeverity: 'LOW', defaultPoints: 1 },
-  { category: 'DC_PROCUREMENT', name: 'Ownership Lapse', defaultSeverity: 'MEDIUM', defaultPoints: 2 },
-  { category: 'DC_PROCUREMENT', name: 'Process-driven exception', defaultSeverity: 'LOW', defaultPoints: 0 },
-  { category: 'DC_PROCUREMENT', name: 'Multiple Contraventions', defaultSeverity: 'CRITICAL', defaultPoints: 5 },
-  { category: 'MANPOWER', name: 'Insufficient AOR value for manpower blanket', defaultSeverity: 'HIGH', defaultPoints: 3 },
-  { category: 'DC_PROCUREMENT', name: 'No approval before purchase', defaultSeverity: 'CRITICAL', defaultPoints: 5 },
-  { category: 'SIGNATORY', name: 'Signatory Contravention', defaultSeverity: 'CRITICAL', defaultPoints: 5 },
-  { category: 'DC_PROCUREMENT', name: 'Vendor AOR differs from actual vendor', defaultSeverity: 'HIGH', defaultPoints: 3 },
-  { category: 'MANPOWER', name: 'Manpower extension without PCPO approval', defaultSeverity: 'HIGH', defaultPoints: 3 },
-  { category: 'DC_PROCUREMENT', name: 'Others', defaultSeverity: 'MEDIUM', defaultPoints: 2 },
+  { category: 'DC_PROCUREMENT', name: 'Missing AOR', defaultPoints: 3 },
+  { category: 'SVP', name: 'Different vendor on AOR versus purchase', defaultPoints: 3 },
+  { category: 'SVP', name: 'Late Personal Claims', defaultPoints: 1 },
+  { category: 'DC_PROCUREMENT', name: 'Ownership Lapse', defaultPoints: 2 },
+  { category: 'DC_PROCUREMENT', name: 'Process-driven exception', defaultPoints: 0 },
+  { category: 'DC_PROCUREMENT', name: 'Multiple Contraventions', defaultPoints: 5 },
+  { category: 'MANPOWER', name: 'Insufficient AOR value for manpower blanket', defaultPoints: 3 },
+  { category: 'DC_PROCUREMENT', name: 'No approval before purchase', defaultPoints: 5 },
+  { category: 'SIGNATORY', name: 'Signatory Contravention', defaultPoints: 5 },
+  { category: 'DC_PROCUREMENT', name: 'Vendor AOR differs from actual vendor', defaultPoints: 3 },
+  { category: 'MANPOWER', name: 'Manpower extension without PCPO approval', defaultPoints: 3 },
+  { category: 'DC_PROCUREMENT', name: 'Others', defaultPoints: 2 },
 ];
 
 // Acknowledgment Configuration

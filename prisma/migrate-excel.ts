@@ -1,4 +1,4 @@
-import { PrismaClient, Severity, ContraventionStatus, EscalationLevel } from '@prisma/client';
+import { PrismaClient, ContraventionStatus, EscalationLevel } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import * as XLSX from 'xlsx';
@@ -117,7 +117,7 @@ async function getOrCreateUser(name: string, departmentName: string): Promise<st
   return user.id;
 }
 
-async function getContraventionType(typeName: string): Promise<{ id: string; name: string; defaultSeverity: Severity; defaultPoints: number } | null> {
+async function getContraventionType(typeName: string): Promise<{ id: string; name: string; defaultPoints: number } | null> {
   if (!typeName || typeName === 'NaN' || typeName.trim() === '') {
     // Return "Others" type for unknown
     const othersType = await prisma.contraventionType.findFirst({
@@ -256,9 +256,8 @@ async function migrate() {
           valueSgd: valueSgd,
           description: description,
           summary: row.Summary && row.Summary !== 'NaN' ? row.Summary : null,
-          severity: contraventionType.defaultSeverity,
           points: contraventionType.defaultPoints,
-          status: 'RESOLVED' as ContraventionStatus,
+          status: 'COMPLETED' as ContraventionStatus,
           incidentDate,
           resolvedDate: incidentDate,
           acknowledgedAt: incidentDate,

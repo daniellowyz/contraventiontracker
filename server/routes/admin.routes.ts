@@ -942,14 +942,13 @@ router.get('/types', authenticate, async (req: AuthenticatedRequest, res: Respon
 // POST /api/admin/types - Create contravention type (admin only)
 router.post('/types', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
   try {
-    const { category, name, description, defaultSeverity, defaultPoints } = req.body;
+    const { category, name, description, defaultPoints } = req.body;
 
     const type = await prisma.contraventionType.create({
       data: {
         category,
         name,
         description,
-        defaultSeverity,
         defaultPoints,
       },
     });
@@ -963,14 +962,13 @@ router.post('/types', authenticate, requireAdmin, async (req: AuthenticatedReque
 // PATCH /api/admin/types/:id - Update contravention type (admin only)
 router.patch('/types/:id', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
   try {
-    const { name, description, defaultSeverity, defaultPoints, isActive } = req.body;
+    const { name, description, defaultPoints, isActive } = req.body;
 
     const type = await prisma.contraventionType.update({
       where: { id: req.params.id },
       data: {
         ...(name && { name }),
         ...(description !== undefined && { description }),
-        ...(defaultSeverity && { defaultSeverity }),
         ...(defaultPoints !== undefined && { defaultPoints }),
         ...(isActive !== undefined && { isActive }),
       },
@@ -1009,7 +1007,6 @@ router.get('/types/others-usage', authenticate, requireAdmin, async (_req: Authe
         customTypeName: true,
         referenceNo: true,
         points: true,
-        severity: true,
         createdAt: true,
         employee: { select: { name: true } },
       },
@@ -1043,16 +1040,15 @@ router.get('/types/others-usage', authenticate, requireAdmin, async (_req: Authe
 // POST /api/admin/types/promote - Create a new permanent type from a custom "Others" name
 router.post('/types/promote', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response, next) => {
   try {
-    const { customTypeName, category, defaultSeverity, defaultPoints, description } = req.body as {
+    const { customTypeName, category, defaultPoints, description } = req.body as {
       customTypeName: string;
       category: string;
-      defaultSeverity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
       defaultPoints: number;
       description?: string;
     };
 
-    if (!customTypeName || !category || !defaultSeverity || defaultPoints === undefined) {
-      throw new AppError('Missing required fields: customTypeName, category, defaultSeverity, defaultPoints', 400);
+    if (!customTypeName || !category || defaultPoints === undefined) {
+      throw new AppError('Missing required fields: customTypeName, category, defaultPoints', 400);
     }
 
     // Check if a type with this name already exists
@@ -1069,7 +1065,6 @@ router.post('/types/promote', authenticate, requireAdmin, async (req: Authentica
       data: {
         name: customTypeName,
         category,
-        defaultSeverity,
         defaultPoints,
         description: description || `Promoted from "Others" type`,
         isOthers: false,

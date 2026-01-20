@@ -153,7 +153,6 @@ model ContraventionType {
   category        String          // DC_PROCUREMENT, MANPOWER, SVP, SVP_VCC, SIGNATORY
   name            String          @unique
   description     String?
-  defaultSeverity Severity
   defaultPoints   Int
   isActive        Boolean         @default(true)
   isOthers        Boolean         @default(false)  // True for "Others" type - requires custom description

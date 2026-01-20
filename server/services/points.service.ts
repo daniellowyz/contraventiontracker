@@ -1,27 +1,15 @@
 import prisma from '../config/database';
-import { ESCALATION_MATRIX, POINTS_CONFIG, SEVERITY_POINTS } from '../config/constants';
-import { EscalationLevel, Severity, PointsHistoryEntry } from '../types';
+import { ESCALATION_MATRIX, POINTS_CONFIG } from '../config/constants';
+import { EscalationLevel, PointsHistoryEntry } from '../types';
 import { addDays } from '../utils/dateUtils';
 
 export class PointsService {
   /**
-   * Calculate points for a contravention based on type and value
+   * Calculate points for a contravention based on type
+   * Points are determined solely by the contravention type's defaultPoints
    */
-  calculatePoints(defaultPoints: number, severity: Severity, valueSgd?: number): number {
-    let points = defaultPoints;
-
-    // Apply value modifiers
-    if (valueSgd) {
-      if (valueSgd > 100000 && severity !== 'CRITICAL') {
-        // Upgrade to critical-level points for high-value contraventions
-        points = SEVERITY_POINTS.CRITICAL;
-      } else if (valueSgd > 10000 && severity === 'MEDIUM') {
-        // Add 1 point for medium severity above $10k
-        points += 1;
-      }
-    }
-
-    return points;
+  calculatePoints(defaultPoints: number): number {
+    return defaultPoints;
   }
 
   /**
