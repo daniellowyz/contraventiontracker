@@ -202,7 +202,6 @@ model Contravention {
 
   // Evidence
   evidenceUrls    String[]
-  supportingDocs  String[]        // Supporting documentation URLs (uploaded by user)
 
   // Authorization personnel
   authorizerEmail String?         // Email of the person who authorized the action

@@ -84,7 +84,6 @@ export class ContraventionService {
         points,
         incidentDate: new Date(data.incidentDate),
         evidenceUrls: data.evidenceUrls || [],
-        supportingDocs: data.supportingDocs || [],
         authorizerEmail: data.authorizerEmail,
         approvalPdfUrl: data.approvalPdfUrl,
         // Status depends on whether approver is selected and if PDF is uploaded
@@ -612,7 +611,6 @@ export class ContraventionService {
         mitigation: data.mitigation,
         summary: data.summary,
         evidenceUrls: data.evidenceUrls,
-        supportingDocs: data.supportingDocs,
         authorizerEmail: data.authorizerEmail,
       },
       include: {
@@ -685,7 +683,6 @@ export class ContraventionService {
         mitigation: data.mitigation,
         summary: data.summary ?? contravention.summary,
         evidenceUrls: data.evidenceUrls ?? contravention.evidenceUrls,
-        supportingDocs: data.supportingDocs ?? (contravention.supportingDocs || []),
         authorizerEmail: approverEmail,
         status: 'PENDING_APPROVAL',
       },

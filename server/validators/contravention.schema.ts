@@ -15,7 +15,6 @@ export const createContraventionSchema = z.object({
     message: 'Invalid date format',
   }),
   evidenceUrls: z.array(z.string().url()).optional(),
-  supportingDocs: z.array(z.string().url()).optional(),  // Supporting documentation URLs
   authorizerEmail: z.string().email('Invalid email format').optional(),
   approvalPdfUrl: z.string().url('Invalid URL format').optional(),
 });
@@ -33,7 +32,6 @@ export const updateContraventionSchema = z.object({
   points: z.number().int().min(0).optional(),
   status: z.enum(['PENDING_APPROVAL', 'PENDING_UPLOAD', 'PENDING_REVIEW', 'COMPLETED', 'REJECTED']).optional(),
   evidenceUrls: z.array(z.string().url()).optional(),
-  supportingDocs: z.array(z.string().url()).optional(),
   approvalPdfUrl: z.string().url('Invalid URL format').optional(),
   authorizerEmail: z.string().email('Invalid email format').optional(),
 });
@@ -47,7 +45,6 @@ export const userUpdateContraventionSchema = z.object({
   mitigation: z.string().optional(),
   summary: z.string().nullable().optional(),
   evidenceUrls: z.array(z.string().url()).optional(),
-  supportingDocs: z.array(z.string().url()).optional(),
   authorizerEmail: z.string().email('Invalid email format').nullable().optional(),
 });
 
@@ -60,7 +57,6 @@ export const resubmitContraventionSchema = z.object({
   mitigation: z.string().min(1, 'Mitigation measures are required'),
   summary: z.string().nullable().optional(),
   evidenceUrls: z.array(z.string().url()).optional(),
-  supportingDocs: z.array(z.string().url()).optional(),
   authorizerEmail: z.string().email('Invalid email format').optional(),
 });
 
