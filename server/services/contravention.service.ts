@@ -168,7 +168,7 @@ export class ContraventionService {
               contraventionId: contravention.id,
               referenceNo,
               employeeName: employee.name,
-              submitterName: contravention.loggedBy?.name || 'A user',
+              submitterName: (contravention as { loggedBy?: { name?: string } }).loggedBy?.name || 'A user',
               typeName: contraventionType.name,
             }).catch((err: Error) => {
               console.error('Failed to send approval notification:', err);
@@ -770,6 +770,15 @@ export class ContraventionService {
 
     return prisma.contravention.delete({
       where: { id },
+    });
+  }
+
+  /**
+   * Get count of contraventions pending admin review
+   */
+  async getPendingReviewCount(): Promise<number> {
+    return prisma.contravention.count({
+      where: { status: 'PENDING_REVIEW' },
     });
   }
 }

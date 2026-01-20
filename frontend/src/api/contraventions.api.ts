@@ -144,4 +144,10 @@ export const contraventionsApi = {
     const response = await client.delete<ApiResponse>(`/admin/types/${typeId}`);
     return response.data;
   },
+
+  // Admin: Get count of contraventions pending review
+  getPendingReviewCount: async (): Promise<number> => {
+    const response = await client.get<ApiResponse<{ count: number }>>('/contraventions/pending-review-count');
+    return response.data.data?.count || 0;
+  },
 };

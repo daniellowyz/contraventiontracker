@@ -167,4 +167,19 @@ router.post(
   }
 );
 
+// GET /api/contraventions/pending-review-count - Get count of contraventions pending admin review (admin only)
+router.get(
+  '/pending-review-count',
+  authenticate,
+  requireAdmin,
+  async (_req: AuthenticatedRequest, res: Response, next) => {
+    try {
+      const count = await contraventionService.getPendingReviewCount();
+      res.json({ success: true, data: { count } });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 export default router;
