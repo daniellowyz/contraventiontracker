@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
 import { approvalsApi } from '@/api/approvals.api';
 import { approversApi } from '@/api/approvers.api';
+import { contraventionsApi } from '@/api/contraventions.api';
 import {
   LayoutDashboard,
   FileWarning,
@@ -53,6 +54,13 @@ export function Sidebar() {
     refetchInterval: 30000, // Refresh every 30 seconds
   });
 
+  // Fetch rejected contraventions count for users (contraventions they logged that were rejected)
+  const { data: myRejectedCount = 0 } = useQuery({
+    queryKey: ['myRejectedCount'],
+    queryFn: contraventionsApi.getMyRejectedCount,
+    refetchInterval: 30000, // Refresh every 30 seconds
+  });
+
   return (
     <div className="w-64 bg-white border-r border-gray-200 flex flex-col h-screen">
       {/* Logo */}
@@ -72,6 +80,9 @@ export function Sidebar() {
           const isActive = location.pathname === item.href ||
             (item.href !== '/' && location.pathname.startsWith(item.href));
 
+          // Show rejected badge on Contraventions link for users who have rejected contraventions
+          const showRejectedBadge = item.href === '/contraventions' && myRejectedCount > 0;
+
           return (
             <Link
               key={item.href}
@@ -85,6 +96,11 @@ export function Sidebar() {
             >
               <item.icon className="w-5 h-5" />
               <span className="flex-1">{item.label}</span>
+              {showRejectedBadge && (
+                <span className="bg-red-500 text-white text-xs font-medium px-2 py-0.5 rounded-full min-w-[20px] text-center" title="Rejected - action required">
+                  {myRejectedCount > 99 ? '99+' : myRejectedCount}
+                </span>
+              )}
             </Link>
           );
         })}

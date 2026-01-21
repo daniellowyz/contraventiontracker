@@ -339,8 +339,8 @@ export const notificationService = {
   },
 
   /**
-   * Notify all admins when a user requests approver role
-   * Sends in-app notification, email, and Slack DM to all admins
+   * Notify all admins and approvers when a user requests approver role
+   * Sends in-app notification, email, and Slack DM to all admins and approvers
    */
   async notifyApproverRoleRequested(params: {
     requestingUserId: string;
@@ -354,18 +354,35 @@ export const notificationService = {
       select: { id: true, email: true, name: true },
     });
 
-    if (admins.length === 0) {
-      console.warn('[Notification] No admins found to notify about approver request');
+    // Get all approver users (excluding the requesting user)
+    const approvers = await prisma.user.findMany({
+      where: {
+        role: 'APPROVER',
+        isActive: true,
+        id: { not: params.requestingUserId },
+      },
+      select: { id: true, email: true, name: true },
+    });
+
+    // Combine admins and approvers (admins may also be approvers, so deduplicate by id)
+    const adminIds = new Set(admins.map((a: { id: string }) => a.id));
+    const uniqueRecipients = [
+      ...admins,
+      ...approvers.filter((a: { id: string }) => !adminIds.has(a.id)),
+    ];
+
+    if (uniqueRecipients.length === 0) {
+      console.warn('[Notification] No admins or approvers found to notify about approver request');
       return [];
     }
 
-    console.log(`[Notification] Notifying ${admins.length} admins about approver request from ${params.requestingUserName}`);
+    console.log(`[Notification] Notifying ${uniqueRecipients.length} admins/approvers about approver request from ${params.requestingUserName}`);
 
-    // Create in-app notifications for all admins
+    // Create in-app notifications for all admins and approvers
     const notifications = await Promise.all(
-      admins.map((admin: { id: string; email: string; name: string }) =>
+      uniqueRecipients.map((recipient: { id: string; email: string; name: string }) =>
         this.create({
-          userId: admin.id,
+          userId: recipient.id,
           type: 'APPROVER_ROLE_REQUESTED',
           title: 'New Approver Request',
           message: `${params.requestingUserName} (${params.position}) has requested approver permissions.`,
@@ -374,12 +391,12 @@ export const notificationService = {
       )
     );
 
-    // Send emails to all admins
+    // Send emails to all admins and approvers
     await Promise.all(
-      admins.map((admin: { id: string; email: string; name: string }) =>
+      uniqueRecipients.map((recipient: { id: string; email: string; name: string }) =>
         emailService.sendApproverRoleRequestEmail({
-          adminEmail: admin.email,
-          adminName: admin.name,
+          adminEmail: recipient.email,
+          adminName: recipient.name,
           requestingUserName: params.requestingUserName,
           requestingUserEmail: params.requestingUserEmail,
           position: params.position,
