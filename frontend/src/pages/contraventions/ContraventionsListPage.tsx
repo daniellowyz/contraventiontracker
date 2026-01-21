@@ -17,12 +17,14 @@ const STATUS_OPTIONS = [
   { value: '', label: 'All Status' },
   { value: 'PENDING_UPLOAD', label: 'Pending Approval' },
   { value: 'PENDING_REVIEW', label: 'Admin Review' },
+  { value: 'REJECTED', label: 'Rejected' },
   { value: 'COMPLETED', label: 'Completed' },
 ];
 
 const STATUS_LABELS: Record<string, string> = {
   PENDING_UPLOAD: 'Pending Approval',
   PENDING_REVIEW: 'Admin Review',
+  REJECTED: 'Rejected',
   COMPLETED: 'Completed',
 };
 
