@@ -5,6 +5,7 @@ import { contraventionsApi, CreateContraventionInput, UserUpdateContraventionInp
 import { employeesApi, EmployeeListItem } from '@/api/employees.api';
 import { teamsApi, Team } from '@/api/teams.api';
 import { approversApi } from '@/api/approvers.api';
+import { approvalsApi } from '@/api/approvals.api';
 import { useAuthStore } from '@/stores/authStore';
 import { Header } from '@/components/layout/Header';
 import { Card } from '@/components/ui/Card';
@@ -101,6 +102,12 @@ export function ContraventionDetailPage() {
   // URL input for supporting docs in user edit/resubmit
   const [newDocUrl, setNewDocUrl] = useState('');
 
+  // Approver review state
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectionNotes, setRejectionNotes] = useState('');
+  const [isApproving, setIsApproving] = useState(false);
+  const [isRejecting, setIsRejecting] = useState(false);
+
   // Departed member handling for reassignment
   const [isDepartedMember, setIsDepartedMember] = useState(false);
   const [departedEmail, setDepartedEmail] = useState('');
@@ -139,6 +146,12 @@ export function ContraventionDetailPage() {
   const canUserEdit = contravention &&
     user?.userId === contravention.loggedBy?.id &&
     ['PENDING_APPROVAL', 'REJECTED'].includes(contravention.status);
+
+  // Check if current user is the assigned approver for a pending approval
+  const pendingApproval = contravention?.approvalRequests?.find(
+    (req) => req.status === 'PENDING' && req.approver?.id === user?.userId
+  );
+  const isAssignedApprover = !!pendingApproval;
 
   // Update mutation
   const updateMutation = useMutation({
@@ -381,6 +394,59 @@ export function ContraventionDetailPage() {
     setUserEditData({ ...userEditData, supportingDocs: currentDocs.filter((_: string, i: number) => i !== index) });
   };
 
+  // Approver review handlers
+  const handleApprove = async () => {
+    if (!pendingApproval) return;
+
+    if (!confirm('Are you sure you want to approve this contravention?')) return;
+
+    setIsApproving(true);
+    setError('');
+
+    try {
+      await approvalsApi.reviewApproval(pendingApproval.id, {
+        status: 'APPROVED',
+      });
+
+      queryClient.invalidateQueries({ queryKey: ['contravention', id] });
+      queryClient.invalidateQueries({ queryKey: ['contraventions'] });
+      queryClient.invalidateQueries({ queryKey: ['pendingApprovalsCount'] });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to approve contravention');
+    } finally {
+      setIsApproving(false);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!pendingApproval) return;
+
+    if (!rejectionNotes.trim()) {
+      setError('Please provide a reason for rejection');
+      return;
+    }
+
+    setIsRejecting(true);
+    setError('');
+
+    try {
+      await approvalsApi.reviewApproval(pendingApproval.id, {
+        status: 'REJECTED',
+        notes: rejectionNotes.trim(),
+      });
+
+      queryClient.invalidateQueries({ queryKey: ['contravention', id] });
+      queryClient.invalidateQueries({ queryKey: ['contraventions'] });
+      queryClient.invalidateQueries({ queryKey: ['pendingApprovalsCount'] });
+      setShowRejectModal(false);
+      setRejectionNotes('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to reject contravention');
+    } finally {
+      setIsRejecting(false);
+    }
+  };
+
   // Handler for creating departed member during reassignment
   const handleCreateDepartedMember = async () => {
     if (!departedEmail.trim() || !departedName.trim()) {
@@ -526,9 +592,9 @@ export function ContraventionDetailPage() {
             )}
             {/* User edit button (for their own contraventions) */}
             {!isAdmin && canUserEdit && !isUserEditing && (
-              <Button onClick={handleUserEdit}>
+              <Button onClick={handleUserEdit} variant={contravention.status === 'REJECTED' ? 'primary' : 'secondary'}>
                 <Edit2 className="w-4 h-4 mr-2" />
-                Edit
+                {contravention.status === 'REJECTED' ? 'Edit and Resubmit' : 'Edit'}
               </Button>
             )}
             {/* Admin editing controls */}
@@ -1534,6 +1600,44 @@ export function ContraventionDetailPage() {
                         Mark as Complete
                       </Button>
                     )}
+
+                    {/* Approver Actions - Approve/Reject buttons */}
+                    {isAssignedApprover && contravention.status === 'PENDING_APPROVAL' && (
+                      <div className="pt-3 mt-3 border-t border-gray-200">
+                        <p className="text-xs text-gray-600 mb-3">
+                          You have been assigned to review this contravention.
+                        </p>
+                        <div className="space-y-2">
+                          <Button
+                            variant="primary"
+                            className="w-full justify-center"
+                            onClick={handleApprove}
+                            disabled={isApproving || isRejecting}
+                          >
+                            {isApproving ? (
+                              <>
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                Approving...
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle className="w-4 h-4 mr-2" />
+                                Approve
+                              </>
+                            )}
+                          </Button>
+                          <Button
+                            variant="danger"
+                            className="w-full justify-center"
+                            onClick={() => setShowRejectModal(true)}
+                            disabled={isApproving || isRejecting}
+                          >
+                            <XCircle className="w-4 h-4 mr-2" />
+                            Reject
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </Card>
@@ -1677,6 +1781,64 @@ export function ContraventionDetailPage() {
                 >
                   <Sparkles className="w-4 h-4 mr-2" />
                   Create Permanent Type
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rejection Modal */}
+      {showRejectModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                <XCircle className="w-5 h-5 text-red-500" />
+                Reject Contravention
+              </h2>
+              <p className="text-sm text-gray-600 mb-4">
+                Please provide a reason for rejecting this contravention. The submitter will be notified and can edit and resubmit.
+              </p>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Rejection Reason <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 min-h-[100px]"
+                  value={rejectionNotes}
+                  onChange={(e) => setRejectionNotes(e.target.value)}
+                  placeholder="Explain why this contravention is being rejected..."
+                />
+              </div>
+
+              {error && (
+                <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+                  {error}
+                </div>
+              )}
+
+              <div className="mt-6 flex justify-end gap-3">
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setShowRejectModal(false);
+                    setRejectionNotes('');
+                    setError('');
+                  }}
+                  disabled={isRejecting}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="danger"
+                  onClick={handleReject}
+                  isLoading={isRejecting}
+                  disabled={!rejectionNotes.trim()}
+                >
+                  <XCircle className="w-4 h-4 mr-2" />
+                  Reject Contravention
                 </Button>
               </div>
             </div>

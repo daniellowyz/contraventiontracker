@@ -730,6 +730,19 @@ export class ContraventionService {
       where: { status: 'PENDING_REVIEW' },
     });
   }
+
+  /**
+   * Get count of rejected contraventions logged by a specific user
+   * These are contraventions that the user submitted and were rejected, requiring resubmission
+   */
+  async getMyRejectedCount(userId: string): Promise<number> {
+    return prisma.contravention.count({
+      where: {
+        loggedById: userId,
+        status: 'REJECTED',
+      },
+    });
+  }
 }
 
 export default new ContraventionService();

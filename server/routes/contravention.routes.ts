@@ -61,6 +61,21 @@ router.get(
   }
 );
 
+// GET /api/contraventions/my-rejected-count - Get count of rejected contraventions logged by current user
+// NOTE: This must be BEFORE /:id route to avoid being caught by the parameter route
+router.get(
+  '/my-rejected-count',
+  authenticate,
+  async (req: AuthenticatedRequest, res: Response, next) => {
+    try {
+      const count = await contraventionService.getMyRejectedCount(req.user!.userId);
+      res.json({ success: true, data: { count } });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 // GET /api/contraventions/:id - Get single contravention
 router.get('/:id', authenticate, async (req: AuthenticatedRequest, res: Response, next) => {
   try {

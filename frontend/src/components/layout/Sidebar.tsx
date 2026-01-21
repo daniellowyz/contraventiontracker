@@ -62,6 +62,13 @@ export function Sidebar() {
     refetchInterval: 30000, // Refresh every 30 seconds
   });
 
+  // Fetch rejected contraventions count for all users (contraventions they logged that were rejected)
+  const { data: myRejectedCount = 0 } = useQuery({
+    queryKey: ['myRejectedCount'],
+    queryFn: contraventionsApi.getMyRejectedCount,
+    refetchInterval: 30000, // Refresh every 30 seconds
+  });
+
   return (
     <div className="w-64 bg-white border-r border-gray-200 flex flex-col h-screen">
       {/* Logo */}
@@ -83,6 +90,8 @@ export function Sidebar() {
 
           // Show pending review badge on Contraventions link for admins
           const showPendingReviewBadge = isAdmin && item.href === '/contraventions' && pendingReviewCount > 0;
+          // Show rejected badge on Contraventions link for users who have rejected contraventions
+          const showRejectedBadge = !isAdmin && item.href === '/contraventions' && myRejectedCount > 0;
 
           return (
             <Link
@@ -100,6 +109,11 @@ export function Sidebar() {
               {showPendingReviewBadge && (
                 <span className="bg-amber-500 text-white text-xs font-medium px-2 py-0.5 rounded-full min-w-[20px] text-center">
                   {pendingReviewCount > 99 ? '99+' : pendingReviewCount}
+                </span>
+              )}
+              {showRejectedBadge && (
+                <span className="bg-red-500 text-white text-xs font-medium px-2 py-0.5 rounded-full min-w-[20px] text-center" title="Rejected - action required">
+                  {myRejectedCount > 99 ? '99+' : myRejectedCount}
                 </span>
               )}
             </Link>

@@ -150,4 +150,10 @@ export const contraventionsApi = {
     const response = await client.get<ApiResponse<{ count: number }>>('/contraventions/pending-review-count');
     return response.data.data?.count || 0;
   },
+
+  // User: Get count of rejected contraventions (logged by current user)
+  getMyRejectedCount: async (): Promise<number> => {
+    const response = await client.get<ApiResponse<{ count: number }>>('/contraventions/my-rejected-count');
+    return response.data.data?.count || 0;
+  },
 };

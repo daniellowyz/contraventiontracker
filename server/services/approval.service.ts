@@ -29,6 +29,20 @@ async function getNotificationService() {
   return notificationServiceModule.notificationService;
 }
 
+// Lazy import email service
+let emailServiceModule: typeof import('./email.service') | null = null;
+async function getEmailService() {
+  if (!emailServiceModule) {
+    try {
+      emailServiceModule = await import('./email.service');
+    } catch (err) {
+      console.error('Failed to load email service:', err);
+      return null;
+    }
+  }
+  return emailServiceModule.emailService;
+}
+
 export class ApprovalService {
   /**
    * Get pending approvals for a specific approver
@@ -325,6 +339,11 @@ export class ApprovalService {
           console.error('Failed to notify ops channel:', err);
         });
       }
+
+      // Send email notification to the submitter about approval
+      this.notifyApproval(updatedApproval, reviewer.name).catch((err) => {
+        console.error('Failed to send approval notification:', err);
+      });
     } else if (status === 'REJECTED') {
       // Rejected: update status to REJECTED
       await prisma.contravention.update({
@@ -371,6 +390,51 @@ export class ApprovalService {
   }
 
   /**
+   * Send notification about approval to the submitter
+   */
+  private async notifyApproval(
+    approval: {
+      contravention: {
+        id: string;
+        referenceNo: string;
+        employee: { name: string };
+        type: { name: string; category: string };
+        loggedBy: { id: string; name: string; email: string };
+      };
+    },
+    approverName: string
+  ) {
+    const { contravention } = approval;
+    const loggedBy = contravention.loggedBy;
+
+    // Send email notification
+    const emailService = await getEmailService();
+    if (emailService) {
+      await emailService.sendApprovalApprovedEmail({
+        submitterEmail: loggedBy.email,
+        submitterName: loggedBy.name,
+        referenceNo: contravention.referenceNo,
+        employeeName: contravention.employee.name,
+        typeName: contravention.type.name,
+        approverName: approverName,
+        contraventionId: contravention.id,
+      });
+    }
+
+    // Send in-app notification
+    const notificationService = await getNotificationService();
+    if (notificationService) {
+      await notificationService.create({
+        userId: loggedBy.id,
+        type: 'CONTRAVENTION_ACKNOWLEDGED',
+        title: `Contravention ${contravention.referenceNo} Approved`,
+        message: `Your contravention for ${contravention.employee.name} (${contravention.type.name}) was approved by ${approverName}. It is now pending admin review.`,
+        link: `/contraventions/${contravention.id}`,
+      });
+    }
+  }
+
+  /**
    * Send notification about rejection to the submitter
    */
   private async notifyRejection(
@@ -391,20 +455,30 @@ export class ApprovalService {
     const { contravention } = approval;
     const loggedBy = contravention.loggedBy;
 
+    // Send email notification
+    const emailService = await getEmailService();
+    if (emailService) {
+      await emailService.sendApprovalRejectedEmail({
+        submitterEmail: loggedBy.email,
+        submitterName: loggedBy.name,
+        referenceNo: contravention.referenceNo,
+        employeeName: contravention.employee.name,
+        typeName: contravention.type.name,
+        approverName: reviewerName,
+        rejectionReason: notes,
+        contraventionId: contravention.id,
+      });
+    }
+
     // Send in-app notification
     const notificationService = await getNotificationService();
     if (notificationService) {
-      await notificationService.createNotification({
+      await notificationService.create({
         userId: loggedBy.id,
-        type: 'CONTRAVENTION_REJECTED',
+        type: 'DISPUTE_DECIDED',
         title: `Contravention ${contravention.referenceNo} Rejected`,
-        message: `Your contravention for ${contravention.employee.name} (${contravention.type.name}) was rejected by ${reviewerName}.${notes ? ` Reason: ${notes}` : ''}`,
-        data: {
-          contraventionId: contravention.id,
-          referenceNo: contravention.referenceNo,
-          rejectedBy: reviewerName,
-          reason: notes || null,
-        },
+        message: `Your contravention for ${contravention.employee.name} (${contravention.type.name}) was rejected by ${reviewerName}.${notes ? ` Reason: ${notes}` : ''} Please edit and resubmit.`,
+        link: `/contraventions/${contravention.id}`,
       });
     }
 

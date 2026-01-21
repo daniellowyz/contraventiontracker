@@ -787,6 +787,176 @@ export const emailService = {
   },
 
   /**
+   * Send notification when contravention is approved
+   */
+  async sendApprovalApprovedEmail(params: {
+    submitterEmail: string;
+    submitterName: string;
+    referenceNo: string;
+    employeeName: string;
+    typeName: string;
+    approverName: string;
+    contraventionId: string;
+  }): Promise<EmailResult> {
+    // Try to send via Google Apps Script webhook first
+    if (EMAIL_CONFIG.GAS_WEBHOOK_URL) {
+      return this.sendViaWebhook({
+        type: 'APPROVAL_APPROVED',
+        submitterEmail: params.submitterEmail,
+        submitterName: params.submitterName,
+        referenceNo: params.referenceNo,
+        employeeName: params.employeeName,
+        typeName: params.typeName,
+        approverName: params.approverName,
+        contraventionId: params.contraventionId,
+        appUrl: EMAIL_CONFIG.APP_URL,
+      });
+    }
+
+    const viewUrl = `${EMAIL_CONFIG.APP_URL}/contraventions/${params.contraventionId}`;
+
+    return this.send({
+      to: params.submitterEmail,
+      toName: params.submitterName,
+      subject: `Contravention Approved: ${params.referenceNo}`,
+      htmlBody: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #22c55e;">Contravention Approved</h2>
+
+          <p>Dear ${params.submitterName},</p>
+
+          <p>Your contravention submission has been <strong style="color: #22c55e;">approved</strong>.</p>
+
+          <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+            <tr>
+              <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: bold;">Reference No</td>
+              <td style="padding: 8px; border: 1px solid #e5e7eb;">${params.referenceNo}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: bold;">Employee</td>
+              <td style="padding: 8px; border: 1px solid #e5e7eb;">${params.employeeName}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: bold;">Type</td>
+              <td style="padding: 8px; border: 1px solid #e5e7eb;">${params.typeName}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: bold;">Approved By</td>
+              <td style="padding: 8px; border: 1px solid #e5e7eb;">${params.approverName}</td>
+            </tr>
+          </table>
+
+          <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; padding: 16px; border-radius: 8px; margin: 20px 0;">
+            <p style="margin: 0; color: #166534;">The contravention is now pending admin review for final processing.</p>
+          </div>
+
+          <p style="margin: 20px 0;">
+            <a href="${viewUrl}" style="background-color: #22c55e; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+              View Contravention
+            </a>
+          </p>
+
+          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+
+          <p style="color: #9ca3af; font-size: 12px;">
+            This is an automated message from the Contravention Tracker system.
+          </p>
+        </div>
+      `,
+    });
+  },
+
+  /**
+   * Send notification when contravention is rejected
+   */
+  async sendApprovalRejectedEmail(params: {
+    submitterEmail: string;
+    submitterName: string;
+    referenceNo: string;
+    employeeName: string;
+    typeName: string;
+    approverName: string;
+    rejectionReason?: string;
+    contraventionId: string;
+  }): Promise<EmailResult> {
+    // Try to send via Google Apps Script webhook first
+    if (EMAIL_CONFIG.GAS_WEBHOOK_URL) {
+      return this.sendViaWebhook({
+        type: 'APPROVAL_REJECTED',
+        submitterEmail: params.submitterEmail,
+        submitterName: params.submitterName,
+        referenceNo: params.referenceNo,
+        employeeName: params.employeeName,
+        typeName: params.typeName,
+        approverName: params.approverName,
+        rejectionReason: params.rejectionReason || 'No reason provided',
+        contraventionId: params.contraventionId,
+        appUrl: EMAIL_CONFIG.APP_URL,
+      });
+    }
+
+    const editUrl = `${EMAIL_CONFIG.APP_URL}/contraventions/${params.contraventionId}`;
+
+    return this.send({
+      to: params.submitterEmail,
+      toName: params.submitterName,
+      subject: `Action Required: Contravention Rejected - ${params.referenceNo}`,
+      htmlBody: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #dc2626;">Contravention Rejected</h2>
+
+          <p>Dear ${params.submitterName},</p>
+
+          <p>Your contravention submission has been <strong style="color: #dc2626;">rejected</strong> and requires your attention.</p>
+
+          <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+            <tr>
+              <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: bold;">Reference No</td>
+              <td style="padding: 8px; border: 1px solid #e5e7eb;">${params.referenceNo}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: bold;">Employee</td>
+              <td style="padding: 8px; border: 1px solid #e5e7eb;">${params.employeeName}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: bold;">Type</td>
+              <td style="padding: 8px; border: 1px solid #e5e7eb;">${params.typeName}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: bold;">Rejected By</td>
+              <td style="padding: 8px; border: 1px solid #e5e7eb;">${params.approverName}</td>
+            </tr>
+          </table>
+
+          ${params.rejectionReason ? `
+          <div style="background-color: #fef2f2; border-left: 4px solid #dc2626; padding: 16px; margin: 20px 0;">
+            <p style="margin: 0 0 8px 0; font-weight: bold; color: #991b1b;">Rejection Reason:</p>
+            <p style="margin: 0; color: #7f1d1d;">${params.rejectionReason}</p>
+          </div>
+          ` : ''}
+
+          <div style="background-color: #fffbeb; border: 1px solid #fde68a; padding: 16px; border-radius: 8px; margin: 20px 0;">
+            <p style="margin: 0 0 12px 0; font-weight: bold; color: #92400e;">Action Required</p>
+            <p style="margin: 0; color: #78350f;">Please review the feedback, make necessary changes, and resubmit the contravention.</p>
+          </div>
+
+          <p style="margin: 24px 0; text-align: center;">
+            <a href="${editUrl}" style="background-color: #f97316; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">
+              Edit and Resubmit
+            </a>
+          </p>
+
+          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+
+          <p style="color: #9ca3af; font-size: 12px;">
+            This is an automated message from the Contravention Tracker system.
+          </p>
+        </div>
+      `,
+    });
+  },
+
+  /**
    * Get current sandbox status
    */
   getSandboxStatus() {
