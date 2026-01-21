@@ -641,6 +641,7 @@ export const emailService = {
     }
 
     const approvalUrl = `${EMAIL_CONFIG.APP_URL}/approvals`;
+    const viewContraventionUrl = `${EMAIL_CONFIG.APP_URL}/contraventions/${params.contraventionId}`;
 
     const severityColors: Record<string, string> = {
       LOW: '#22c55e',
@@ -687,12 +688,18 @@ export const emailService = {
 
           <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; padding: 16px; border-radius: 8px; margin: 20px 0;">
             <p style="margin: 0 0 12px 0; font-weight: bold; color: #1e40af;">Action Required</p>
-            <p style="margin: 0; color: #1e3a8a;">Please log in to the Contravention Tracker to review and approve or reject this request.</p>
+            <p style="margin: 0; color: #1e3a8a;">Please click the button below to review the details and approve or reject this request.</p>
           </div>
 
           <p style="margin: 24px 0; text-align: center;">
-            <a href="${approvalUrl}" style="background-color: #1e40af; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">
-              Review & Approve
+            <a href="${approvalUrl}" style="background-color: #22c55e; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold; margin-right: 12px;">
+              ✓ Go to Approvals
+            </a>
+          </p>
+
+          <p style="margin: 16px 0; text-align: center;">
+            <a href="${viewContraventionUrl}" style="color: #1e40af; text-decoration: underline;">
+              View full contravention details →
             </a>
           </p>
 
