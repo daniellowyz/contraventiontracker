@@ -416,7 +416,7 @@ model ContraventionApproval {
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
 
-  @@unique([contraventionId, approverId])
+  @@index([contraventionId])
   @@index([approverId])
   @@index([status])
 }

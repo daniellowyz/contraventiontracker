@@ -650,21 +650,9 @@ export class ContraventionService {
       },
     });
 
-    // Create or update approval request
-    await prisma.contraventionApproval.upsert({
-      where: {
-        contraventionId_approverId: {
-          contraventionId: id,
-          approverId: approver.id,
-        },
-      },
-      update: {
-        status: 'PENDING',
-        reviewedById: null,
-        reviewedAt: null,
-        reviewNotes: null,
-      },
-      create: {
+    // Create a NEW approval request (preserves history of previous rejections)
+    await prisma.contraventionApproval.create({
+      data: {
         contraventionId: id,
         approverId: approver.id,
         status: 'PENDING',
