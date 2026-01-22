@@ -6,7 +6,7 @@ export const createContraventionSchema = z.object({
   teamId: z.string().min(1, 'Team is required'),  // Required team for tracking
   customTypeName: z.string().optional(),  // For "Others" type - custom contravention name
   vendor: z.string().optional(),
-  valueSgd: z.number().optional(),
+  valueSgd: z.coerce.number().optional(),
   description: z.string().min(1, 'Description is required'),
   justification: z.string().min(1, 'Justification is required'),
   mitigation: z.string().min(1, 'Mitigation measures are required'),
@@ -24,7 +24,7 @@ export const updateContraventionSchema = z.object({
   teamId: z.string().nullable().optional(), // Admin can reassign to different team (null to remove)
   customTypeName: z.string().nullable().optional(),  // For "Others" type - custom contravention name
   vendor: z.string().optional(),
-  valueSgd: z.number().optional(),
+  valueSgd: z.coerce.number().optional(),
   description: z.string().optional(),
   justification: z.string().optional(),
   mitigation: z.string().optional(),
@@ -39,7 +39,7 @@ export const updateContraventionSchema = z.object({
 // Schema for users editing their own contraventions (more restrictive)
 export const userUpdateContraventionSchema = z.object({
   vendor: z.string().nullable().optional(),
-  valueSgd: z.number().nullable().optional(),
+  valueSgd: z.coerce.number().nullable().optional(),
   description: z.string().optional(),
   justification: z.string().optional(),
   mitigation: z.string().optional(),
@@ -51,7 +51,7 @@ export const userUpdateContraventionSchema = z.object({
 // Schema for resubmitting a rejected contravention
 export const resubmitContraventionSchema = z.object({
   vendor: z.string().nullable().optional(),
-  valueSgd: z.number().nullable().optional(),
+  valueSgd: z.coerce.number().nullable().optional(),
   description: z.string().min(1, 'Description is required'),
   justification: z.string().min(1, 'Justification is required'),
   mitigation: z.string().min(1, 'Mitigation measures are required'),
