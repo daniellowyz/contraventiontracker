@@ -170,6 +170,13 @@ export class ContraventionService {
               employeeName: employee.name,
               submitterName: (contravention as { loggedBy?: { name?: string } }).loggedBy?.name || 'A user',
               typeName: contraventionType.name,
+              // Additional fields for email
+              vendor: contravention.vendor || undefined,
+              valueSgd: contravention.valueSgd ? Number(contravention.valueSgd) : null,
+              incidentDate: contravention.incidentDate,
+              description: contravention.description,
+              justification: contravention.justification || undefined,
+              mitigation: contravention.mitigation || undefined,
             }).catch((err: Error) => {
               console.error('Failed to send approval notification:', err);
             });
@@ -672,10 +679,17 @@ export class ContraventionService {
           approverEmail: approver.email,
           approverName: approver.name,
           contraventionId: id,
-          referenceNo: contravention.referenceNo,
-          employeeName: contravention.employee.name,
-          submitterName: contravention.loggedBy?.name || 'A user',
-          typeName: contravention.type.name,
+          referenceNo: updated.referenceNo,
+          employeeName: updated.employee.name,
+          submitterName: updated.loggedBy?.name || 'A user',
+          typeName: updated.type.name,
+          // Additional fields for email
+          vendor: updated.vendor || undefined,
+          valueSgd: updated.valueSgd ? Number(updated.valueSgd) : null,
+          incidentDate: updated.incidentDate,
+          description: updated.description,
+          justification: updated.justification || undefined,
+          mitigation: updated.mitigation || undefined,
         }).catch((err: Error) => {
           console.error('Failed to send resubmission approval notification:', err);
         });

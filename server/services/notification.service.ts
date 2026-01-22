@@ -314,6 +314,13 @@ export const notificationService = {
     submitterName: string;
     typeName: string;
     severity?: string;  // Optional - for backwards compatibility
+    // Additional fields for email
+    vendor?: string;
+    valueSgd?: number | null;
+    incidentDate?: Date | string;
+    description?: string;
+    justification?: string;
+    mitigation?: string;
   }) {
     // Create in-app notification
     const notification = await this.create({
@@ -333,6 +340,13 @@ export const notificationService = {
       typeName: params.typeName,
       severity: params.severity || 'N/A',
       contraventionId: params.contraventionId,
+      // Pass additional fields for GAS email
+      vendor: params.vendor,
+      valueSgd: params.valueSgd,
+      incidentDate: params.incidentDate,
+      description: params.description,
+      justification: params.justification,
+      mitigation: params.mitigation,
     });
 
     return notification;

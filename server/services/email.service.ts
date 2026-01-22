@@ -624,19 +624,44 @@ export const emailService = {
     typeName: string;
     severity: string;
     contraventionId: string;
+    // Additional fields for GAS legacy email template
+    vendor?: string;
+    valueSgd?: number | null;
+    incidentDate?: Date | string;
+    description?: string;
+    justification?: string;
+    mitigation?: string;
   }): Promise<EmailResult> {
+    // Format incident date if provided
+    const formattedIncidentDate = params.incidentDate
+      ? new Date(params.incidentDate).toLocaleDateString('en-SG', {
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric',
+        })
+      : 'N/A';
+
+    // Format value if provided
+    const formattedValue = params.valueSgd != null
+      ? `$${params.valueSgd.toLocaleString('en-SG', { minimumFractionDigits: 2 })}`
+      : 'N/A';
+
     // Try to send via Google Apps Script webhook first
     if (EMAIL_CONFIG.GAS_WEBHOOK_URL) {
+      // Send as legacy format (no 'type' field) so GAS uses sendApprovalEmail
       return this.sendViaWebhook({
-        type: 'APPROVAL_REQUESTED',
+        // Note: NOT sending 'type' field so GAS falls through to legacy sendApprovalEmail
         approverEmail: params.approverEmail,
-        approverName: params.approverName,
         referenceNo: params.referenceNo,
         employeeName: params.employeeName,
-        typeName: params.typeName,
-        severity: params.severity,
+        contraventionType: params.typeName, // GAS expects 'contraventionType' not 'typeName'
+        vendor: params.vendor || 'N/A',
+        valueSgd: formattedValue,
+        incidentDate: formattedIncidentDate,
+        description: params.description || 'N/A',
+        justification: params.justification || 'N/A',
+        mitigation: params.mitigation || 'N/A',
         contraventionId: params.contraventionId,
-        appUrl: EMAIL_CONFIG.APP_URL,
       });
     }
 
