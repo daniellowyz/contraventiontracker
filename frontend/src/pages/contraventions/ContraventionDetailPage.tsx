@@ -1411,11 +1411,15 @@ export function ContraventionDetailPage() {
                       }`}>
                         {statusLabels[contravention.status]}
                       </p>
-                      {contravention.status === 'PENDING_APPROVAL' && contravention.approvalRequests?.[0] && (
-                        <p className="text-xs text-amber-700">
-                          Waiting for {contravention.approvalRequests[0].approver?.name || contravention.authorizerEmail}
-                        </p>
-                      )}
+                      {contravention.status === 'PENDING_APPROVAL' && (() => {
+                        // Find the latest pending approval request
+                        const pendingRequest = contravention.approvalRequests?.find(r => r.status === 'PENDING');
+                        return pendingRequest ? (
+                          <p className="text-xs text-amber-700">
+                            Waiting for {pendingRequest.approver?.name || contravention.authorizerEmail}
+                          </p>
+                        ) : null;
+                      })()}
                       {contravention.status === 'PENDING_UPLOAD' && (
                         <p className="text-xs text-amber-700">
                           Approved - awaiting PDF upload
@@ -1426,11 +1430,15 @@ export function ContraventionDetailPage() {
                           Awaiting admin final review
                         </p>
                       )}
-                      {contravention.status === 'REJECTED' && contravention.approvalRequests?.[0]?.reviewNotes && (
-                        <p className="text-xs text-red-700 mt-1">
-                          Reason: {contravention.approvalRequests[0].reviewNotes}
-                        </p>
-                      )}
+                      {contravention.status === 'REJECTED' && (() => {
+                        // Find the latest rejected request (most recent by createdAt)
+                        const latestRejection = contravention.approvalRequests?.find(r => r.status === 'REJECTED');
+                        return latestRejection?.reviewNotes ? (
+                          <p className="text-xs text-red-700 mt-1">
+                            Reason: {latestRejection.reviewNotes}
+                          </p>
+                        ) : null;
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -1449,47 +1457,70 @@ export function ContraventionDetailPage() {
                     </div>
                   </div>
 
-                  {/* Approval Request Sent */}
+                  {/* All Approval Requests - sorted chronologically (oldest first) */}
                   {contravention.approvalRequests && contravention.approvalRequests.length > 0 && (
-                    <div className="flex items-start gap-3">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                        contravention.approvalRequests[0].status === 'APPROVED' ? 'bg-green-100' :
-                        contravention.approvalRequests[0].status === 'REJECTED' ? 'bg-red-100' :
-                        'bg-amber-100'
-                      }`}>
-                        {contravention.approvalRequests[0].status === 'APPROVED' ? (
-                          <UserCheck className="w-4 h-4 text-green-600" />
-                        ) : contravention.approvalRequests[0].status === 'REJECTED' ? (
-                          <XCircle className="w-4 h-4 text-red-600" />
-                        ) : (
-                          <Clock className="w-4 h-4 text-amber-600" />
-                        )}
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">
-                          {contravention.approvalRequests[0].status === 'APPROVED' ? 'Approved' :
-                           contravention.approvalRequests[0].status === 'REJECTED' ? 'Rejected' :
-                           'Pending Approval'}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {contravention.approvalRequests[0].status === 'PENDING'
-                            ? `Assigned to ${contravention.approvalRequests[0].approver?.name}`
-                            : contravention.approvalRequests[0].reviewedAt
-                              ? formatDateTime(contravention.approvalRequests[0].reviewedAt)
-                              : ''}
-                        </p>
-                        {contravention.approvalRequests[0].reviewedBy && (
-                          <p className="text-xs text-gray-500">
-                            by {contravention.approvalRequests[0].reviewedBy.name}
-                          </p>
-                        )}
-                        {contravention.approvalRequests[0].reviewNotes && (
-                          <p className="text-xs text-gray-600 mt-1 italic">
-                            "{contravention.approvalRequests[0].reviewNotes}"
-                          </p>
-                        )}
-                      </div>
-                    </div>
+                    <>
+                      {[...contravention.approvalRequests]
+                        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+                        .map((request, index) => (
+                          <div key={request.id}>
+                            {/* Show "Resubmitted" marker if this is not the first request */}
+                            {index > 0 && (
+                              <div className="flex items-start gap-3 mb-4">
+                                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                                  <RotateCcw className="w-4 h-4 text-blue-600" />
+                                </div>
+                                <div>
+                                  <p className="text-sm font-medium text-gray-900">Resubmitted</p>
+                                  <p className="text-xs text-gray-500">{formatDateTime(request.createdAt)}</p>
+                                  <p className="text-xs text-gray-500">Sent to {request.approver?.name}</p>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Approval/Rejection/Pending status */}
+                            <div className="flex items-start gap-3">
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                                request.status === 'APPROVED' ? 'bg-green-100' :
+                                request.status === 'REJECTED' ? 'bg-red-100' :
+                                'bg-amber-100'
+                              }`}>
+                                {request.status === 'APPROVED' ? (
+                                  <UserCheck className="w-4 h-4 text-green-600" />
+                                ) : request.status === 'REJECTED' ? (
+                                  <XCircle className="w-4 h-4 text-red-600" />
+                                ) : (
+                                  <Clock className="w-4 h-4 text-amber-600" />
+                                )}
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-gray-900">
+                                  {request.status === 'APPROVED' ? 'Approved' :
+                                   request.status === 'REJECTED' ? 'Rejected' :
+                                   'Pending Approval'}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  {request.status === 'PENDING'
+                                    ? `Assigned to ${request.approver?.name}`
+                                    : request.reviewedAt
+                                      ? formatDateTime(request.reviewedAt)
+                                      : ''}
+                                </p>
+                                {request.reviewedBy && (
+                                  <p className="text-xs text-gray-500">
+                                    by {request.reviewedBy.name}
+                                  </p>
+                                )}
+                                {request.reviewNotes && (
+                                  <p className="text-xs text-gray-600 mt-1 italic bg-gray-50 p-2 rounded">
+                                    "{request.reviewNotes}"
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                    </>
                   )}
 
                   {/* PDF Uploaded */}
