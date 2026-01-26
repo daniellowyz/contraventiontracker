@@ -4,7 +4,7 @@ import { AppError } from '../middleware/errorHandler';
 import generateReferenceNumber from '../utils/generateRefNo';
 import pointsService from './points.service';
 import { notificationService } from './notification.service';
-import { CreateContraventionInput, UpdateContraventionInput, ContraventionFiltersInput } from '../validators/contravention.schema';
+import { CreateContraventionInput, UpdateContraventionInput, UserUpdateContraventionInput, ResubmitContraventionInput, ContraventionFiltersInput } from '../validators/contravention.schema';
 // Removed unused imports for old dispute workflow
 
 export class ContraventionService {
@@ -35,17 +35,20 @@ export class ContraventionService {
       throw new AppError('Employee not found', 404);
     }
 
-    // Calculate points (use custom points if provided, otherwise use type default)
-    const points = data.points !== undefined ? data.points : contraventionType.defaultPoints;
+    // Get points from contravention type (severity is now derived from type, not stored)
+    const points = contraventionType.defaultPoints;
 
     // Generate reference number
     const referenceNo = await generateReferenceNumber();
 
-    // Determine initial status based on pathway:
-    // - If approvalPdfUrl provided: Pathway B (already has approval) → PENDING_REVIEW
-    // - If authorizerEmail provided: Pathway A (seeking approval) → PENDING_UPLOAD
-    // - Otherwise: PENDING_UPLOAD (default)
-    const initialStatus = data.approvalPdfUrl ? 'PENDING_REVIEW' : 'PENDING_UPLOAD';
+    // Status depends on whether approver is selected and if PDF is uploaded
+    // If approver selected (system approval): PENDING_APPROVAL -> (approved) -> PENDING_REVIEW -> COMPLETED
+    //   (System approval acts as evidence, no PDF upload needed)
+    // If no approver and PDF uploaded (external approval): PENDING_REVIEW
+    // If no approver and no PDF (external approval pending): PENDING_UPLOAD
+    const initialStatus = data.authorizerEmail
+      ? 'PENDING_APPROVAL'
+      : (data.approvalPdfUrl ? 'PENDING_REVIEW' : 'PENDING_UPLOAD');
 
     // Create the contravention
     const contravention = await prisma.contravention.create({
@@ -195,7 +198,10 @@ export class ContraventionService {
    * Get all contraventions with filters and pagination
    */
   async findAll(filters: ContraventionFiltersInput) {
-    const { page, limit, status, typeId, departmentId, employeeId, dateFrom, dateTo, search } = filters;
+    const { status, typeId, departmentId, employeeId, dateFrom, dateTo, search } = filters;
+    // Ensure page and limit are numbers (query params can come as strings)
+    const page = Number(filters.page) || 1;
+    const limit = Number(filters.limit) || 20;
 
     const where: Record<string, unknown> = {};
 
@@ -273,17 +279,25 @@ export class ContraventionService {
           select: { id: true, name: true, email: true, department: true },
         },
         type: true,
+        team: {
+          select: { id: true, name: true, isPersonal: true },
+        },
         loggedBy: {
           select: { id: true, name: true },
         },
         acknowledgedBy: {
           select: { id: true, name: true },
         },
-        disputes: {
+        approvalRequests: {
           include: {
-            submittedBy: { select: { id: true, name: true } },
-            decidedBy: { select: { id: true, name: true } },
+            approver: {
+              select: { id: true, name: true, email: true },
+            },
+            reviewedBy: {
+              select: { id: true, name: true },
+            },
           },
+          orderBy: { createdAt: 'desc' },
         },
       },
     });
@@ -538,8 +552,221 @@ export class ContraventionService {
       where: { contraventionId: id },
     });
 
+    // Delete related approval requests
+    await prisma.contraventionApproval.deleteMany({
+      where: { contraventionId: id },
+    });
+
     return prisma.contravention.delete({
       where: { id },
+    });
+  }
+
+  /**
+   * Update a contravention by the user who logged it
+   * Users can only edit contraventions they created and only when status is PENDING_APPROVAL or REJECTED
+   */
+  async userUpdate(id: string, userId: string, data: UserUpdateContraventionInput) {
+    const contravention = await prisma.contravention.findUnique({
+      where: { id },
+      include: {
+        employee: { select: { id: true, name: true } },
+        type: { select: { id: true, name: true } },
+      },
+    });
+
+    if (!contravention) {
+      throw new AppError('Contravention not found', 404);
+    }
+
+    // Check if user is the one who logged this contravention
+    if (contravention.loggedById !== userId) {
+      throw new AppError('You can only edit contraventions you created', 403);
+    }
+
+    // Check status - users can only edit when PENDING_APPROVAL or REJECTED
+    const editableStatuses = ['PENDING_APPROVAL', 'REJECTED'];
+    if (!editableStatuses.includes(contravention.status)) {
+      throw new AppError('This contravention can no longer be edited. It has already been approved.', 400);
+    }
+
+    // Update the contravention with allowed fields only
+    const updated = await prisma.contravention.update({
+      where: { id },
+      data: {
+        vendor: data.vendor,
+        valueSgd: data.valueSgd,
+        description: data.description,
+        justification: data.justification,
+        mitigation: data.mitigation,
+        summary: data.summary,
+        evidenceUrls: data.evidenceUrls,
+        authorizerEmail: data.authorizerEmail,
+      },
+      include: {
+        employee: { select: { id: true, name: true, email: true, department: true } },
+        type: true,
+        team: { select: { id: true, name: true, isPersonal: true } },
+        loggedBy: { select: { id: true, name: true } },
+      },
+    });
+
+    return updated;
+  }
+
+  /**
+   * Resubmit a rejected contravention
+   * This resets the status back to PENDING_APPROVAL and creates a new approval request
+   */
+  async resubmit(id: string, userId: string, data: ResubmitContraventionInput) {
+    const contravention = await prisma.contravention.findUnique({
+      where: { id },
+      include: {
+        employee: { select: { id: true, name: true, email: true } },
+        type: { select: { id: true, name: true } },
+        loggedBy: { select: { id: true, name: true } },
+      },
+    });
+
+    if (!contravention) {
+      throw new AppError('Contravention not found', 404);
+    }
+
+    // Check if user is the one who logged this contravention
+    if (contravention.loggedById !== userId) {
+      throw new AppError('You can only resubmit contraventions you created', 403);
+    }
+
+    // Check status - can only resubmit when REJECTED
+    if (contravention.status !== 'REJECTED') {
+      throw new AppError('Only rejected contraventions can be resubmitted', 400);
+    }
+
+    // Determine new approver email (use provided or existing)
+    const approverEmail = data.authorizerEmail || contravention.authorizerEmail;
+
+    if (!approverEmail) {
+      throw new AppError('An approver email is required to resubmit', 400);
+    }
+
+    // Look up the approver
+    const approver = await prisma.user.findUnique({
+      where: { email: approverEmail.toLowerCase() },
+    });
+
+    if (!approver) {
+      throw new AppError('Approver not found with the provided email', 404);
+    }
+
+    if (approver.role !== 'APPROVER' && approver.role !== 'ADMIN') {
+      throw new AppError('The specified user is not an approver', 400);
+    }
+
+    // Update the contravention
+    const updated = await prisma.contravention.update({
+      where: { id },
+      data: {
+        vendor: data.vendor ?? contravention.vendor,
+        valueSgd: data.valueSgd ?? contravention.valueSgd,
+        description: data.description,
+        justification: data.justification,
+        mitigation: data.mitigation,
+        summary: data.summary ?? contravention.summary,
+        evidenceUrls: data.evidenceUrls ?? contravention.evidenceUrls,
+        authorizerEmail: approverEmail,
+        status: 'PENDING_APPROVAL',
+      },
+      include: {
+        employee: { select: { id: true, name: true, email: true, department: true } },
+        type: true,
+        team: { select: { id: true, name: true, isPersonal: true } },
+        loggedBy: { select: { id: true, name: true } },
+      },
+    });
+
+    // Create new approval request
+    await prisma.contraventionApproval.create({
+      data: {
+        contraventionId: id,
+        approverId: approver.id,
+        status: 'PENDING',
+      },
+    });
+
+    // Send notification to the approver
+    notificationService.notifyApprovalRequested({
+      approverUserId: approver.id,
+      approverEmail: approver.email,
+      approverName: approver.name,
+      contraventionId: id,
+      referenceNo: updated.referenceNo,
+      employeeName: updated.employee.name,
+      typeName: updated.type.name,
+      points: updated.points,
+    }).catch((err: Error) => {
+      console.error('Failed to send resubmission approval notification:', err);
+    });
+
+    return updated;
+  }
+
+  /**
+   * Mark contravention as complete - transitions from PENDING_REVIEW to COMPLETED (admin only)
+   */
+  async markComplete(id: string, completedById: string, notes?: string) {
+    const contravention = await prisma.contravention.findUnique({
+      where: { id },
+    });
+
+    if (!contravention) {
+      throw new AppError('Contravention not found', 404);
+    }
+
+    if (contravention.status !== 'PENDING_REVIEW') {
+      throw new AppError('Contravention is not pending review', 400);
+    }
+
+    const updated = await prisma.contravention.update({
+      where: { id },
+      data: {
+        status: 'COMPLETED',
+        resolvedDate: new Date(),
+        acknowledgedById: completedById,
+        acknowledgedAt: new Date(),
+        summary: notes ? `${contravention.summary || ''}\n\nAdmin notes: ${notes}` : contravention.summary,
+      },
+      include: {
+        employee: {
+          select: { id: true, name: true, email: true, department: true },
+        },
+        type: true,
+        team: { select: { id: true, name: true } },
+        loggedBy: { select: { id: true, name: true } },
+      },
+    });
+
+    return updated;
+  }
+
+  /**
+   * Get count of contraventions pending admin review
+   */
+  async getPendingReviewCount(): Promise<number> {
+    return prisma.contravention.count({
+      where: { status: 'PENDING_REVIEW' },
+    });
+  }
+
+  /**
+   * Get count of rejected contraventions logged by a specific user
+   * These are contraventions that the user submitted and were rejected, requiring resubmission
+   */
+  async getMyRejectedCount(userId: string): Promise<number> {
+    return prisma.contravention.count({
+      where: {
+        loggedById: userId,
+        status: 'REJECTED',
+      },
     });
   }
 }

@@ -33,25 +33,28 @@ export function formatDateTime(date: string | Date): string {
 
 export function getPointsColor(points: number): string {
   if (points >= 5) {
-    return 'bg-red-100 text-red-800';
+    return 'bg-red-50 text-red-700 border border-red-200';
   } else if (points >= 3) {
-    return 'bg-orange-100 text-orange-800';
+    return 'bg-orange-50 text-orange-700 border border-orange-200';
   } else if (points >= 1) {
-    return 'bg-yellow-100 text-yellow-800';
+    return 'bg-amber-50 text-amber-700 border border-amber-200';
   }
-  return 'bg-gray-100 text-gray-800';
+  return 'bg-stone-100 text-stone-600 border border-stone-200';
 }
 
 export function getStatusColor(status: string): string {
   switch (status) {
     case 'PENDING_UPLOAD':
-      return 'bg-yellow-100 text-yellow-800';
+    case 'PENDING_APPROVAL':
+      return 'bg-amber-50 text-amber-700 border border-amber-200';
     case 'PENDING_REVIEW':
-      return 'bg-blue-100 text-blue-800';
+      return 'bg-blue-50 text-blue-700 border border-blue-200';
     case 'COMPLETED':
-      return 'bg-green-100 text-green-800';
+      return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
+    case 'REJECTED':
+      return 'bg-red-50 text-red-700 border border-red-200';
     default:
-      return 'bg-gray-100 text-gray-800';
+      return 'bg-stone-100 text-stone-600 border border-stone-200';
   }
 }
 
@@ -59,26 +62,26 @@ export function getLevelName(level: string | null): string {
   if (!level) return 'None';
   switch (level) {
     case 'LEVEL_1':
-      return 'Stage 1 - Notify Manager';
+      return 'Stage 1';
     case 'LEVEL_2':
-      return 'Stage 2 - Training Required';
+      return 'Stage 2';
     case 'LEVEL_3':
-      return 'Stage 3 - Procurement Paused';
+      return 'Stage 3';
     default:
       return level;
   }
 }
 
 export function getLevelColor(level: string | null): string {
-  if (!level) return 'bg-gray-100 text-gray-800';
+  if (!level) return 'bg-stone-100 text-stone-600 border border-stone-200';
   switch (level) {
     case 'LEVEL_1':
-      return 'bg-yellow-100 text-yellow-800';
+      return 'bg-amber-50 text-amber-700 border border-amber-200';
     case 'LEVEL_2':
-      return 'bg-orange-100 text-orange-800';
+      return 'bg-orange-50 text-orange-700 border border-orange-200';
     case 'LEVEL_3':
-      return 'bg-red-100 text-red-800';
+      return 'bg-red-50 text-red-700 border border-red-200';
     default:
-      return 'bg-gray-100 text-gray-800';
+      return 'bg-stone-100 text-stone-600 border border-stone-200';
   }
 }

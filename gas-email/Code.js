@@ -52,6 +52,12 @@ function doPost(e) {
       case 'OTP':
         result = sendOtpEmail(data);
         break;
+      case 'APPROVAL_APPROVED':
+        result = sendApprovalApprovedEmail(data);
+        break;
+      case 'APPROVAL_REJECTED':
+        result = sendApprovalRejectedEmail(data);
+        break;
       default:
         // Legacy: approval request email (when no type specified)
         if (!data.approverEmail) {
@@ -118,7 +124,6 @@ function sendContraventionLoggedEmail(data) {
     employeeName = 'Employee',
     referenceNo = 'N/A',
     typeName = 'N/A',
-    severity = 'N/A',
     points = 0,
     contraventionId = ''
   } = data;
@@ -146,16 +151,10 @@ function sendContraventionLoggedEmail(data) {
           <td style="padding: 10px; border: 1px solid #ddd;">${typeName}</td>
         </tr>
         <tr style="background-color: #f5f5f5;">
-          <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold;">Severity</td>
-          <td style="padding: 10px; border: 1px solid #ddd;">${severity}</td>
-        </tr>
-        <tr>
           <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold;">Points</td>
           <td style="padding: 10px; border: 1px solid #ddd;">${points}</td>
         </tr>
       </table>
-
-      <p>Please acknowledge this contravention within 5 working days.</p>
 
       <p style="margin: 20px 0;">
         <a href="${viewUrl}" style="background-color: #1e40af; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
@@ -468,11 +467,16 @@ function sendApprovalEmail(data) {
     incidentDate = 'N/A',
     description = 'N/A',
     justification = 'N/A',
-    mitigation = 'N/A'
+    mitigation = 'N/A',
+    contraventionId = ''
   } = data;
 
   const recipient = getRecipient(approverEmail);
   const subjectPrefix = SANDBOX_MODE ? '[SANDBOX] ' : '';
+
+  // Build URLs for action buttons
+  const approvalUrl = `${APP_URL}/approvals`;
+  const viewUrl = contraventionId ? `${APP_URL}/contraventions/${contraventionId}` : '';
 
   const htmlBody = `
     ${getSandboxBanner(approverEmail)}
@@ -517,7 +521,24 @@ function sendApprovalEmail(data) {
       <h3 style="color: #333;">Mitigation Measures</h3>
       <p style="background-color: #f9f9f9; padding: 15px; border-left: 4px solid #ffc107;">${mitigation}</p>
 
-      <p style="margin-top: 30px;">Please review and respond to this contravention approval request.</p>
+      <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; padding: 16px; border-radius: 8px; margin: 20px 0;">
+        <p style="margin: 0 0 12px 0; font-weight: bold; color: #1e40af;">Action Required</p>
+        <p style="margin: 0; color: #1e3a8a;">Please click the button below to review and approve or reject this request.</p>
+      </div>
+
+      <p style="margin: 24px 0; text-align: center;">
+        <a href="${approvalUrl}" style="background-color: #22c55e; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">
+          Go to Approvals
+        </a>
+      </p>
+
+      ${viewUrl ? `
+      <p style="margin: 16px 0; text-align: center;">
+        <a href="${viewUrl}" style="color: #1e40af; text-decoration: underline;">
+          View full contravention details
+        </a>
+      </p>
+      ` : ''}
 
       <hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;">
       <p style="color: #666; font-size: 12px;">This is an automated message from the Contravention Tracker system.</p>
@@ -594,6 +615,159 @@ function sendOtpEmail(data) {
 }
 
 /**
+ * Send notification when contravention is approved (to submitter)
+ */
+function sendApprovalApprovedEmail(data) {
+  const {
+    submitterEmail,
+    submitterName = 'User',
+    referenceNo = 'N/A',
+    employeeName = 'N/A',
+    typeName = 'N/A',
+    approverName = 'N/A',
+    contraventionId = '',
+    appUrl = APP_URL
+  } = data;
+
+  const viewUrl = `${appUrl}/contraventions/${contraventionId}`;
+  const recipient = getRecipient(submitterEmail);
+  const subjectPrefix = SANDBOX_MODE ? '[SANDBOX] ' : '';
+
+  const htmlBody = `
+    ${getSandboxBanner(submitterEmail)}
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #22c55e;">Contravention Approved</h2>
+
+      <p>Dear ${submitterName},</p>
+
+      <p>Your contravention submission has been <strong style="color: #22c55e;">approved</strong>.</p>
+
+      <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+        <tr style="background-color: #f5f5f5;">
+          <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold;">Reference No</td>
+          <td style="padding: 10px; border: 1px solid #ddd;">${referenceNo}</td>
+        </tr>
+        <tr>
+          <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold;">Employee</td>
+          <td style="padding: 10px; border: 1px solid #ddd;">${employeeName}</td>
+        </tr>
+        <tr style="background-color: #f5f5f5;">
+          <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold;">Type</td>
+          <td style="padding: 10px; border: 1px solid #ddd;">${typeName}</td>
+        </tr>
+        <tr>
+          <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold;">Approved By</td>
+          <td style="padding: 10px; border: 1px solid #ddd;">${approverName}</td>
+        </tr>
+      </table>
+
+      <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; padding: 16px; border-radius: 8px; margin: 20px 0;">
+        <p style="margin: 0; color: #166534;">The contravention is now pending admin review for final processing.</p>
+      </div>
+
+      <p style="margin: 20px 0;">
+        <a href="${viewUrl}" style="background-color: #22c55e; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+          View Contravention
+        </a>
+      </p>
+
+      <hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;">
+      <p style="color: #666; font-size: 12px;">This is an automated message from the Contravention Tracker system.</p>
+    </div>
+  `;
+
+  const emailOptions = {
+    htmlBody: htmlBody,
+    name: SENDER_NAME,
+    from: SENDER_EMAIL,
+    cc: ALWAYS_CC
+  };
+
+  GmailApp.sendEmail(recipient, `${subjectPrefix}Contravention Approved: ${referenceNo}`, '', emailOptions);
+  return { sent: true, to: recipient, sandbox: SANDBOX_MODE };
+}
+
+/**
+ * Send notification when contravention is rejected (to submitter)
+ */
+function sendApprovalRejectedEmail(data) {
+  const {
+    submitterEmail,
+    submitterName = 'User',
+    referenceNo = 'N/A',
+    employeeName = 'N/A',
+    typeName = 'N/A',
+    approverName = 'N/A',
+    rejectionReason = 'No reason provided',
+    contraventionId = '',
+    appUrl = APP_URL
+  } = data;
+
+  const editUrl = `${appUrl}/contraventions/${contraventionId}`;
+  const recipient = getRecipient(submitterEmail);
+  const subjectPrefix = SANDBOX_MODE ? '[SANDBOX] ' : '';
+
+  const htmlBody = `
+    ${getSandboxBanner(submitterEmail)}
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #dc2626;">Contravention Rejected</h2>
+
+      <p>Dear ${submitterName},</p>
+
+      <p>Your contravention submission has been <strong style="color: #dc2626;">rejected</strong> and requires your attention.</p>
+
+      <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+        <tr style="background-color: #f5f5f5;">
+          <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold;">Reference No</td>
+          <td style="padding: 10px; border: 1px solid #ddd;">${referenceNo}</td>
+        </tr>
+        <tr>
+          <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold;">Employee</td>
+          <td style="padding: 10px; border: 1px solid #ddd;">${employeeName}</td>
+        </tr>
+        <tr style="background-color: #f5f5f5;">
+          <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold;">Type</td>
+          <td style="padding: 10px; border: 1px solid #ddd;">${typeName}</td>
+        </tr>
+        <tr>
+          <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold;">Rejected By</td>
+          <td style="padding: 10px; border: 1px solid #ddd;">${approverName}</td>
+        </tr>
+      </table>
+
+      <div style="background-color: #fef2f2; border-left: 4px solid #dc2626; padding: 16px; margin: 20px 0;">
+        <p style="margin: 0 0 8px 0; font-weight: bold; color: #991b1b;">Rejection Reason:</p>
+        <p style="margin: 0; color: #7f1d1d;">${rejectionReason}</p>
+      </div>
+
+      <div style="background-color: #fffbeb; border: 1px solid #fde68a; padding: 16px; border-radius: 8px; margin: 20px 0;">
+        <p style="margin: 0 0 12px 0; font-weight: bold; color: #92400e;">Action Required</p>
+        <p style="margin: 0; color: #78350f;">Please review the feedback, make necessary changes, and resubmit the contravention.</p>
+      </div>
+
+      <p style="margin: 24px 0; text-align: center;">
+        <a href="${editUrl}" style="background-color: #f97316; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">
+          Edit and Resubmit
+        </a>
+      </p>
+
+      <hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;">
+      <p style="color: #666; font-size: 12px;">This is an automated message from the Contravention Tracker system.</p>
+    </div>
+  `;
+
+  const emailOptions = {
+    htmlBody: htmlBody,
+    name: SENDER_NAME,
+    from: SENDER_EMAIL,
+    cc: ALWAYS_CC
+  };
+
+  GmailApp.sendEmail(recipient, `${subjectPrefix}[Action Required] Contravention Rejected - ${referenceNo}`, '', emailOptions);
+  return { sent: true, to: recipient, sandbox: SANDBOX_MODE };
+}
+
+/**
  * Test OTP email
  */
 function testOtpEmail() {
@@ -620,7 +794,6 @@ function testContraventionLogged() {
     employeeName: 'Test User',
     referenceNo: 'CTR-2026-TEST',
     typeName: 'Missing AOR',
-    severity: 'HIGH',
     points: 3,
     contraventionId: 'test-123'
   };
@@ -663,7 +836,6 @@ function testDoPost() {
         employeeName: 'Test User',
         referenceNo: 'CTR-2026-TEST',
         typeName: 'Missing AOR',
-        severity: 'HIGH',
         points: 3,
         contraventionId: 'test-123'
       })

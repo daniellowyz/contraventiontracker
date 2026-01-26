@@ -366,7 +366,7 @@ export function ContraventionFormPage() {
   };
 
   return (
-    <div>
+    <div className="min-h-screen bg-white">
       <Header
         title="New Contravention"
         subtitle="Record a new procurement contravention"

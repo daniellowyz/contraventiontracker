@@ -77,10 +77,11 @@ export function EmployeesListPage() {
   };
 
   return (
-    <div>
+    <div className="min-h-screen">
       <Header title="Employees" subtitle="View employee contravention records" />
 
-      <div className="p-8">
+      <div className="p-6 sm:p-8 lg:p-12 xl:p-16 relative z-10">
+        <div className="max-w-6xl mx-auto">
         <Card padding="none">
           {isLoading ? (
             <div className="p-8 text-center text-gray-500">Loading...</div>
@@ -89,7 +90,7 @@ export function EmployeesListPage() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-200">
+                <thead className="bg-stone-50 border-b border-stone-200">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Employee</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Department</th>
@@ -123,9 +124,9 @@ export function EmployeesListPage() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase"></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200">
+                <tbody className="divide-y divide-stone-100 bg-white">
                   {sortedEmployees.map((employee) => (
-                    <tr key={employee.id} className="hover:bg-gray-50">
+                    <tr key={employee.id} className="hover:bg-orange-50/50 transition-colors">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
@@ -171,6 +172,7 @@ export function EmployeesListPage() {
             </div>
           )}
         </Card>
+        </div>
       </div>
     </div>
   );

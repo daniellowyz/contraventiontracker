@@ -5,10 +5,13 @@ import { validateBody, validateQuery } from '../middleware/validate';
 import {
   createContraventionSchema,
   updateContraventionSchema,
+  userUpdateContraventionSchema,
+  resubmitContraventionSchema,
+  uploadApprovalSchema,
+  markCompleteSchema,
   contraventionFiltersSchema,
 } from '../validators/contravention.schema';
 import { AuthenticatedRequest } from '../types';
-import { AppError } from '../middleware/errorHandler';
 
 const router = Router();
 
@@ -19,8 +22,7 @@ router.get(
   validateQuery(contraventionFiltersSchema),
   async (req: AuthenticatedRequest, res: Response, next) => {
     try {
-      // Use parsedQuery which has proper types from zod validation
-      const result = await contraventionService.findAll((req as any).parsedQuery);
+      const result = await contraventionService.findAll(req.query as any);
       res.json({ success: true, ...result });
     } catch (error) {
       next(error);
@@ -28,24 +30,46 @@ router.get(
   }
 );
 
-// POST /api/contraventions - Create new contravention
-// Users can create contraventions for themselves, admins can create for anyone
+// POST /api/contraventions - Create new contravention (any authenticated user)
 router.post(
   '/',
   authenticate,
   validateBody(createContraventionSchema),
   async (req: AuthenticatedRequest, res: Response, next) => {
     try {
-      const isAdmin = req.user!.role === 'ADMIN';
-      const employeeId = req.body.employeeId;
-
-      // Non-admins can only create contraventions for themselves
-      if (!isAdmin && employeeId !== req.user!.userId) {
-        throw new AppError('You can only create contraventions for yourself', 403);
-      }
-
       const contravention = await contraventionService.create(req.body, req.user!.userId);
       res.status(201).json({ success: true, data: contravention });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// GET /api/contraventions/pending-review-count - Get count of contraventions pending admin review (admin only)
+// NOTE: This must be BEFORE /:id route to avoid being caught by the parameter route
+router.get(
+  '/pending-review-count',
+  authenticate,
+  requireAdmin,
+  async (_req: AuthenticatedRequest, res: Response, next) => {
+    try {
+      const count = await contraventionService.getPendingReviewCount();
+      res.json({ success: true, data: { count } });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// GET /api/contraventions/my-rejected-count - Get count of rejected contraventions logged by current user
+// NOTE: This must be BEFORE /:id route to avoid being caught by the parameter route
+router.get(
+  '/my-rejected-count',
+  authenticate,
+  async (req: AuthenticatedRequest, res: Response, next) => {
+    try {
+      const count = await contraventionService.getMyRejectedCount(req.user!.userId);
+      res.json({ success: true, data: { count } });
     } catch (error) {
       next(error);
     }
@@ -98,16 +122,13 @@ router.delete(
 router.post(
   '/:id/upload-approval',
   authenticate,
+  validateBody(uploadApprovalSchema),
   async (req: AuthenticatedRequest, res: Response, next) => {
     try {
-      const { approvalPdfUrl } = req.body;
-      if (!approvalPdfUrl) {
-        return res.status(400).json({ success: false, error: 'approvalPdfUrl is required' });
-      }
       const isAdmin = req.user!.role === 'ADMIN';
       const contravention = await contraventionService.uploadApproval(
         req.params.id,
-        approvalPdfUrl,
+        req.body.approvalPdfUrl,
         req.user!.userId,
         isAdmin
       );
@@ -118,16 +139,58 @@ router.post(
   }
 );
 
-// POST /api/contraventions/:id/mark-completed - Mark as completed (admin only)
+// POST /api/contraventions/:id/complete - Mark as complete (admin only, transitions PENDING_REVIEW -> COMPLETED)
 router.post(
-  '/:id/mark-completed',
+  '/:id/complete',
   authenticate,
   requireAdmin,
+  validateBody(markCompleteSchema),
   async (req: AuthenticatedRequest, res: Response, next) => {
     try {
-      const contravention = await contraventionService.markCompleted(
+      const contravention = await contraventionService.markComplete(
         req.params.id,
-        req.user!.userId
+        req.user!.userId,
+        req.body.notes
+      );
+      res.json({ success: true, data: contravention });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// PATCH /api/contraventions/:id/user-edit - User edits their own contravention
+// Users can only edit contraventions they created, and only when status is PENDING_APPROVAL or REJECTED
+router.patch(
+  '/:id/user-edit',
+  authenticate,
+  validateBody(userUpdateContraventionSchema),
+  async (req: AuthenticatedRequest, res: Response, next) => {
+    try {
+      const contravention = await contraventionService.userUpdate(
+        req.params.id,
+        req.user!.userId,
+        req.body
+      );
+      res.json({ success: true, data: contravention });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// POST /api/contraventions/:id/resubmit - Resubmit a rejected contravention
+// Only the user who created the contravention can resubmit it
+router.post(
+  '/:id/resubmit',
+  authenticate,
+  validateBody(resubmitContraventionSchema),
+  async (req: AuthenticatedRequest, res: Response, next) => {
+    try {
+      const contravention = await contraventionService.resubmit(
+        req.params.id,
+        req.user!.userId,
+        req.body
       );
       res.json({ success: true, data: contravention });
     } catch (error) {

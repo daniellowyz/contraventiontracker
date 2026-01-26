@@ -2,11 +2,12 @@
 // Database: Supabase PostgreSQL
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {
-  provider = "postgresql"
+  provider  = "postgresql"
 }
 
 // ============== ENUMS ==============
@@ -23,10 +24,19 @@ enum ApprovalRequestStatus {
   REJECTED
 }
 
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
 enum ContraventionStatus {
-  PENDING_UPLOAD    // Waiting for approval PDF to be uploaded
+  PENDING_APPROVAL  // Waiting for approver to review
+  PENDING_UPLOAD    // Approved, waiting for approval PDF to be uploaded
   PENDING_REVIEW    // PDF uploaded, waiting for admin review
   COMPLETED         // Admin has verified and marked complete
+  REJECTED          // Approver rejected the contravention
 }
 
 enum DisputeStatus {
@@ -143,7 +153,7 @@ model ContraventionType {
   description     String?
   defaultPoints   Int
   isActive        Boolean         @default(true)
-  isOthers        Boolean         @default(false)  // True for "Others" type that allows custom names
+  isOthers        Boolean         @default(false)  // True for "Others" type - requires custom description
   contraventions  Contravention[]
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
@@ -174,7 +184,7 @@ model Contravention {
   mitigation      String?             @db.Text  // Mitigation measures to prevent recurrence
   summary         String?             @db.Text
 
-  // Classification
+  // Classification (severity removed from DB - now derived from type)
   points          Int
 
   // Status tracking
@@ -404,7 +414,7 @@ model ContraventionApproval {
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
 
-  @@unique([contraventionId, approverId])
+  @@index([contraventionId])
   @@index([approverId])
   @@index([status])
 }

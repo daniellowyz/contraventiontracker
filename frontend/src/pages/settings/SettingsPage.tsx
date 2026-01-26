@@ -555,14 +555,15 @@ export function SettingsPage() {
   ];
 
   return (
-    <div>
+    <div className="min-h-screen bg-white">
       <Header
         title="Settings"
         subtitle="Manage your account settings and preferences"
       />
 
-      <div className="p-8">
-        <div className="flex gap-8 max-w-5xl">
+      <div className="p-6 sm:p-8 lg:p-12 xl:p-16 relative z-10">
+        <div className="max-w-6xl mx-auto">
+        <div className="flex gap-8">
           {/* Sidebar */}
           <div className="w-48 flex-shrink-0">
             <nav className="space-y-1">
@@ -1619,6 +1620,7 @@ export function SettingsPage() {
               </div>
             )}
           </div>
+        </div>
         </div>
       </div>
     </div>

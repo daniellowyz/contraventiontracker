@@ -141,13 +141,14 @@ export function EscalationsPage() {
   }
 
   return (
-    <div>
+    <div className="min-h-screen">
       <Header
         title="Escalations Management"
         subtitle="Track and manage employee escalation stages based on contravention points"
       />
 
-      <div className="p-8">
+      <div className="p-6 sm:p-8 lg:p-12 xl:p-16 relative z-10">
+        <div className="max-w-6xl mx-auto">
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-6">
           <Card className="text-center">
@@ -389,6 +390,7 @@ export function EscalationsPage() {
               );
             })
           )}
+        </div>
         </div>
       </div>
     </div>

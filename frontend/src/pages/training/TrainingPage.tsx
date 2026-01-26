@@ -241,13 +241,14 @@ export function TrainingPage() {
   }
 
   return (
-    <div>
+    <div className="min-h-screen bg-white">
       <Header
         title="Training Management"
         subtitle="Manage employee training assignments and track completion"
       />
 
-      <div className="p-8">
+      <div className="p-6 sm:p-8 lg:p-12 xl:p-16 relative z-10">
+        <div className="max-w-6xl mx-auto">
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
           <Card className="text-center">
@@ -544,6 +545,7 @@ export function TrainingPage() {
             </Card>
           </>
         )}
+        </div>
       </div>
 
       {/* Assign Training Modal (Single) */}

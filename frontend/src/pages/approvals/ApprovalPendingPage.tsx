@@ -155,7 +155,8 @@ export function ApprovalPendingPage() {
   const reviewedApprovals = approvals.filter(a => a.status !== 'PENDING');
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="min-h-screen bg-white p-6 sm:p-8 lg:p-12 xl:p-16 relative z-10">
+      <div className="max-w-6xl mx-auto space-y-6">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">
@@ -391,6 +392,7 @@ export function ApprovalPendingPage() {
           </Card>
         </div>
       )}
+      </div>
     </div>
   );
 }

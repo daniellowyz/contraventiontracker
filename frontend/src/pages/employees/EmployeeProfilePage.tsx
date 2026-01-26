@@ -53,7 +53,7 @@ export function EmployeeProfilePage() {
     : 100;
 
   return (
-    <div>
+    <div className="min-h-screen bg-white">
       <Header
         title={pointsSummary.employeeName}
         subtitle="Employee Profile"

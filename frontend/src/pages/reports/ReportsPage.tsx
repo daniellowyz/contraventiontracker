@@ -33,7 +33,7 @@ export function ReportsPage() {
   };
 
   return (
-    <div>
+    <div className="min-h-screen bg-white">
       <Header
         title="Reports"
         subtitle="Analytics and export"
@@ -45,7 +45,8 @@ export function ReportsPage() {
         }
       />
 
-      <div className="p-8 space-y-6">
+      <div className="p-6 sm:p-8 lg:p-12 xl:p-16 relative z-10">
+        <div className="max-w-6xl mx-auto space-y-6">
         {/* Department Breakdown */}
         <Card>
           <CardTitle className="flex items-center gap-2 mb-6">
@@ -169,6 +170,7 @@ export function ReportsPage() {
             <p className="text-gray-500 text-sm">No repeat offenders</p>
           )}
         </Card>
+        </div>
       </div>
     </div>
   );

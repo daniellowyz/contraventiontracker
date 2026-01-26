@@ -577,7 +577,7 @@ export function ContraventionDetailPage() {
   }
 
   return (
-    <div>
+    <div className="min-h-screen bg-white">
       <Header
         title={`Contravention ${contravention.referenceNo}`}
         subtitle={contravention.type.name}

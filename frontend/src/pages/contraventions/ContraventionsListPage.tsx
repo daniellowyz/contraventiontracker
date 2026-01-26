@@ -97,7 +97,7 @@ export function ContraventionsListPage() {
     setFilters((prev) => {
       let dateTo = prev.dateTo;
       let error = '';
-      
+
       // Validate date range
       if (dateFrom && dateTo) {
         const fromDate = new Date(dateFrom);
@@ -108,7 +108,7 @@ export function ContraventionsListPage() {
           dateTo = undefined;
         }
       }
-      
+
       setDateError(error);
       return { ...prev, dateFrom, dateTo, page: 1 };
     });
@@ -120,7 +120,7 @@ export function ContraventionsListPage() {
     setFilters((prev) => {
       let error = '';
       let finalDateTo = dateTo;
-      
+
       // Validate date range
       if (prev.dateFrom && dateTo) {
         const fromDate = new Date(prev.dateFrom);
@@ -131,7 +131,7 @@ export function ContraventionsListPage() {
           finalDateTo = prev.dateTo;
         }
       }
-      
+
       setDateError(error);
       return { ...prev, dateTo: finalDateTo, page: 1 };
     });
@@ -149,7 +149,7 @@ export function ContraventionsListPage() {
   };
 
   return (
-    <div>
+    <div className="min-h-screen">
       <Header
         title="Contraventions"
         subtitle="Manage procurement contraventions"
@@ -163,111 +163,114 @@ export function ContraventionsListPage() {
         }
       />
 
-      <div className="p-8">
-        {/* Filters */}
-        <Card className="mb-6">
-          <div className="flex flex-wrap gap-4">
-            <div className="w-38">
-              <MonthYearPicker
-                value={filters.dateFrom}
-                onChange={handleDateFromChange}
-                placeholder="From MMM YYYY"
-                error={dateError && filters.dateFrom ? dateError : undefined}
-              />
-            </div>
-            <div className="w-38">
-              <MonthYearPicker
-                value={filters.dateTo ? (() => {
-                  // Convert last day back to first day for display
-                  const date = new Date(filters.dateTo);
-                  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`;
-                })() : undefined}
-                onChange={handleDateToChange}
-                placeholder="To MMM YYYY"
-                error={dateError && filters.dateTo ? dateError : undefined}
-              />
-            </div>
-            <div className="w-48">
-              <Select
-                options={STATUS_OPTIONS}
-                value={filters.status || ''}
-                onChange={(e) => handleFilterChange('status', e.target.value)}
-              />
-            </div>
-            <div className="flex-1">
-              <Input
-                placeholder="Search by reference, description, or employee..."
-                value={filters.search || ''}
-                onChange={(e) => handleFilterChange('search', e.target.value)}
-              />
+      <div className="p-6 sm:p-8 lg:p-12 xl:p-16 relative z-10">
+        <div className="max-w-6xl mx-auto">
+        {/* Filters + Table Container */}
+        <Card padding="none">
+          {/* Filters */}
+          <div className="p-5 border-b border-stone-200">
+            <div className="flex flex-wrap gap-4">
+              <div className="w-38">
+                <MonthYearPicker
+                  value={filters.dateFrom}
+                  onChange={handleDateFromChange}
+                  placeholder="From MMM YYYY"
+                  error={dateError && filters.dateFrom ? dateError : undefined}
+                />
+              </div>
+              <div className="w-38">
+                <MonthYearPicker
+                  value={filters.dateTo ? (() => {
+                    // Convert last day back to first day for display
+                    const date = new Date(filters.dateTo);
+                    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`;
+                  })() : undefined}
+                  onChange={handleDateToChange}
+                  placeholder="To MMM YYYY"
+                  error={dateError && filters.dateTo ? dateError : undefined}
+                />
+              </div>
+              <div className="w-48">
+                <Select
+                  options={STATUS_OPTIONS}
+                  value={filters.status || ''}
+                  onChange={(e) => handleFilterChange('status', e.target.value)}
+                />
+              </div>
+              <div className="flex-1">
+                <Input
+                  placeholder="Search by reference, description, or employee..."
+                  value={filters.search || ''}
+                  onChange={(e) => handleFilterChange('search', e.target.value)}
+                />
+              </div>
             </div>
           </div>
-        </Card>
 
-        {/* Table */}
-        <Card padding="none">
+          {/* Table */}
+          <div>
           {isLoading ? (
-            <div className="p-8">
+            <div className="p-6">
               <div className="space-y-3">
                 {[1, 2, 3, 4, 5].map((i) => (
                   <div key={i} className="flex gap-4 items-center">
-                    <div className="skeleton h-5 w-24" />
-                    <div className="skeleton h-5 w-32" />
-                    <div className="skeleton h-5 w-28" />
-                    <div className="skeleton h-6 w-16 rounded-full" />
-                    <div className="skeleton h-5 w-12" />
+                    <div className="skeleton h-4 w-24" />
+                    <div className="skeleton h-4 w-32" />
+                    <div className="skeleton h-4 w-28" />
+                    <div className="skeleton h-5 w-16" />
+                    <div className="skeleton h-4 w-12" />
+                    <div className="skeleton h-4 w-20" />
                     <div className="skeleton h-5 w-20" />
-                    <div className="skeleton h-6 w-20 rounded-full" />
-                    <div className="skeleton h-5 w-24" />
+                    <div className="skeleton h-4 w-24" />
                   </div>
                 ))}
               </div>
             </div>
           ) : !data?.data.length ? (
             <div className="p-12 text-center">
-              <div className="text-gray-400 mb-2">
-                <FileWarning className="w-12 h-12 mx-auto" />
+              <div className="text-stone-400 mb-2">
+                <FileWarning className="w-10 h-10 mx-auto" />
               </div>
-              <p className="text-gray-500">No contraventions found</p>
-              <p className="text-sm text-gray-400 mt-1">Try adjusting your filters</p>
+              <p className="text-stone-600 text-[13px]">No contraventions found</p>
+              <p className="text-[11px] text-stone-400 mt-1">Try adjusting your filters</p>
             </div>
           ) : (
             <>
               <div className="overflow-x-auto max-h-[600px] sticky-header">
                 <table className="w-full">
-                  <thead className="bg-gray-50/95 border-b border-gray-200">
+                  <thead className="bg-stone-50 border-b border-stone-200">
                     <tr>
-                      <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Reference</th>
-                      <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Employee</th>
-                      <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Type</th>
-                      <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Points</th>
-                      <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Value</th>
-                      <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
-                      <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Date</th>
-                      <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"></th>
+                      <th className="px-6 py-3 text-left text-[11px] font-semibold text-stone-600 uppercase tracking-wider">Reference</th>
+                      <th className="px-6 py-3 text-left text-[11px] font-semibold text-stone-600 uppercase tracking-wider">Employee</th>
+                      <th className="px-6 py-3 text-left text-[11px] font-semibold text-stone-600 uppercase tracking-wider">Type</th>
+                      <th className="px-6 py-3 text-left text-[11px] font-semibold text-stone-600 uppercase tracking-wider">Points</th>
+                      <th className="px-6 py-3 text-left text-[11px] font-semibold text-stone-600 uppercase tracking-wider">Value</th>
+                      <th className="px-6 py-3 text-left text-[11px] font-semibold text-stone-600 uppercase tracking-wider">Status</th>
+                      <th className="px-6 py-3 text-left text-[11px] font-semibold text-stone-600 uppercase tracking-wider">Date</th>
+                      <th className="px-6 py-3 text-left text-[11px] font-semibold text-stone-600 uppercase tracking-wider"></th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
+                  <tbody className="divide-y divide-stone-100 bg-white">
                     {data.data.map((contravention) => (
                       <tr
                         key={contravention.id}
-                        className="hover:bg-gray-50/50 cursor-pointer transition-colors"
+                        className="hover:bg-orange-50/50 cursor-pointer transition-colors"
                         onClick={() => navigate(`/contraventions/${contravention.id}`)}
                       >
-                        <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                        <td className="px-6 py-4 text-[13px] font-medium text-stone-900">
                           {contravention.referenceNo}
                         </td>
                         <td className="px-6 py-4">
-                          <div className="text-sm text-gray-900">{contravention.employee.name}</div>
-                          <div className="text-xs text-gray-500">{contravention.employee.department?.name}</div>
+                          <div className="text-[13px] text-stone-900">{contravention.employee.name}</div>
+                          <div className="text-[11px] text-stone-500">{contravention.employee.department?.name}</div>
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-500">
+                        <td className="px-6 py-4 text-[13px] text-stone-600">
                           {contravention.type.name}
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-900 font-medium">
+                        <td className="px-6 py-4 text-[13px] text-stone-700 font-medium">
                           {contravention.points}
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-500">
+                        <td className="px-6 py-4 text-[13px] text-stone-600">
                           {formatCurrency(contravention.valueSgd)}
                         </td>
                         <td className="px-6 py-4">
@@ -275,7 +278,7 @@ export function ContraventionsListPage() {
                             {STATUS_LABELS[contravention.status] || contravention.status}
                           </Badge>
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-500">
+                        <td className="px-6 py-4 text-[13px] text-stone-600">
                           {formatDate(contravention.incidentDate)}
                         </td>
                         <td className="px-6 py-4">
@@ -290,7 +293,7 @@ export function ContraventionsListPage() {
                                 variant="ghost"
                                 size="sm"
                                 onClick={(e) => handleDelete(e, contravention.id)}
-                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                className="text-red-500 hover:text-red-600 hover:bg-red-50"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </Button>
@@ -305,8 +308,8 @@ export function ContraventionsListPage() {
 
               {/* Pagination */}
               {data.pagination && (
-                <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
-                  <p className="text-sm text-gray-500">
+                <div className="px-6 py-4 border-t border-stone-200 flex items-center justify-between">
+                  <p className="text-[12px] text-stone-500">
                     Showing {(data.pagination.page - 1) * data.pagination.limit + 1} to{' '}
                     {Math.min(data.pagination.page * data.pagination.limit, data.pagination.total)} of{' '}
                     {data.pagination.total} results
@@ -320,7 +323,7 @@ export function ContraventionsListPage() {
                     >
                       <ChevronLeft className="w-4 h-4" />
                     </Button>
-                    <span className="text-sm text-gray-600">
+                    <span className="text-[12px] text-stone-600">
                       Page {data.pagination.page} of {data.pagination.totalPages}
                     </span>
                     <Button
@@ -336,15 +339,17 @@ export function ContraventionsListPage() {
               )}
             </>
           )}
+          </div>
         </Card>
+        </div>
       </div>
 
       {/* Delete Confirmation Modal */}
       {deleteId && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete Contravention</h3>
-            <p className="text-gray-600 mb-6">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 max-w-md w-full mx-4 border border-stone-200 shadow-lg">
+            <h3 className="text-[15px] font-semibold text-stone-900 mb-2">Delete Contravention</h3>
+            <p className="text-stone-600 text-[13px] mb-6">
               Are you sure you want to delete this contravention? This action cannot be undone and will also reverse any points assigned.
             </p>
             <div className="flex justify-end gap-3">
@@ -352,9 +357,9 @@ export function ContraventionsListPage() {
                 Cancel
               </Button>
               <Button
+                variant="danger"
                 onClick={confirmDelete}
                 disabled={deleteMutation.isPending}
-                className="bg-red-600 hover:bg-red-700 text-white"
               >
                 {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
               </Button>
