@@ -15,6 +15,7 @@ import {
   Settings,
   LogOut,
   ClipboardCheck,
+  X,
 } from 'lucide-react';
 
 const navItems = [
@@ -34,178 +35,203 @@ const adminItems = [
   { icon: Settings, label: 'Settings', href: '/settings' },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+}
+
+export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const location = useLocation();
   const { user, isAdmin, isApprover, logout } = useAuthStore();
 
-  // Fetch pending approvals count for approvers
   const { data: pendingCount = 0 } = useQuery({
     queryKey: ['pendingApprovalsCount'],
     queryFn: approvalsApi.getPendingCount,
     enabled: isApprover,
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: 30000,
   });
 
-  // Fetch pending approver role requests count for admins
   const { data: pendingApproverRequestsCount = 0 } = useQuery({
     queryKey: ['pendingApproverRequestsCount'],
     queryFn: approversApi.getPendingRequestsCount,
     enabled: isAdmin,
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: 30000,
   });
 
-  // Fetch rejected contraventions count for users (contraventions they logged that were rejected)
   const { data: myRejectedCount = 0 } = useQuery({
     queryKey: ['myRejectedCount'],
     queryFn: contraventionsApi.getMyRejectedCount,
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: 30000,
   });
 
-  // Fetch pending review count for admins (contraventions pending admin review)
   const { data: pendingReviewCount = 0 } = useQuery({
     queryKey: ['pendingReviewCount'],
     queryFn: contraventionsApi.getPendingReviewCount,
     enabled: isAdmin,
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: 30000,
   });
 
-  return (
-    <div className="w-64 bg-white border-r border-gray-200 flex flex-col h-screen">
+  const handleNavClick = () => {
+    // Close mobile menu when navigating
+    if (onClose) {
+      onClose();
+    }
+  };
+
+  const NavLink = ({ item, showBadge, badgeCount }: {
+    item: typeof navItems[0],
+    showBadge?: boolean,
+    badgeCount?: number,
+  }) => {
+    const isActive = location.pathname === item.href ||
+      (item.href !== '/' && location.pathname.startsWith(item.href));
+    const Icon = item.icon;
+
+    return (
+      <Link
+        to={item.href}
+        onClick={handleNavClick}
+        className={cn(
+          'flex items-center gap-3 px-3 py-2.5 text-[13px] font-medium transition-all duration-150',
+          isActive
+            ? 'bg-neutral-100 text-neutral-900 border-l-4 border-orange-600'
+            : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50 border-l-4 border-transparent'
+        )}
+      >
+        <Icon className={cn(
+          "w-[18px] h-[18px]",
+          isActive ? "text-orange-600" : "text-stone-400"
+        )} />
+        <span className="flex-1">{item.label}</span>
+        {showBadge && badgeCount && badgeCount > 0 && (
+          <span className="bg-orange-600 text-white text-[9px] font-semibold px-1.5 py-0.5 min-w-[16px] text-center">
+            {badgeCount > 99 ? '99+' : badgeCount}
+          </span>
+        )}
+      </Link>
+    );
+  };
+
+  const sidebarContent = (
+    <>
       {/* Logo */}
-      <div className="p-6 border-b border-gray-100">
-        <div className="flex items-center gap-3">
-          <img src="/logo.png" alt="Logo" className="w-10 h-10 rounded-lg" />
-          <div>
-            <h1 className="text-lg font-bold text-gray-900">Contravention</h1>
-            <p className="text-xs text-gray-500">Tracker</p>
-          </div>
+      <div className="px-4 py-4 border-b border-neutral-100 flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <img src="/logo.png" alt="Logo" className="w-6 h-6" />
+          <span className="text-[13px] font-semibold text-neutral-900 tracking-tight">Contravention Tracker</span>
         </div>
+        {/* Mobile close button */}
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="lg:hidden p-1.5 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 transition-all"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        )}
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-1">
-        {navItems.map((item) => {
-          const isActive = location.pathname === item.href ||
-            (item.href !== '/' && location.pathname.startsWith(item.href));
-
-          // Show rejected badge on Contraventions link for users who have rejected contraventions
-          const showRejectedBadge = item.href === '/contraventions' && myRejectedCount > 0;
-          // Show pending review badge on Contraventions link for admins
-          const showPendingReviewBadge = item.href === '/contraventions' && isAdmin && pendingReviewCount > 0;
-
-          return (
-            <Link
-              key={item.href}
-              to={item.href}
-              className={cn(
-                'flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150',
-                isActive
-                  ? 'bg-primary-50 text-primary-700 border-l-3 border-primary-600'
-                  : 'text-gray-600 hover:bg-gray-50 hover:translate-x-0.5'
-              )}
-            >
-              <item.icon className="w-5 h-5" />
-              <span className="flex-1">{item.label}</span>
-              {showPendingReviewBadge && (
-                <span className="bg-amber-500 text-white text-xs font-medium px-2 py-0.5 rounded-full min-w-[20px] text-center" title="Pending admin review">
-                  {pendingReviewCount > 99 ? '99+' : pendingReviewCount}
-                </span>
-              )}
-              {showRejectedBadge && (
-                <span className="bg-red-500 text-white text-xs font-medium px-2 py-0.5 rounded-full min-w-[20px] text-center" title="Rejected - action required">
-                  {myRejectedCount > 99 ? '99+' : myRejectedCount}
-                </span>
-              )}
-            </Link>
-          );
-        })}
+      <nav className="flex-1 py-3 overflow-y-auto space-y-0.5">
+        {navItems.map((item) => (
+          <NavLink
+            key={item.href}
+            item={item}
+            showBadge={
+              (item.href === '/contraventions' && myRejectedCount > 0) ||
+              (item.href === '/contraventions' && isAdmin && pendingReviewCount > 0)
+            }
+            badgeCount={item.href === '/contraventions' ? (isAdmin ? pendingReviewCount : myRejectedCount) : undefined}
+          />
+        ))}
 
         {isApprover && (
           <>
-            <div className="pt-4 mt-4 border-t border-gray-100">
-              <p className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase">Approver</p>
+            <div className="pt-6 pb-1 px-4">
+              <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">
+                Approver
+              </p>
             </div>
-            {approverItems.map((item) => {
-              const isActive = location.pathname.startsWith(item.href);
-
-              return (
-                <Link
-                  key={item.href}
-                  to={item.href}
-                  className={cn(
-                    'flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150',
-                    isActive
-                      ? 'bg-primary-50 text-primary-700 border-l-3 border-primary-600'
-                      : 'text-gray-600 hover:bg-gray-50 hover:translate-x-0.5'
-                  )}
-                >
-                  <item.icon className="w-5 h-5" />
-                  <span className="flex-1">{item.label}</span>
-                  {pendingCount > 0 && (
-                    <span className="bg-red-500 text-white text-xs font-medium px-2 py-0.5 rounded-full min-w-[20px] text-center">
-                      {pendingCount > 99 ? '99+' : pendingCount}
-                    </span>
-                  )}
-                </Link>
-              );
-            })}
+            {approverItems.map((item) => (
+              <NavLink
+                key={item.href}
+                item={item}
+                showBadge={pendingCount > 0}
+                badgeCount={pendingCount}
+              />
+            ))}
           </>
         )}
 
         {isAdmin && (
           <>
-            <div className="pt-4 mt-4 border-t border-gray-100">
-              <p className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase">Admin</p>
+            <div className="pt-6 pb-1 px-4">
+              <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">
+                Admin
+              </p>
             </div>
-            {adminItems.map((item) => {
-              const isActive = location.pathname.startsWith(item.href);
-
-              return (
-                <Link
-                  key={item.href}
-                  to={item.href}
-                  className={cn(
-                    'flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150',
-                    isActive
-                      ? 'bg-primary-50 text-primary-700 border-l-3 border-primary-600'
-                      : 'text-gray-600 hover:bg-gray-50 hover:translate-x-0.5'
-                  )}
-                >
-                  <item.icon className="w-5 h-5" />
-                  <span className="flex-1">{item.label}</span>
-                  {pendingApproverRequestsCount > 0 && (
-                    <span className="bg-orange-500 text-white text-xs font-medium px-2 py-0.5 rounded-full min-w-[20px] text-center">
-                      {pendingApproverRequestsCount > 99 ? '99+' : pendingApproverRequestsCount}
-                    </span>
-                  )}
-                </Link>
-              );
-            })}
+            {adminItems.map((item) => (
+              <NavLink
+                key={item.href}
+                item={item}
+                showBadge={pendingApproverRequestsCount > 0}
+                badgeCount={pendingApproverRequestsCount}
+              />
+            ))}
           </>
         )}
       </nav>
 
       {/* User section */}
-      <div className="p-4 border-t border-gray-100">
-        <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 rounded-lg">
-          <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
-            <span className="text-sm font-medium text-primary-700">
+      <div className="p-3 border-t-2 border-neutral-300">
+        <div className="flex items-center gap-3 p-2 hover:bg-neutral-50 transition-colors">
+          <div className="w-7 h-7 bg-neutral-900 flex items-center justify-center">
+            <span className="text-[11px] font-medium text-white">
               {user?.name?.charAt(0) || '?'}
             </span>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-900 truncate">{user?.name}</p>
-            <p className="text-xs text-gray-500">{isAdmin ? 'Admin' : isApprover ? 'Approver' : 'User'}</p>
+            <p className="text-[12px] font-medium text-neutral-900 truncate">{user?.name}</p>
+            <p className="text-[10px] text-neutral-400">
+              {isAdmin ? 'Admin' : isApprover ? 'Approver' : 'Staff'}
+            </p>
           </div>
           <button
             onClick={logout}
-            className="p-1.5 text-gray-400 hover:text-gray-600 rounded"
+            className="p-1.5 text-neutral-400 hover:text-red-600 hover:bg-red-50 transition-all"
             title="Logout"
           >
-            <LogOut className="w-4 h-4" />
+            <LogOut className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
-    </div>
+    </>
+  );
+
+  return (
+    <>
+      {/* Desktop Sidebar */}
+      <div className="hidden lg:flex w-56 bg-white flex-col h-full border-r-2 border-neutral-300">
+        {sidebarContent}
+      </div>
+
+      {/* Mobile Sidebar Overlay */}
+      {isOpen && (
+        <div
+          className="lg:hidden fixed inset-0 bg-black/50 z-40"
+          onClick={onClose}
+        />
+      )}
+
+      {/* Mobile Sidebar Drawer */}
+      <div
+        className={cn(
+          "lg:hidden fixed inset-y-0 left-0 w-72 bg-white z-50 flex flex-col border-r-2 border-neutral-300 transform transition-transform duration-300 ease-in-out",
+          isOpen ? "translate-x-0" : "-translate-x-full"
+        )}
+      >
+        {sidebarContent}
+      </div>
+    </>
   );
 }

@@ -5,14 +5,35 @@ import { Header } from '@/components/layout/Header';
 import { Card, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { formatCurrency, getLevelName, getLevelColor } from '@/lib/utils';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { AlertTriangle, Clock, FileWarning, DollarSign } from 'lucide-react';
+import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
+import { Users } from 'lucide-react';
 
+// Colors for pie chart - Browserbase style
 const POINTS_COLORS = {
-  '1-2': '#22c55e',
-  '3-5': '#eab308',
-  '6-10': '#f97316',
-  '11+': '#ef4444',
+  '1-2': '#ea580c',  // orange-600
+  '3-5': '#f59e0b',  // amber-500
+  '6-10': '#a855f7', // purple-500
+  '11+': '#dc2626',  // red-600
+};
+
+// Stat card styles - Browserbase style with top borders
+const STAT_CARD_STYLES = {
+  total: {
+    card: 'stat-card-orange card-interactive',
+    icon: 'text-orange-600',
+  },
+  pending: {
+    card: 'stat-card-amber card-interactive',
+    icon: 'text-amber-500',
+  },
+  highPoints: {
+    card: 'stat-card-purple card-interactive',
+    icon: 'text-purple-500',
+  },
+  value: {
+    card: 'stat-card-teal card-interactive',
+    icon: 'text-teal-500',
+  },
 };
 
 export function DashboardPage() {
@@ -22,59 +43,44 @@ export function DashboardPage() {
     queryFn: reportsApi.getDashboard,
   });
 
-  // Handle bar chart click - navigate to contraventions filtered by month
-  const handleBarClick = (data: { month: string; count: number }) => {
-    if (data.count === 0) return;
-
-    // month is in format "YYYY-MM", convert to date range
-    const [year, monthStr] = data.month.split('-');
-    const monthNum = parseInt(monthStr, 10);
-    const dateFrom = `${year}-${monthStr}-01`;
-    // Get last day of month: new Date(year, month, 0) gives last day of previous month
-    // So we use monthNum (1-12) directly since JS months are 0-indexed
-    const lastDay = new Date(parseInt(year), monthNum, 0).getDate();
-    const dateTo = `${year}-${monthStr}-${String(lastDay).padStart(2, '0')}`;
-
-    navigate(`/contraventions?dateFrom=${dateFrom}&dateTo=${dateTo}`);
-  };
-
-  // Handle pie chart click - navigate to contraventions filtered by points
-  const handlePointsClick = (data: { name: string; value: number }) => {
-    if (data.value === 0) return;
-    // Points filtering would need to be implemented in the contraventions list page
-    // For now, just navigate to the contraventions page
-    navigate('/contraventions');
+  const handleChartClick = (data: { activePayload?: Array<{ payload: { month: string } }> }) => {
+    if (data.activePayload && data.activePayload.length > 0) {
+      const month = data.activePayload[0].payload.month; // format: "2024-01"
+      const [year, monthNum] = month.split('-');
+      const dateFrom = `${year}-${monthNum}-01`;
+      const lastDay = new Date(parseInt(year), parseInt(monthNum), 0).getDate();
+      const dateTo = `${year}-${monthNum}-${lastDay.toString().padStart(2, '0')}`;
+      navigate(`/contraventions?dateFrom=${dateFrom}&dateTo=${dateTo}`);
+    }
   };
 
   if (isLoading) {
     return (
-      <div>
+      <div className="min-h-screen">
         <Header title="Dashboard" subtitle="Overview of procurement contraventions" />
-        <div className="p-8 space-y-6">
-          {/* Skeleton stat cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="p-6 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="bg-white rounded-xl p-6 border border-gray-100/80">
+              <Card key={i}>
                 <div className="flex items-center gap-4">
-                  <div className="skeleton w-12 h-12 rounded-lg" />
+                  <div className="skeleton w-10 h-10" />
                   <div className="flex-1 space-y-2">
-                    <div className="skeleton h-4 w-24" />
-                    <div className="skeleton h-7 w-16" />
+                    <div className="skeleton h-3 w-20" />
+                    <div className="skeleton h-6 w-16" />
                   </div>
                 </div>
-              </div>
+              </Card>
             ))}
           </div>
-          {/* Skeleton charts */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 bg-white rounded-xl p-6 border border-gray-100/80">
-              <div className="skeleton h-5 w-32 mb-6" />
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <Card className="lg:col-span-2">
+              <div className="skeleton h-4 w-28 mb-6" />
               <div className="skeleton h-64 w-full" />
-            </div>
-            <div className="bg-white rounded-xl p-6 border border-gray-100/80">
-              <div className="skeleton h-5 w-24 mb-6" />
-              <div className="skeleton h-64 w-full rounded-full mx-auto" style={{ maxWidth: '180px' }} />
-            </div>
+            </Card>
+            <Card>
+              <div className="skeleton h-4 w-20 mb-6" />
+              <div className="skeleton h-64 w-full" />
+            </Card>
           </div>
         </div>
       </div>
@@ -83,79 +89,81 @@ export function DashboardPage() {
 
   if (!stats) return null;
 
-  // Convert points data to chart format
   const pointsData = stats.byPoints ? Object.entries(stats.byPoints).map(([range, value]) => ({
     name: `${range} pts`,
     value,
-    color: POINTS_COLORS[range as keyof typeof POINTS_COLORS] || '#6b7280',
+    color: POINTS_COLORS[range as keyof typeof POINTS_COLORS] || '#52525b',
   })) : [];
 
+  const statCards = [
+    {
+      label: 'Total Contraventions',
+      value: stats.summary.totalContraventions,
+      colorKey: 'total' as const,
+    },
+    {
+      label: 'Pending Acknowledgment',
+      value: stats.summary.pendingAcknowledgment,
+      colorKey: 'pending' as const,
+    },
+    {
+      label: 'High Points Issues',
+      value: stats.summary.highPointsIssues,
+      colorKey: 'highPoints' as const,
+    },
+    {
+      label: 'Total Value Affected',
+      value: formatCurrency(stats.summary.totalValueAffected),
+      colorKey: 'value' as const,
+    },
+  ];
+
   return (
-    <div>
+    <div className="min-h-screen">
       <Header title="Dashboard" subtitle="Overview of procurement contraventions" />
 
-      <div className="p-8 space-y-6">
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card className="flex items-center gap-4">
-            <div className="p-3 bg-blue-100 rounded-lg">
-              <FileWarning className="w-6 h-6 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">Total Contraventions</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.summary.totalContraventions}</p>
-            </div>
-          </Card>
-
-          <Card className="flex items-center gap-4">
-            <div className="p-3 bg-yellow-100 rounded-lg">
-              <Clock className="w-6 h-6 text-yellow-600" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">Pending Acknowledgment</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.summary.pendingAcknowledgment}</p>
-            </div>
-          </Card>
-
-          <Card className="flex items-center gap-4">
-            <div className="p-3 bg-red-100 rounded-lg">
-              <AlertTriangle className="w-6 h-6 text-red-600" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">High Points Issues</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.summary.highPointsIssues}</p>
-            </div>
-          </Card>
-
-          <Card className="flex items-center gap-4">
-            <div className="p-3 bg-green-100 rounded-lg">
-              <DollarSign className="w-6 h-6 text-green-600" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">Total Value Affected</p>
-              <p className="text-2xl font-bold text-gray-900">{formatCurrency(stats.summary.totalValueAffected)}</p>
-            </div>
-          </Card>
+      <div className="p-6 sm:p-8 lg:p-12 xl:p-16 relative z-10">
+        <div className="max-w-6xl mx-auto space-y-8 lg:space-y-12">
+        {/* Summary Cards - Browserbase big number style */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-0 border-2 border-neutral-300 bg-white relative z-10">
+          {statCards.map((stat, idx) => {
+            const styles = STAT_CARD_STYLES[stat.colorKey];
+            return (
+              <div key={idx} className={`p-4 sm:p-6 ${styles.card} ${idx % 2 === 0 ? 'border-r-2 border-neutral-300' : ''} ${idx < 2 ? 'lg:border-r-2 border-b-2 lg:border-b-0' : 'lg:border-r-2'} ${idx === 3 ? 'lg:border-r-0' : ''}`}>
+                <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-neutral-900 tracking-tight truncate">{stat.value}</p>
+                <p className="text-[10px] sm:text-[11px] lg:text-[12px] text-neutral-500 mt-1 sm:mt-2 font-medium">{stat.label}</p>
+              </div>
+            );
+          })}
         </div>
 
         {/* Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
           {/* Monthly Trend */}
-          <Card className="lg:col-span-2">
-            <CardTitle className="mb-6">Monthly Trend</CardTitle>
-            <div className="h-64">
+          <Card className="lg:col-span-2 chart-card card-hover" padding="md">
+            <div className="flex items-center gap-2 mb-6">
+              <div className="w-3 h-3 bg-orange-600 border-2 border-orange-700"></div>
+              <CardTitle>Monthly Trend</CardTitle>
+            </div>
+            <div className="h-48 sm:h-56 lg:h-64">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={stats.monthlyTrend} style={{ cursor: 'pointer' }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                <AreaChart data={stats.monthlyTrend} onClick={handleChartClick} style={{ cursor: 'pointer' }}>
+                  <defs>
+                    <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#ea580c" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#ea580c" stopOpacity={0.05}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" vertical={false} />
                   <XAxis
                     dataKey="month"
                     tickFormatter={(val) => val.split('-')[1]}
-                    tick={{ fontSize: 12, fill: '#6b7280' }}
-                    axisLine={{ stroke: '#e5e7eb' }}
+                    tick={{ fontSize: 11, fill: '#78716c' }}
+                    axisLine={{ stroke: '#e7e5e4' }}
                     tickLine={false}
                   />
                   <YAxis
-                    tick={{ fontSize: 12, fill: '#6b7280' }}
+                    tick={{ fontSize: 11, fill: '#78716c' }}
                     axisLine={false}
                     tickLine={false}
                   />
@@ -163,27 +171,41 @@ export function DashboardPage() {
                     formatter={(value: number) => [value, 'Contraventions']}
                     labelFormatter={(label) => `Month: ${label}`}
                     contentStyle={{
-                      borderRadius: '8px',
-                      border: '1px solid #e5e7eb',
-                      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
+                      borderRadius: '0',
+                      border: '1px solid #e7e5e4',
+                      backgroundColor: '#ffffff',
+                      color: '#57534e',
+                      fontSize: '12px',
+                    }}
+                    itemStyle={{ color: '#1c1917' }}
+                    labelStyle={{ color: '#78716c' }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="count"
+                    stroke="#ea580c"
+                    strokeWidth={2}
+                    fillOpacity={1}
+                    fill="url(#colorCount)"
+                    activeDot={{
+                      r: 5,
+                      stroke: '#c2410c',
+                      strokeWidth: 2,
+                      fill: '#ffffff',
                     }}
                   />
-                  <Bar
-                    dataKey="count"
-                    fill="#4338ca"
-                    radius={[6, 6, 0, 0]}
-                    onClick={(data) => handleBarClick(data)}
-                    style={{ cursor: 'pointer' }}
-                  />
-                </BarChart>
+                </AreaChart>
               </ResponsiveContainer>
             </div>
           </Card>
 
           {/* By Points */}
-          <Card>
-            <CardTitle className="mb-6">By Points</CardTitle>
-            <div className="h-64">
+          <Card className="chart-card card-hover" padding="md">
+            <div className="flex items-center gap-2 mb-6">
+              <div className="w-3 h-3 bg-purple-500 border-2 border-purple-600"></div>
+              <CardTitle>By Points</CardTitle>
+            </div>
+            <div className="h-48 sm:h-56 lg:h-64">
               {pointsData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -194,25 +216,29 @@ export function DashboardPage() {
                       cx="50%"
                       cy="50%"
                       outerRadius={80}
+                      innerRadius={45}
                       label={({ name, value }) => `${name}: ${value}`}
-                      onClick={(data) => handlePointsClick(data)}
-                      style={{ cursor: 'pointer' }}
+                      stroke="#ffffff"
+                      strokeWidth={2}
                     >
                       {pointsData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} style={{ cursor: 'pointer' }} />
+                        <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
                     <Tooltip
                       contentStyle={{
-                        borderRadius: '8px',
-                        border: '1px solid #e5e7eb',
-                        boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
+                        borderRadius: '0',
+                        border: '1px solid #e7e5e4',
+                        backgroundColor: '#ffffff',
+                        color: '#57534e',
+                        fontSize: '12px',
                       }}
+                      itemStyle={{ color: '#1c1917' }}
                     />
                   </PieChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="flex items-center justify-center h-full text-gray-500 text-sm">
+                <div className="flex items-center justify-center h-full text-stone-400 text-[12px]">
                   No data available
                 </div>
               )}
@@ -221,26 +247,35 @@ export function DashboardPage() {
         </div>
 
         {/* Employees at Risk */}
-        <Card>
-          <CardTitle className="mb-4">Employees at Risk</CardTitle>
+        <Card className="card-hover" padding="md">
+          <div className="flex items-center gap-2 mb-6">
+            <div className="w-3 h-3 bg-amber-500 border-2 border-amber-600"></div>
+            <CardTitle>Employees at Risk</CardTitle>
+          </div>
           {stats.employeesAtRisk.length === 0 ? (
-            <p className="text-gray-500 text-sm">No employees currently at risk</p>
+            <div className="text-center py-10">
+              <div className="w-12 h-12 bg-stone-100 flex items-center justify-center mx-auto mb-3">
+                <Users className="w-6 h-6 text-stone-400" />
+              </div>
+              <p className="text-stone-600 text-[13px] font-normal">No employees currently at risk</p>
+              <p className="text-stone-400 text-[11px] mt-1">All employees are within acceptable thresholds</p>
+            </div>
           ) : (
-            <div className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {stats.employeesAtRisk.map((emp) => (
                 <div
                   key={emp.id}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                  className="flex items-center justify-between p-4 bg-stone-50/80 border border-stone-200 hover:border-stone-300 hover:bg-stone-100/80 transition-all cursor-pointer"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
-                      <span className="text-sm font-medium text-gray-600">
+                    <div className="w-10 h-10 bg-stone-200/80 flex items-center justify-center rounded-full">
+                      <span className="text-sm font-semibold text-stone-600">
                         {emp.name.charAt(0)}
                       </span>
                     </div>
                     <div>
-                      <p className="font-medium text-gray-900">{emp.name}</p>
-                      <p className="text-sm text-gray-500">{emp.points} points</p>
+                      <p className="text-[13px] font-medium text-stone-900">{emp.name}</p>
+                      <p className="text-[11px] text-stone-500">{emp.points} points</p>
                     </div>
                   </div>
                   <Badge className={getLevelColor(emp.level)}>
@@ -251,6 +286,7 @@ export function DashboardPage() {
             </div>
           )}
         </Card>
+        </div>
       </div>
     </div>
   );
