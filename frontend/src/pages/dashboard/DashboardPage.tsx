@@ -8,12 +8,11 @@ import { formatCurrency, getLevelName, getLevelColor } from '@/lib/utils';
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
 import { Users } from 'lucide-react';
 
-// Colors for pie chart - Browserbase style
-const POINTS_COLORS = {
+// Colors for pie chart - Browserbase style (keys match backend: 1-2, 3-4, 5+)
+const POINTS_COLORS: Record<string, string> = {
   '1-2': '#ea580c',  // orange-600
-  '3-5': '#f59e0b',  // amber-500
-  '6-10': '#a855f7', // purple-500
-  '11+': '#dc2626',  // red-600
+  '3-4': '#f59e0b',  // amber-500
+  '5+': '#a855f7',   // purple-500
 };
 
 // Stat card styles - Browserbase style with top borders
@@ -89,31 +88,33 @@ export function DashboardPage() {
 
   if (!stats) return null;
 
-  const pointsData = stats.byPoints ? Object.entries(stats.byPoints).map(([range, value]) => ({
-    name: `${range} pts`,
-    value,
-    color: POINTS_COLORS[range as keyof typeof POINTS_COLORS] || '#52525b',
-  })) : [];
+  const pointsData = stats.byPoints ? Object.entries(stats.byPoints)
+    .filter(([, value]) => value > 0)
+    .map(([range, value]) => ({
+      name: `${range} pts`,
+      value,
+      color: POINTS_COLORS[range] || '#52525b',
+    })) : [];
 
   const statCards = [
     {
       label: 'Total Contraventions',
-      value: stats.summary.totalContraventions,
+      value: stats.summary.totalContraventions ?? 0,
       colorKey: 'total' as const,
     },
     {
       label: 'Pending Acknowledgment',
-      value: stats.summary.pendingAcknowledgment,
+      value: stats.summary.pendingAcknowledgment ?? 0,
       colorKey: 'pending' as const,
     },
     {
       label: 'High Points Issues',
-      value: stats.summary.highPointsIssues,
+      value: stats.summary.highPointsIssues ?? 0,
       colorKey: 'highPoints' as const,
     },
     {
       label: 'Total Value Affected',
-      value: formatCurrency(stats.summary.totalValueAffected),
+      value: formatCurrency(stats.summary.totalValueAffected ?? 0),
       colorKey: 'value' as const,
     },
   ];
