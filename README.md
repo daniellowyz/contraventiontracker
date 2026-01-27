@@ -1,14 +1,8 @@
 # Contravention Tracker
 
-A full-stack web application for tracking procurement contraventions, managing employee points, and enforcing escalation policies.
+A full-stack web application for tracking procurement contraventions, managing employee points, and enforcing escalation policies. Built as part of OGP's Hack for Public Good.
 
 ## Tech Stack
-
-### Backend
-- **Runtime**: Node.js + Express
-- **Database**: PostgreSQL (Supabase)
-- **ORM**: Prisma
-- **Auth**: JWT
 
 ### Frontend
 - **Framework**: React 18 + TypeScript
@@ -17,14 +11,52 @@ A full-stack web application for tracking procurement contraventions, managing e
 - **State**: React Query + Zustand
 - **Charts**: Recharts
 
+### Backend
+- **Runtime**: Node.js + Express
+- **Database**: PostgreSQL (Supabase)
+- **ORM**: Prisma
+- **Auth**: JWT + Email OTP
+
+### Deployment
+- **Hosting**: Vercel (Frontend + API)
+- **Database**: Supabase
+
 ## Features
 
 - **Contravention Management**: Log, track, and manage procurement contraventions
-- **Points System**: Automatic point calculation based on severity
-- **Escalation Engine**: 5-level escalation (Verbal Warning → Severe Consequences)
-- **Training Trigger**: Mandatory course assigned at 5 points
-- **Dispute Process**: 5-day dispute window with panel review
-- **Reports & Analytics**: Dashboard, department breakdown, export to Excel
+- **Points System**: Automatic point calculation based on contravention severity
+- **Escalation Engine**: 5-level escalation system with automated notifications
+- **Approval Workflow**: Multi-level approval process with email notifications
+- **Training Integration**: Mandatory training triggered at point thresholds
+- **Reports & Analytics**: Dashboard with charts, department breakdowns, and Excel export
+- **Email Notifications**: Automated alerts via Google Apps Script
+
+## Project Structure
+
+```
+contravention-tracker-app/
+├── frontend/              # React frontend application
+│   └── src/
+│       ├── api/          # API client functions
+│       ├── components/   # Reusable UI components
+│       ├── pages/        # Page components
+│       ├── stores/       # Zustand state stores
+│       └── lib/          # Utility functions
+│
+├── server/               # Express backend (Vercel deployment)
+│   ├── routes/           # API route handlers
+│   ├── services/         # Business logic
+│   ├── middleware/       # Auth, validation, error handling
+│   └── validators/       # Zod schemas
+│
+├── backend/              # Backend for local development
+│   ├── src/              # Source code
+│   └── prisma/           # Database schema and seeds
+│
+├── prisma/               # Prisma schema (Vercel)
+├── api/                  # Vercel serverless entry point
+└── gas-email/            # Google Apps Script for emails
+```
 
 ## Getting Started
 
@@ -33,122 +65,34 @@ A full-stack web application for tracking procurement contraventions, managing e
 - Node.js 18+
 - Supabase account (for PostgreSQL database)
 
-### 1. Set up Supabase
+### Local Development
 
-1. Create a new project at [supabase.com](https://supabase.com)
-2. Get your database connection strings from Project Settings → Database
+1. **Backend Setup**
+   ```bash
+   cd backend
+   npm install
+   cp .env.example .env
+   # Edit .env with your Supabase credentials
+   npm run db:generate
+   npm run db:push
+   npm run db:seed
+   npm run dev
+   ```
 
-### 2. Backend Setup
+2. **Frontend Setup**
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
 
-```bash
-cd backend
+3. **Access the Application**
+   - Frontend: http://localhost:5173
+   - Backend API: http://localhost:3001
 
-# Install dependencies
-npm install
+### Demo Accounts
 
-# Copy environment file
-cp .env.example .env
-
-# Edit .env with your Supabase credentials
-# DATABASE_URL="postgresql://..."
-# DIRECT_URL="postgresql://..."
-
-# Generate Prisma client
-npm run db:generate
-
-# Push schema to database
-npm run db:push
-
-# Seed initial data (departments, types, admin user)
-npm run db:seed
-
-# (Optional) Import existing contraventions from Excel
-# First copy your Excel file to the backend folder
-cp ../Contraventions🔥.xlsx .
-npx ts-node prisma/migrate-excel.ts
-
-# Start development server
-npm run dev
-```
-
-### 3. Frontend Setup
-
-```bash
-cd frontend
-
-# Install dependencies
-npm install
-
-# Copy environment file
-cp .env.example .env
-
-# Start development server
-npm run dev
-```
-
-### 4. Access the Application
-
-- Frontend: http://localhost:5173
-- Backend API: http://localhost:3001
-
-### Default Admin Login
-
-- Email: `admin@ogp.gov.sg`
-- Password: `admin123`
-
-## Project Structure
-
-```
-contravention-tracker-app/
-├── backend/
-│   ├── prisma/
-│   │   ├── schema.prisma      # Database schema
-│   │   ├── seed.ts            # Seed data script
-│   │   └── migrate-excel.ts   # Excel import script
-│   └── src/
-│       ├── config/            # Configuration files
-│       ├── middleware/        # Express middleware
-│       ├── routes/            # API routes
-│       ├── services/          # Business logic
-│       ├── validators/        # Zod schemas
-│       └── types/             # TypeScript types
-│
-└── frontend/
-    └── src/
-        ├── api/               # API client functions
-        ├── components/        # React components
-        ├── hooks/             # Custom hooks
-        ├── pages/             # Page components
-        ├── stores/            # Zustand stores
-        ├── types/             # TypeScript types
-        └── lib/               # Utility functions
-```
-
-## API Endpoints
-
-### Authentication
-- `POST /api/auth/login` - Login
-- `GET /api/auth/me` - Get current user
-
-### Contraventions
-- `GET /api/contraventions` - List all (with filters)
-- `POST /api/contraventions` - Create new (admin)
-- `GET /api/contraventions/:id` - Get single
-- `PATCH /api/contraventions/:id` - Update (admin)
-- `POST /api/contraventions/:id/acknowledge` - Acknowledge
-- `POST /api/contraventions/:id/dispute` - Submit dispute
-
-### Employees
-- `GET /api/employees` - List all
-- `GET /api/employees/:id` - Get profile
-- `GET /api/employees/:id/points` - Get points summary
-- `GET /api/employees/:id/contraventions` - Get contraventions
-
-### Reports
-- `GET /api/reports/dashboard` - Dashboard stats
-- `GET /api/reports/by-department` - Department breakdown
-- `GET /api/reports/repeat-offenders` - Repeat offenders
-- `GET /api/reports/export` - Export to Excel
+The application includes demo accounts for testing different user roles.
 
 ## Escalation Levels
 
@@ -160,19 +104,26 @@ contravention-tracker-app/
 | 4 | 8-11 | Performance Impact | PIP + reduced approval limits |
 | 5 | 12+ | Severe Consequences | Privileges suspended |
 
-## Deployment
+## API Endpoints
 
-### Backend (Render / Railway)
-1. Connect your repository
-2. Set environment variables
-3. Build command: `npm run build`
-4. Start command: `npm start`
+### Authentication
+- `POST /api/auth/login` - Email OTP login
+- `POST /api/auth/demo-login` - Demo account login
+- `GET /api/auth/me` - Get current user
 
-### Frontend (Vercel)
-1. Connect your repository
-2. Set `VITE_API_URL` environment variable
-3. Build command: `npm run build`
-4. Output directory: `dist`
+### Contraventions
+- `GET /api/contraventions` - List with filters
+- `POST /api/contraventions` - Create new
+- `GET /api/contraventions/:id` - Get details
+- `PATCH /api/contraventions/:id` - Update
+
+### Employees
+- `GET /api/employees` - List all
+- `GET /api/employees/:id` - Get profile with points
+
+### Reports
+- `GET /api/reports/dashboard` - Dashboard statistics
+- `GET /api/reports/export` - Export to Excel
 
 ## License
 
