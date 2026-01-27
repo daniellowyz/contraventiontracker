@@ -264,18 +264,23 @@ export function ContraventionsListPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-stone-100 bg-white">
-                    {data.data.map((contravention) => (
+                    {data.data.map((contravention) => {
+                      const attention = needsAttention(contravention);
+                      return (
                       <tr
                         key={contravention.id}
                         className={cn(
                           "hover:bg-orange-50/50 cursor-pointer transition-colors",
-                          needsAttention(contravention) && "bg-amber-50/70 border-l-4 border-l-amber-500"
+                          attention && "bg-amber-100"
                         )}
                         onClick={() => navigate(`/contraventions/${contravention.id}`)}
                       >
-                        <td className="px-6 py-4 text-[13px] font-medium text-stone-900">
+                        <td className={cn(
+                          "px-6 py-4 text-[13px] font-medium text-stone-900",
+                          attention && "border-l-4 border-l-amber-500"
+                        )}>
                           <div className="flex items-center gap-2">
-                            {needsAttention(contravention) && (
+                            {attention && (
                               <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" title="Needs attention" />
                             )}
                             {contravention.referenceNo}
@@ -322,7 +327,8 @@ export function ContraventionsListPage() {
                           </div>
                         </td>
                       </tr>
-                    ))}
+                    );})}
+
                   </tbody>
                 </table>
               </div>
