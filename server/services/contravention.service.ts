@@ -189,6 +189,24 @@ export class ContraventionService {
       }
     }
 
+    // Notify ops channel when status is PENDING_REVIEW (user submitted with existing approval)
+    // This happens when user selects "I already have approval" and uploads a PDF
+    if (contravention.status === 'PENDING_REVIEW') {
+      getSlackService().then(async (slackSvc) => {
+        if (slackSvc && slackSvc.isConfigured()) {
+          await slackSvc.notifyPendingAdminReview({
+            referenceNo: contravention.referenceNo,
+            employeeName: contravention.employee.name,
+            typeName: contravention.type.name,
+            reason: 'Submitted with existing approval - awaiting admin review',
+            contraventionId: contravention.id,
+          });
+        }
+      }).catch((err) => {
+        console.error('Failed to notify ops channel for direct submission:', err);
+      });
+    }
+
     return contravention;
   }
 

@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
 import { Input } from '@/components/ui/Input';
 import { MonthYearPicker } from '@/components/ui/MonthYearPicker';
-import { formatDate, formatCurrency, getStatusColor } from '@/lib/utils';
+import { formatDate, formatCurrency, getStatusColor, cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
 import { Plus, ChevronLeft, ChevronRight, Eye, Trash2, FileWarning } from 'lucide-react';
 
@@ -29,7 +29,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export function ContraventionsListPage() {
-  const { isAdmin } = useAuthStore();
+  const { isAdmin, user } = useAuthStore();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -148,6 +148,19 @@ export function ContraventionsListPage() {
     }
   };
 
+  // Check if a contravention needs attention (for highlighting)
+  const needsAttention = (contravention: { status: string; loggedBy?: { id: string } }) => {
+    // For admins: highlight PENDING_REVIEW items
+    if (isAdmin && contravention.status === 'PENDING_REVIEW') {
+      return true;
+    }
+    // For users: highlight REJECTED items they submitted
+    if (contravention.status === 'REJECTED' && contravention.loggedBy?.id === user?.userId) {
+      return true;
+    }
+    return false;
+  };
+
   return (
     <div className="min-h-screen">
       <Header
@@ -254,11 +267,19 @@ export function ContraventionsListPage() {
                     {data.data.map((contravention) => (
                       <tr
                         key={contravention.id}
-                        className="hover:bg-orange-50/50 cursor-pointer transition-colors"
+                        className={cn(
+                          "hover:bg-orange-50/50 cursor-pointer transition-colors",
+                          needsAttention(contravention) && "bg-amber-50/70 border-l-4 border-l-amber-500"
+                        )}
                         onClick={() => navigate(`/contraventions/${contravention.id}`)}
                       >
                         <td className="px-6 py-4 text-[13px] font-medium text-stone-900">
-                          {contravention.referenceNo}
+                          <div className="flex items-center gap-2">
+                            {needsAttention(contravention) && (
+                              <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" title="Needs attention" />
+                            )}
+                            {contravention.referenceNo}
+                          </div>
                         </td>
                         <td className="px-6 py-4">
                           <div className="text-[13px] text-stone-900">{contravention.employee.name}</div>

@@ -48,27 +48,31 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     queryKey: ['pendingApprovalsCount'],
     queryFn: approvalsApi.getPendingCount,
     enabled: isApprover,
-    refetchInterval: 30000,
+    refetchInterval: 10000, // Refresh every 10 seconds
+    refetchOnWindowFocus: true,
   });
 
   const { data: pendingApproverRequestsCount = 0 } = useQuery({
     queryKey: ['pendingApproverRequestsCount'],
     queryFn: approversApi.getPendingRequestsCount,
     enabled: isAdmin,
-    refetchInterval: 30000,
+    refetchInterval: 10000,
+    refetchOnWindowFocus: true,
   });
 
   const { data: myRejectedCount = 0 } = useQuery({
     queryKey: ['myRejectedCount'],
     queryFn: contraventionsApi.getMyRejectedCount,
-    refetchInterval: 30000,
+    refetchInterval: 10000,
+    refetchOnWindowFocus: true,
   });
 
   const { data: pendingReviewCount = 0 } = useQuery({
     queryKey: ['pendingReviewCount'],
     queryFn: contraventionsApi.getPendingReviewCount,
     enabled: isAdmin,
-    refetchInterval: 30000,
+    refetchInterval: 10000,
+    refetchOnWindowFocus: true,
   });
 
   const handleNavClick = () => {
