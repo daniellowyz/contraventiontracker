@@ -167,10 +167,14 @@ export function LoginPage() {
     <div className="min-h-screen flex flex-col">
       <Masthead />
       <div className="flex-1 flex items-center justify-center bg-gray-50 py-12 px-4">
-        <Card className="w-full max-w-md">
-          <div className="text-center mb-8">
-            <h1 className="text-2xl font-bold text-gray-900">Contravention Tracker</h1>
-            <p className="text-gray-500 mt-2">
+        <Card className="w-full max-w-2xl">
+          <div className="text-center mb-10">
+            <img
+              src="/login-logo.png"
+              alt="Contravention Tracker"
+              className="max-w-md w-full mx-auto mb-6"
+            />
+            <p className="text-gray-500">
               {step === 'email' ? 'Sign in to your account' : 'Enter verification code'}
             </p>
           </div>
@@ -289,33 +293,33 @@ export function LoginPage() {
             <p className="text-center text-sm text-gray-500 mb-4">
               Demo Accounts (for testing)
             </p>
-            <div className="space-y-2">
+            <div className="flex gap-2">
               <Button
                 type="button"
                 variant="secondary"
-                className="w-full"
+                className="flex-1 text-xs px-2"
                 onClick={() => handleDemoLogin('demouser@open.gov.sg')}
                 disabled={demoLoginMutation.isPending}
               >
-                Login as Demo User
+                User
               </Button>
               <Button
                 type="button"
                 variant="secondary"
-                className="w-full"
+                className="flex-1 text-xs px-2"
                 onClick={() => handleDemoLogin('demoapprover@open.gov.sg')}
                 disabled={demoLoginMutation.isPending}
               >
-                Login as Demo Approver
+                Approver
               </Button>
               <Button
                 type="button"
                 variant="secondary"
-                className="w-full"
+                className="flex-1 text-xs px-2"
                 onClick={() => handleDemoLogin('demoadmin@open.gov.sg')}
                 disabled={demoLoginMutation.isPending}
               >
-                Login as Demo Admin
+                Admin
               </Button>
             </div>
             {demoLoginMutation.isPending && (
