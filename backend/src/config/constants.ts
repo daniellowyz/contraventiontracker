@@ -7,7 +7,7 @@ export const ESCALATION_MATRIX = {
     min: 5,
     max: 9,
     name: 'Stage 1',
-    actions: ['Notify reporting manager']
+    actions: ['Notify Reporting Manager']
   },
   LEVEL_2: {
     min: 10,

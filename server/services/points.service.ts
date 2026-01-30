@@ -14,9 +14,9 @@ export class PointsService {
 
   /**
    * Determine escalation level based on total points
-   * Level 1: 1-2 points - Verbal Advisory
-   * Level 2: 3-4 points - Mandatory Training
-   * Level 3: 5+ points - Performance Impact
+   * Stage 1: 5 pts - Notify reporting manager
+   * Stage 2: 10 pts - Notify Management + Session with Finance
+   * Stage 3: >15 pts - Performance Impact
    */
   getEscalationLevel(totalPoints: number): EscalationLevel | null {
     if (totalPoints >= ESCALATION_MATRIX.LEVEL_3.min) return 'LEVEL_3';
@@ -403,17 +403,8 @@ export class PointsService {
       const oldLevel = emp.currentLevel;
       const hasTraining = emp.employee.trainingRecords.length > 0;
 
-      // Recalculate level based on new 3-level system
-      let newLevel: EscalationLevel | null = null;
-
-      // Check for performance impact first (if they completed training and have any points)
-      if (hasTraining && emp.totalPoints > 0) {
-        newLevel = 'LEVEL_3';
-      } else if (emp.totalPoints >= ESCALATION_MATRIX.LEVEL_2.min) {
-        newLevel = 'LEVEL_2';
-      } else if (emp.totalPoints >= ESCALATION_MATRIX.LEVEL_1.min) {
-        newLevel = 'LEVEL_1';
-      }
+      // Recalculate level based on points only (Stage 1: 5, Stage 2: 10, Stage 3: 16+)
+      const newLevel = this.getEscalationLevel(emp.totalPoints);
 
       // Update if level changed
       if (oldLevel !== newLevel) {
@@ -452,6 +443,28 @@ export class PointsService {
       });
     }
 
+    // Archive active escalations where level no longer matches triggerPoints (corrected matrix)
+    const activeEscalations = await prisma.escalation.findMany({
+      where: {
+        level: { in: ['LEVEL_1', 'LEVEL_2', 'LEVEL_3'] },
+        completedAt: null,
+      },
+    });
+    let wrongLevelArchived = 0;
+    for (const esc of activeEscalations) {
+      const correctLevel = this.getEscalationLevel(esc.triggerPoints);
+      if (correctLevel !== esc.level) {
+        await prisma.escalation.update({
+          where: { id: esc.id },
+          data: {
+            completedAt: new Date(),
+            notes: (esc.notes || '') + (esc.notes ? ' ' : '') + 'Auto-archived: Level did not match points (corrected escalation matrix).',
+          },
+        });
+        wrongLevelArchived++;
+      }
+    }
+
     // Create new escalations for employees who need them
     let newEscalationsCreated = 0;
     for (const detail of details) {
@@ -475,7 +488,7 @@ export class PointsService {
 
     return {
       employeesUpdated,
-      escalationsArchived: oldEscalations.length,
+      escalationsArchived: oldEscalations.length + wrongLevelArchived,
       newEscalationsCreated,
       details,
     };

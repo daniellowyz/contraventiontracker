@@ -1,11 +1,26 @@
-// Escalation Matrix Configuration
-// Level 1: 1-2 points - Finance verbal advisory
-// Level 2: 3-4 points - Mandatory training required
-// Level 3: 5+ points - Performance impact
+// Escalation Matrix Configuration (Stages of Correction)
+// Stage 1: 5 points - Notify reporting manager
+// Stage 2: 10 points - Notify Management + Session with Finance
+// Stage 3: >15 points - Performance Impact
 export const ESCALATION_MATRIX = {
-  LEVEL_1: { min: 1, max: 2, name: 'Verbal Advisory', actions: ['Finance verbal advisory on contravention and prevention'] },
-  LEVEL_2: { min: 3, max: 4, name: 'Mandatory Training', actions: ['Complete Procurement Compliance Training within 30 days'] },
-  LEVEL_3: { min: 5, max: Infinity, name: 'Performance Impact', actions: ['Affects performance review', 'Manager to review employee contravention record at end of performance cycle'] },
+  LEVEL_1: {
+    min: 5,
+    max: 9,
+    name: 'Stage 1',
+    actions: ['Notify Reporting Manager']
+  },
+  LEVEL_2: {
+    min: 10,
+    max: 15,
+    name: 'Stage 2',
+    actions: ['Notify Management', 'Session with Finance']
+  },
+  LEVEL_3: {
+    min: 16,
+    max: Infinity,
+    name: 'Stage 3',
+    actions: ['Performance Impact']
+  },
 };
 
 // Severity Points Mapping
@@ -18,7 +33,7 @@ export const SEVERITY_POINTS = {
 
 // Points Configuration
 export const POINTS_CONFIG = {
-  TRAINING_TRIGGER_THRESHOLD: 3, // Points at which training is triggered (Level 2)
+  TRAINING_TRIGGER_THRESHOLD: 10, // Points at which training is triggered (Stage 2)
   TRAINING_CREDIT: 1, // Points reduction for completing training
   // Fiscal Year Reset Configuration (Apr-Mar cycle)
   FISCAL_YEAR_START_MONTH: 4, // April (1-indexed: 1=Jan, 4=Apr)

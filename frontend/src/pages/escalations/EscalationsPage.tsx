@@ -56,21 +56,21 @@ const getLevelConfig = (level: string) => {
       color: 'text-yellow-700',
       bgColor: 'bg-yellow-100',
       icon: <Clock className="w-5 h-5 text-yellow-600" />,
-      description: '5 points: Notify reporting manager',
+      description: '5 points: Notify Reporting Manager',
     },
     LEVEL_2: {
       name: 'Stage 2 - Training Required',
       color: 'text-orange-700',
       bgColor: 'bg-orange-100',
       icon: <FileWarning className="w-5 h-5 text-orange-600" />,
-      description: '10 points: Notify Dept Head & Hong + Mandatory Training',
+      description: '10 points: Notify Management + Session with Finance',
     },
     LEVEL_3: {
       name: 'Stage 3 - Procurement Paused',
       color: 'text-red-700',
       bgColor: 'bg-red-100',
       icon: <AlertTriangle className="w-5 h-5 text-red-600" />,
-      description: '>15 points: Procurement rights paused + Session with Finance',
+      description: '>15 points: Performance Impact',
     },
   };
   return configs[level] || configs.LEVEL_1;
@@ -82,7 +82,16 @@ export function EscalationsPage() {
   const [levelFilter, setLevelFilter] = useState('');
   const [completionFilter, setCompletionFilter] = useState('');
 
-  // Fetch escalations
+  // Fetch all escalations (for stats cards - never filtered)
+  const { data: allEscalations } = useQuery({
+    queryKey: ['escalations', 'all'],
+    queryFn: async () => {
+      const response = await client.get('/admin/escalations');
+      return response.data.data as Escalation[];
+    },
+  });
+
+  // Fetch escalations with current filter (for the list only)
   const { data: escalations, isLoading } = useQuery({
     queryKey: ['escalations', levelFilter, completionFilter],
     queryFn: async () => {
@@ -121,14 +130,14 @@ export function EscalationsPage() {
     },
   });
 
-  // Calculate stats
+  // Stats from all escalations (unchanged by filter)
   const stats = {
-    total: escalations?.length || 0,
-    pending: escalations?.filter((e) => !e.completedAt).length || 0,
-    completed: escalations?.filter((e) => e.completedAt).length || 0,
-    level1: escalations?.filter((e) => e.level === 'LEVEL_1').length || 0,
-    level2: escalations?.filter((e) => e.level === 'LEVEL_2').length || 0,
-    level3: escalations?.filter((e) => e.level === 'LEVEL_3').length || 0,
+    total: allEscalations?.length || 0,
+    pending: allEscalations?.filter((e) => !e.completedAt).length || 0,
+    completed: allEscalations?.filter((e) => e.completedAt).length || 0,
+    level1: allEscalations?.filter((e) => e.level === 'LEVEL_1').length || 0,
+    level2: allEscalations?.filter((e) => e.level === 'LEVEL_2').length || 0,
+    level3: allEscalations?.filter((e) => e.level === 'LEVEL_3').length || 0,
   };
 
   if (!isAdmin) {
