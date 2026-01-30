@@ -88,13 +88,18 @@ export function DashboardPage() {
 
   if (!stats) return null;
 
-  const pointsData = stats.byPoints ? Object.entries(stats.byPoints)
-    .filter(([, value]) => value > 0)
-    .map(([range, value]) => ({
+  // Normalize byPoints for chart (defensive: handle missing/different shapes in deployment)
+  const rawByPoints = stats.byPoints && typeof stats.byPoints === 'object' ? stats.byPoints : {};
+  const pointsData = (['1-2', '3-4', '5+'] as const).map((range) => {
+    const value = Number(rawByPoints[range]) || 0;
+    return { range, value };
+  })
+    .filter(({ value }) => value > 0)
+    .map(({ range, value }) => ({
       name: `${range} pts`,
       value,
       color: POINTS_COLORS[range] || '#52525b',
-    })) : [];
+    }));
 
   const statCards = [
     {
