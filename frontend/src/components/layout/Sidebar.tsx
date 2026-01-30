@@ -23,7 +23,7 @@ const navItems = [
   { icon: FileWarning, label: 'Contraventions', href: '/contraventions' },
   { icon: Users, label: 'Employees', href: '/employees' },
   { icon: AlertTriangle, label: 'Escalations', href: '/escalations' },
-  { icon: GraduationCap, label: 'Training', href: '/training' },
+  // { icon: GraduationCap, label: 'Training', href: '/training' },
   { icon: BarChart3, label: 'Reports', href: '/reports' },
 ];
 

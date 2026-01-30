@@ -26,6 +26,16 @@ router.get('/by-department', authenticate, async (req: AuthenticatedRequest, res
   }
 });
 
+// GET /api/reports/by-team - Team breakdown (teams with contraventions only)
+router.get('/by-team', authenticate, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const breakdown = await reportService.getTeamBreakdown();
+    res.json({ success: true, data: breakdown });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // GET /api/reports/by-type - Contravention type breakdown
 router.get('/by-type', authenticate, async (req: AuthenticatedRequest, res: Response, next) => {
   try {

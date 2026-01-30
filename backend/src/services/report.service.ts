@@ -176,6 +176,39 @@ export class ReportService {
   }
 
   /**
+   * Get team breakdown (only teams with at least one contravention)
+   */
+  async getTeamBreakdown() {
+    const teams = await prisma.team.findMany({
+      where: { contraventions: { some: {} } },
+      include: {
+        contraventions: {
+          select: { employeeId: true, points: true },
+        },
+      },
+    });
+
+    return teams.map((team) => {
+      const contraventions = team.contraventions;
+      const employeeIds = new Set(contraventions.map((c) => c.employeeId));
+      const totalPoints = contraventions.reduce((sum, c) => sum + c.points, 0);
+
+      return {
+        id: team.id,
+        name: team.name,
+        employeeCount: employeeIds.size,
+        contraventionCount: contraventions.length,
+        totalPoints,
+        byPoints: {
+          '1-2': contraventions.filter((c) => c.points >= 1 && c.points <= 2).length,
+          '3-4': contraventions.filter((c) => c.points >= 3 && c.points <= 4).length,
+          '5+': contraventions.filter((c) => c.points >= 5).length,
+        },
+      };
+    });
+  }
+
+  /**
    * Get contravention type breakdown
    */
   async getTypeBreakdown() {

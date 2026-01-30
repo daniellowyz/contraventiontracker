@@ -14,6 +14,19 @@ export interface DepartmentBreakdown {
   };
 }
 
+export interface TeamBreakdown {
+  id: string;
+  name: string;
+  employeeCount: number;
+  contraventionCount: number;
+  totalPoints: number;
+  byPoints: {
+    '1-2': number;
+    '3-4': number;
+    '5+': number;
+  };
+}
+
 export interface TypeBreakdown {
   id: string;
   name: string;
@@ -46,6 +59,11 @@ export const reportsApi = {
 
   getByDepartment: async () => {
     const response = await client.get<ApiResponse<DepartmentBreakdown[]>>('/reports/by-department');
+    return response.data.data!;
+  },
+
+  getByTeam: async () => {
+    const response = await client.get<ApiResponse<TeamBreakdown[]>>('/reports/by-team');
     return response.data.data!;
   },
 
