@@ -44,10 +44,11 @@ export interface DashboardStats {
     totalContraventions: number;
     pendingAcknowledgment: number;
     thisMonth: number;
-    highPointsEmployees: number;
+    highPointsIssues: number;
     totalValueAffected: number;
   };
   byStatus: Record<ContraventionStatus, number>;
+  byPoints: Record<string, number>;
   employeesAtRisk: {
     id: string;
     name: string;

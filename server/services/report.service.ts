@@ -17,11 +17,12 @@ export class ReportService {
       totalContraventions,
       pendingAcknowledgment,
       thisMonth,
-      highPointsEmployees,
+      highPointsIssues,
       valueSum,
       statusCounts,
       employeesAtRisk,
       contraventionsByMonth,
+      contraventionsForPoints,
     ] = await Promise.all([
       // Total contraventions
       prisma.contravention.count(),
@@ -79,6 +80,12 @@ export class ReportService {
           incidentDate: true,
         },
       }),
+      // All contraventions for points breakdown
+      prisma.contravention.findMany({
+        select: {
+          points: true,
+        },
+      }),
     ]);
 
     // Process status counts
@@ -109,15 +116,33 @@ export class ReportService {
       });
     }
 
+    // Calculate byPoints breakdown (1-2, 3-4, 5+)
+    const byPoints: Record<string, number> = {
+      '1-2': 0,
+      '3-4': 0,
+      '5+': 0,
+    };
+    contraventionsForPoints.forEach((c) => {
+      const pts = c.points;
+      if (pts >= 1 && pts <= 2) {
+        byPoints['1-2']++;
+      } else if (pts >= 3 && pts <= 4) {
+        byPoints['3-4']++;
+      } else if (pts >= 5) {
+        byPoints['5+']++;
+      }
+    });
+
     return {
       summary: {
         totalContraventions,
         pendingAcknowledgment,
         thisMonth,
-        highPointsEmployees,
+        highPointsIssues,
         totalValueAffected: Number(valueSum._sum.valueSgd) || 0,
       },
       byStatus: byStatus as DashboardStats['byStatus'],
+      byPoints,
       employeesAtRisk: employeesAtRisk.map((ep) => ({
         id: ep.employee.id,
         name: ep.employee.name,
