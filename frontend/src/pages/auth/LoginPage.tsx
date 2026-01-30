@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
 import { Masthead } from '@/components/layout/Masthead';
 import { Footer } from '@/components/layout/Footer';
+import { Banner } from '@/components/ui/Banner';
 
 type LoginStep = 'email' | 'otp';
 
@@ -166,6 +167,7 @@ export function LoginPage() {
   return (
     <div className="min-h-screen flex flex-col">
       <Masthead />
+      <Banner />
       <div className="flex-1 flex items-center justify-center bg-gray-50 py-12 px-4">
         <Card className="w-full max-w-2xl">
           <div className="text-center mb-10">

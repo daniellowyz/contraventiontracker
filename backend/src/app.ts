@@ -36,6 +36,16 @@ if (config.nodeEnv === 'development') {
   });
 }
 
+// Root - API info
+app.get('/', (_req, res) => {
+  res.json({
+    success: true,
+    message: 'Contravention Tracker API',
+    docs: { health: '/health', api: '/api' },
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // Health check
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
