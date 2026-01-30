@@ -60,6 +60,7 @@ export function ContraventionFormPage() {
   const [newDocUrl, setNewDocUrl] = useState('');
 
   const [approvalFile, setApprovalFile] = useState<File | null>(null);
+  const [approvalDropActive, setApprovalDropActive] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState('');
   const [showNewTeamInput, setShowNewTeamInput] = useState(false);
@@ -145,16 +146,37 @@ export function ContraventionFormPage() {
     }));
   };
 
+  const setApprovalFileIfValid = (file: File) => {
+    if (file.type !== 'application/pdf') {
+      setError('Please upload a PDF file');
+      return;
+    }
+    setApprovalFile(file);
+    setError('');
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      if (file.type !== 'application/pdf') {
-        setError('Please upload a PDF file');
-        return;
-      }
-      setApprovalFile(file);
-      setError('');
-    }
+    if (file) setApprovalFileIfValid(file);
+  };
+
+  const handleApprovalDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setApprovalDropActive(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) setApprovalFileIfValid(file);
+  };
+
+  const handleApprovalDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setApprovalDropActive(true);
+  };
+
+  const handleApprovalDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setApprovalDropActive(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -686,10 +708,19 @@ export function ContraventionFormPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Upload Approval PDF <span className="text-red-500">*</span>
                   </label>
-                  <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:border-gray-400 transition-colors">
+                  <div
+                    className={`mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-dashed rounded-lg transition-colors ${
+                      approvalDropActive
+                        ? 'border-blue-500 bg-blue-50'
+                        : 'border-gray-300 hover:border-gray-400'
+                    }`}
+                    onDragOver={handleApprovalDragOver}
+                    onDragLeave={handleApprovalDragLeave}
+                    onDrop={handleApprovalDrop}
+                  >
                     <div className="space-y-1 text-center">
                       <Upload className="mx-auto h-12 w-12 text-gray-400" />
-                      <div className="flex text-sm text-gray-600">
+                      <div className="flex text-sm text-gray-600 justify-center">
                         <label
                           htmlFor="approval-file"
                           className="relative cursor-pointer rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none"
