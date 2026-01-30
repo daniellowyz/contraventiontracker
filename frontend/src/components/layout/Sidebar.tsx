@@ -10,7 +10,6 @@ import {
   FileWarning,
   Users,
   AlertTriangle,
-  GraduationCap,
   BarChart3,
   Settings,
   LogOut,
