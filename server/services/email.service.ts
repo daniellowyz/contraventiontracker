@@ -127,16 +127,28 @@ export const emailService = {
         requestBody.cc = ccRecipients;
       }
 
-      // Send via Postman API
+      // Send via Postman API with timeout
       console.log('[Email] Calling Postman API...');
-      const response = await fetch(EMAIL_CONFIG.POSTMAN_API_URL, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${EMAIL_CONFIG.POSTMAN_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        console.error('[Email] Postman API request timed out after 15s');
+        controller.abort();
+      }, 15000);
+
+      let response: Response;
+      try {
+        response = await fetch(EMAIL_CONFIG.POSTMAN_API_URL, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${EMAIL_CONFIG.POSTMAN_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
       console.log('[Email] Postman API response status:', response.status);
 
