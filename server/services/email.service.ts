@@ -110,7 +110,9 @@ export const emailService = {
       }
 
       // Log the email attempt
+      const apiKeyPreview = EMAIL_CONFIG.POSTMAN_API_KEY ? `${EMAIL_CONFIG.POSTMAN_API_KEY.substring(0, 15)}...` : 'NOT SET';
       console.log(`[Email] ${isSandbox ? '[SANDBOX]' : ''} Sending via Postman to: ${actualRecipient} | Subject: ${subject}`);
+      console.log(`[Email] API Key configured: ${apiKeyPreview}`);
 
       // Build request body for Postman API
       const requestBody: Record<string, unknown> = {
@@ -126,6 +128,7 @@ export const emailService = {
       }
 
       // Send via Postman API
+      console.log('[Email] Calling Postman API...');
       const response = await fetch(EMAIL_CONFIG.POSTMAN_API_URL, {
         method: 'POST',
         headers: {
@@ -135,9 +138,12 @@ export const emailService = {
         body: JSON.stringify(requestBody),
       });
 
+      console.log('[Email] Postman API response status:', response.status);
+
       if (!response.ok) {
-        const errorData = await response.json() as { message?: string; error?: string };
-        throw new Error(errorData.message || errorData.error || `Postman API failed with status: ${response.status}`);
+        const errorText = await response.text();
+        console.error('[Email] Postman API error response:', errorText);
+        throw new Error(`Postman API failed with status ${response.status}: ${errorText}`);
       }
 
       const result = await response.json() as PostmanResponse;
