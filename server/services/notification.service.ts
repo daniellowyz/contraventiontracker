@@ -73,16 +73,20 @@ export const notificationService = {
       link: `/contraventions/${params.contraventionId}`,
     });
 
-    // Send email notification
-    await emailService.sendContraventionLoggedEmail({
-      employeeEmail: params.employeeEmail,
-      employeeName: params.employeeName,
-      referenceNo: params.referenceNo,
-      typeName: params.typeName,
-      severity: params.severity || 'N/A',
-      points: params.points,
-      contraventionId: params.contraventionId,
-    });
+    // Send email notification (don't fail if email fails)
+    try {
+      await emailService.sendContraventionLoggedEmail({
+        employeeEmail: params.employeeEmail,
+        employeeName: params.employeeName,
+        referenceNo: params.referenceNo,
+        typeName: params.typeName,
+        severity: params.severity || 'N/A',
+        points: params.points,
+        contraventionId: params.contraventionId,
+      });
+    } catch (emailError) {
+      console.error(`[Notification] Email to employee ${params.employeeEmail} failed:`, emailError);
+    }
 
     return notification;
   },
@@ -183,14 +187,18 @@ export const notificationService = {
       link: '/escalations',
     });
 
-    // Send email notification
-    await emailService.sendEscalationEmail({
-      employeeEmail: params.employeeEmail,
-      employeeName: params.employeeName,
-      level: params.level,
-      totalPoints: params.totalPoints,
-      actionsRequired: params.actionsRequired,
-    });
+    // Send email notification (don't fail if email fails)
+    try {
+      await emailService.sendEscalationEmail({
+        employeeEmail: params.employeeEmail,
+        employeeName: params.employeeName,
+        level: params.level,
+        totalPoints: params.totalPoints,
+        actionsRequired: params.actionsRequired,
+      });
+    } catch (emailError) {
+      console.error(`[Notification] Escalation email to ${params.employeeEmail} failed:`, emailError);
+    }
 
     return notification;
   },
@@ -223,15 +231,19 @@ export const notificationService = {
       link: '/training',
     });
 
-    // Send email notification
-    await emailService.sendTrainingAssignedEmail({
-      employeeEmail: params.employeeEmail,
-      employeeName: params.employeeName,
-      courseName: params.courseName,
-      dueDate: params.dueDate,
-      provider: params.provider,
-      durationHours: params.durationHours,
-    });
+    // Send email notification (don't fail if email fails)
+    try {
+      await emailService.sendTrainingAssignedEmail({
+        employeeEmail: params.employeeEmail,
+        employeeName: params.employeeName,
+        courseName: params.courseName,
+        dueDate: params.dueDate,
+        provider: params.provider,
+        durationHours: params.durationHours,
+      });
+    } catch (emailError) {
+      console.error(`[Notification] Training email to ${params.employeeEmail} failed:`, emailError);
+    }
 
     return notification;
   },
@@ -256,14 +268,18 @@ export const notificationService = {
       link: `/contraventions/${params.contraventionId}`,
     });
 
-    // Send email reminder
-    await emailService.sendAcknowledgmentReminderEmail({
-      employeeEmail: params.employeeEmail,
-      employeeName: params.employeeName,
-      referenceNo: params.referenceNo,
-      daysSinceLogged: params.daysSinceLogged,
-      contraventionId: params.contraventionId,
-    });
+    // Send email reminder (don't fail if email fails)
+    try {
+      await emailService.sendAcknowledgmentReminderEmail({
+        employeeEmail: params.employeeEmail,
+        employeeName: params.employeeName,
+        referenceNo: params.referenceNo,
+        daysSinceLogged: params.daysSinceLogged,
+        contraventionId: params.contraventionId,
+      });
+    } catch (emailError) {
+      console.error(`[Notification] Reminder email to ${params.employeeEmail} failed:`, emailError);
+    }
 
     return notification;
   },
@@ -288,14 +304,18 @@ export const notificationService = {
       link: '/training',
     });
 
-    // Send email notification
-    await emailService.sendTrainingOverdueEmail({
-      employeeEmail: params.employeeEmail,
-      employeeName: params.employeeName,
-      courseName: params.courseName,
-      dueDate: params.dueDate,
-      daysOverdue: params.daysOverdue,
-    });
+    // Send email notification (don't fail if email fails)
+    try {
+      await emailService.sendTrainingOverdueEmail({
+        employeeEmail: params.employeeEmail,
+        employeeName: params.employeeName,
+        courseName: params.courseName,
+        dueDate: params.dueDate,
+        daysOverdue: params.daysOverdue,
+      });
+    } catch (emailError) {
+      console.error(`[Notification] Training overdue email to ${params.employeeEmail} failed:`, emailError);
+    }
 
     return notification;
   },
@@ -331,23 +351,28 @@ export const notificationService = {
       link: `/approvals`,
     });
 
-    // Send email notification
-    await emailService.sendApprovalRequestEmail({
-      approverEmail: params.approverEmail,
-      approverName: params.approverName,
-      referenceNo: params.referenceNo,
-      employeeName: params.employeeName,
-      typeName: params.typeName,
-      severity: params.severity || 'N/A',
-      contraventionId: params.contraventionId,
-      // Pass additional fields for GAS email
-      vendor: params.vendor,
-      valueSgd: params.valueSgd,
-      incidentDate: params.incidentDate,
-      description: params.description,
-      justification: params.justification,
-      mitigation: params.mitigation,
-    });
+    // Send email notification (don't fail if email fails - approver can still see in-app notification)
+    try {
+      await emailService.sendApprovalRequestEmail({
+        approverEmail: params.approverEmail,
+        approverName: params.approverName,
+        referenceNo: params.referenceNo,
+        employeeName: params.employeeName,
+        typeName: params.typeName,
+        severity: params.severity || 'N/A',
+        contraventionId: params.contraventionId,
+        // Pass additional fields for email
+        vendor: params.vendor,
+        valueSgd: params.valueSgd,
+        incidentDate: params.incidentDate,
+        description: params.description,
+        justification: params.justification,
+        mitigation: params.mitigation,
+      });
+    } catch (emailError) {
+      // Log but don't fail - in-app notification was already created
+      console.error(`[Notification] Email to approver ${params.approverEmail} failed (may be blacklisted):`, emailError);
+    }
 
     return notification;
   },
