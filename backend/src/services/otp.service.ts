@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import validator from 'validator';
 import prisma from '../config/database';
 import { AppError } from '../middleware/errorHandler';
+import { emailService } from './email.service';
 
 // Constants
 const OTP_LENGTH = 6;
@@ -134,9 +135,9 @@ export class OtpService {
     console.log(`Expires at: ${expiresAt.toISOString()}`);
     console.log('========================================');
 
-    // Send OTP email via webhook (non-blocking)
-    this.sendOtpWebhook(normalizedEmail, otp, expiresAt).catch((err) => {
-      console.error('Failed to send OTP webhook:', err);
+    // Send OTP email via Postman API (non-blocking)
+    this.sendOtpEmail(normalizedEmail, otp, expiresAt).catch((err) => {
+      console.error('Failed to send OTP email:', err);
     });
 
     return {
@@ -146,39 +147,26 @@ export class OtpService {
   }
 
   /**
-   * Send OTP email via Google Apps Script webhook
+   * Send OTP email via Postman.gov.sg API
    */
-  private async sendOtpWebhook(email: string, otp: string, expiresAt: Date): Promise<void> {
-    const webhookUrl = process.env.OTP_WEBHOOK_URL;
-    if (!webhookUrl) {
-      console.log('OTP_WEBHOOK_URL not configured, skipping webhook');
-      return;
-    }
-
-    // Calculate expiry minutes dynamically (matching production format)
+  private async sendOtpEmail(email: string, otp: string, expiresAt: Date): Promise<void> {
+    // Calculate expiry minutes dynamically
     const expiryMinutes = Math.round((expiresAt.getTime() - Date.now()) / 60000);
 
-    const payload = {
-      type: 'OTP',  // Must be uppercase to match Google Apps Script
-      email,
-      otp,
-      expiryMinutes,
-    };
-
     try {
-      const response = await fetch(webhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+      const result = await emailService.sendOtpEmail({
+        email,
+        otp,
+        expiryMinutes,
       });
 
-      if (!response.ok) {
-        throw new Error(`Webhook failed with status: ${response.status}`);
+      if (result.success) {
+        console.log('OTP email sent successfully for:', email, { messageId: result.messageId });
+      } else {
+        throw new Error(result.error || 'Failed to send OTP email');
       }
-
-      console.log('OTP webhook sent successfully for:', email);
     } catch (error) {
-      console.error('Error sending OTP webhook:', error);
+      console.error('Error sending OTP email:', error);
       throw error;
     }
   }
