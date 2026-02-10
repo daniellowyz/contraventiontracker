@@ -2,13 +2,13 @@ import crypto from 'crypto';
 import validator from 'validator';
 import prisma from '../config/database';
 import { AppError } from '../middleware/errorHandler';
-import emailService from './email.service';
+import { emailService } from './email.service';
 
 // Constants
 const OTP_LENGTH = 6;
 const OTP_EXPIRY_MINUTES = 15;
 const MAX_ATTEMPTS = 5;
-const ALLOWED_DOMAINS = ['@open.gov.sg', '@tech.gov.sg', '@ogp.gov.sg'];
+const ALLOWED_DOMAINS = ['@open.gov.sg', '@tech.gov.sg'];
 
 export class OtpService {
   /**
@@ -129,31 +129,46 @@ export class OtpService {
       },
     });
 
-    // Always log OTP to console for debugging/development
+    // Log OTP to console for development (as per requirement #6)
     console.log('========================================');
     console.log(`OTP for ${normalizedEmail}: ${otp}`);
     console.log(`Expires at: ${expiresAt.toISOString()}`);
     console.log('========================================');
 
-    // Send OTP via email
-    const emailResult = await emailService.sendOtpEmail({
-      email: normalizedEmail,
-      otp,
-      expiresAt,
+    // Send OTP email via Postman API (non-blocking)
+    this.sendOtpEmail(normalizedEmail, otp, expiresAt).catch((err) => {
+      console.error('Failed to send OTP email:', err);
     });
-
-    if (!emailResult.success) {
-      console.error('[OTP] Failed to send OTP email:', emailResult.error);
-      // Don't throw error - OTP is still valid and logged to console
-      // This allows development to continue even if email fails
-    } else {
-      console.log(`[OTP] Email sent successfully to ${normalizedEmail}`);
-    }
 
     return {
       success: true,
       message: 'OTP sent to your email address',
     };
+  }
+
+  /**
+   * Send OTP email via Postman.gov.sg API
+   */
+  private async sendOtpEmail(email: string, otp: string, expiresAt: Date): Promise<void> {
+    // Calculate expiry minutes dynamically
+    const expiryMinutes = Math.round((expiresAt.getTime() - Date.now()) / 60000);
+
+    try {
+      const result = await emailService.sendOtpEmail({
+        email,
+        otp,
+        expiryMinutes,
+      });
+
+      if (result.success) {
+        console.log('OTP email sent successfully for:', email, { messageId: result.messageId });
+      } else {
+        throw new Error(result.error || 'Failed to send OTP email');
+      }
+    } catch (error) {
+      console.error('Error sending OTP email:', error);
+      throw error;
+    }
   }
 
   /**
@@ -166,7 +181,7 @@ export class OtpService {
     name: string;
     role: 'ADMIN' | 'APPROVER' | 'USER';
     isProfileComplete: boolean;
-    position?: string;
+    position?: string | null;
   }> {
     // Validate email format
     const validation = this.validateEmail(email);
@@ -239,67 +254,31 @@ export class OtpService {
 
     if (!user) {
       // Auto-create user for allowed domains
-      // Generate unique employee ID using timestamp to avoid conflicts
-      const timestamp = Date.now().toString(36);
-      const count = await prisma.user.count();
-      const employeeId = `EMP${String(count + 1).padStart(4, '0')}-${timestamp}`;
+      // Generate unique employee ID using timestamp + random to avoid collisions
+      const timestamp = Date.now().toString(36).toUpperCase();
+      const random = Math.random().toString(36).substring(2, 6).toUpperCase();
+      const employeeId = `EMP${timestamp}${random}`;
 
-      // Extract name from email (before @) - placeholder name
+      // Extract name from email (before @)
       const namePart = normalizedEmail.split('@')[0];
       const name = namePart
         .split(/[._-]/)
         .map(part => part.charAt(0).toUpperCase() + part.slice(1))
         .join(' ');
 
-      try {
-        // New users from tech.gov.sg or ogp.gov.sg need to complete their profile
-        // Only open.gov.sg users who are synced from Slack are pre-populated
-        user = await prisma.user.create({
-          data: {
-            email: normalizedEmail,
-            employeeId,
-            name,
-            role: 'USER',
-            isActive: true,
-            isProfileComplete: false, // New users need to complete profile
-          },
-        });
+      user = await prisma.user.create({
+        data: {
+          email: normalizedEmail,
+          employeeId,
+          name,
+          role: 'USER',
+          isActive: true,
+        },
+      });
 
-        // Create initial points record (use upsert to avoid conflicts)
-        await prisma.employeePoints.upsert({
-          where: { employeeId: user.id },
-          update: {}, // No update needed if exists
-          create: {
-            employeeId: user.id,
-            totalPoints: 0,
-          },
-        });
-      } catch (createError: unknown) {
-        // If user creation failed due to unique constraint (race condition),
-        // try to fetch the existing user
-        if ((createError as { code?: string }).code === 'P2002') {
-          user = await prisma.user.findUnique({
-            where: { email: normalizedEmail },
-          });
-          if (!user) {
-            throw new AppError('Failed to create or find user account', 500);
-          }
-        } else {
-          throw createError;
-        }
-      }
-    }
-
-    // User exists - ensure they have a points record
-    const existingPoints = await prisma.employeePoints.findUnique({
-      where: { employeeId: user.id },
-    });
-
-    if (!existingPoints) {
-      await prisma.employeePoints.upsert({
-        where: { employeeId: user.id },
-        update: {},
-        create: {
+      // Create initial points record
+      await prisma.employeePoints.create({
+        data: {
           employeeId: user.id,
           totalPoints: 0,
         },
@@ -318,7 +297,7 @@ export class OtpService {
       name: user.name,
       role: user.role,
       isProfileComplete: user.isProfileComplete,
-      position: user.position || undefined,
+      position: user.position,
     };
   }
 
