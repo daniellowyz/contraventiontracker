@@ -135,10 +135,14 @@ export class OtpService {
     console.log(`Expires at: ${expiresAt.toISOString()}`);
     console.log('========================================');
 
-    // Send OTP email via Postman API (non-blocking)
-    this.sendOtpEmail(normalizedEmail, otp, expiresAt).catch((err) => {
+    // Send OTP email via Postman API (BLOCKING - must wait for serverless)
+    // In serverless environments, non-blocking calls may be terminated before completion
+    try {
+      await this.sendOtpEmail(normalizedEmail, otp, expiresAt);
+    } catch (err) {
       console.error('Failed to send OTP email:', err);
-    });
+      // Don't fail the OTP request if email fails - user can still see OTP in console/logs
+    }
 
     return {
       success: true,
