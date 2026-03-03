@@ -29,7 +29,7 @@ export function Footer() {
             rel="noopener noreferrer"
             className="text-stone-500 hover:text-stone-900 transition-colors"
           >
-            Privacy
+            Privacy Statement
           </a>
           <a
             href="https://www.tech.gov.sg/terms-of-use/"
@@ -37,7 +37,15 @@ export function Footer() {
             rel="noopener noreferrer"
             className="text-stone-500 hover:text-stone-900 transition-colors"
           >
-            Terms
+            Terms of Use
+          </a>
+          <a
+            href="https://www.hack.gov.sg/about-hfpg/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-stone-500 hover:text-stone-900 transition-colors"
+          >
+            About Hack for Public Good
           </a>
         </div>
         <hr className="border-stone-200" />

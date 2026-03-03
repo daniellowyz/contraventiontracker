@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Masthead } from './Masthead';
 import { Footer } from './Footer';
@@ -8,6 +8,13 @@ import { Menu } from 'lucide-react';
 
 export function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const location = useLocation();
+
+  // Force banner to remount (reset dismiss state) on every route change
+  const [bannerKey, setBannerKey] = useState(0);
+  useEffect(() => {
+    setBannerKey((k) => k + 1);
+  }, [location.pathname]);
 
   // Prevent body scroll when mobile menu is open
   useEffect(() => {
@@ -24,7 +31,7 @@ export function Layout() {
   return (
     <div className="flex flex-col min-h-screen bg-white">
       <Masthead />
-      <Banner />
+      <Banner key={bannerKey} />
 
       {/* Mobile Header with hamburger */}
       <div className="lg:hidden flex items-center gap-3 px-4 py-3 bg-white border-b-2 border-neutral-300">

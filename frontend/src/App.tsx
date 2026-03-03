@@ -15,12 +15,14 @@ import { TrainingPage } from '@/pages/training/TrainingPage';
 import { EscalationsPage } from '@/pages/escalations/EscalationsPage';
 import { ApprovalPendingPage } from '@/pages/approvals/ApprovalPendingPage';
 import { useAuthStore } from '@/stores/authStore';
+import { DisclaimerModal } from '@/components/ui/DisclaimerModal';
 
 function App() {
   const { isAuthenticated, needsProfileCompletion } = useAuthStore();
 
   return (
     <BrowserRouter>
+      <DisclaimerModal />
       <Routes>
         {/* Public routes */}
         <Route

@@ -59,13 +59,4 @@ export const authApi = {
     return response.data.data!;
   },
 
-  /**
-   * Demo login for testing (bypasses OTP)
-   */
-  demoLogin: async (email: string) => {
-    const response = await client.post<ApiResponse<VerifyOtpResponse>>('/auth/demo-login', {
-      email,
-    });
-    return response.data.data!;
-  },
 };

@@ -29,7 +29,7 @@ A full-stack web application for tracking procurement contraventions, managing e
 - **Approval Workflow**: Multi-level approval process with email notifications
 - **Training Integration**: Mandatory training triggered at point thresholds
 - **Reports & Analytics**: Dashboard with charts, department breakdowns, and Excel export
-- **Email Notifications**: Automated alerts via Google Apps Script
+- **Email Notifications**: Automated alerts via Postman.gov.sg
 
 ## Project Structure
 
@@ -90,10 +90,6 @@ contravention-tracker-app/
    - Frontend: http://localhost:5173
    - Backend API: http://localhost:3001
 
-### Demo Accounts
-
-The application includes demo accounts for testing different user roles.
-
 ## Escalation Levels
 
 | Level | Points | Name | Consequences |
@@ -107,8 +103,8 @@ The application includes demo accounts for testing different user roles.
 ## API Endpoints
 
 ### Authentication
-- `POST /api/auth/login` - Email OTP login
-- `POST /api/auth/demo-login` - Demo account login
+- `POST /api/auth/request-otp` - Request OTP for email
+- `POST /api/auth/verify-otp` - Verify OTP and get session
 - `GET /api/auth/me` - Get current user
 
 ### Contraventions

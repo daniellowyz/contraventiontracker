@@ -100,13 +100,8 @@ interface ContraventionTypeData {
 interface OthersUsageItem {
   customTypeName: string;
   count: number;
-  contraventions: Array<{
-    id: string;
-    referenceNo: string;
-    points: number;
-    createdAt: string;
-    employee: { name: string };
-  }>;
+  totalPoints: number;
+  avgPoints: number;
 }
 
 interface DuplicateUser {
@@ -1566,7 +1561,7 @@ export function SettingsPage() {
                             <tr>
                               <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Custom Type Name</th>
                               <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Usage Count</th>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Recent Contraventions</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Avg Points</th>
                               <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                             </tr>
                           </thead>
@@ -1579,15 +1574,8 @@ export function SettingsPage() {
                                     {item.count} time(s)
                                   </Badge>
                                 </td>
-                                <td className="px-4 py-2 text-gray-600 text-xs">
-                                  {item.contraventions.slice(0, 2).map((c) => (
-                                    <div key={c.id}>
-                                      {c.referenceNo} - {c.employee.name}
-                                    </div>
-                                  ))}
-                                  {item.contraventions.length > 2 && (
-                                    <span className="text-gray-400">+{item.contraventions.length - 2} more</span>
-                                  )}
+                                <td className="px-4 py-2 text-gray-600 text-sm">
+                                  {item.avgPoints} pts
                                 </td>
                                 <td className="px-4 py-2">
                                   <Button

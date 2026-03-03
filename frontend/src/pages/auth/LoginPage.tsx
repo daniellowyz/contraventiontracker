@@ -140,24 +140,6 @@ export function LoginPage() {
     setTimeRemaining('');
   };
 
-  // Demo login mutation
-  const demoLoginMutation = useMutation({
-    mutationFn: (demoEmail: string) => authApi.demoLogin(demoEmail),
-    onSuccess: (data) => {
-      setAuth(data.token, data.user);
-      navigate(from, { replace: true });
-    },
-    onError: (err: Error) => {
-      setError(err.message || 'Demo login failed');
-    },
-  });
-
-  const handleDemoLogin = (demoEmail: string) => {
-    setError('');
-    setSuccessMessage('');
-    demoLoginMutation.mutate(demoEmail);
-  };
-
   // Handle OTP input change (only allow digits)
   const handleOtpChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.replace(/\D/g, '').slice(0, 6);
@@ -290,46 +272,6 @@ export function LoginPage() {
             <p className="mt-1">No password required</p>
           </div>
 
-          {/* Demo Login Section */}
-          <div className="mt-6 pt-6 border-t border-gray-200">
-            <p className="text-center text-sm text-gray-500 mb-4">
-              Demo Accounts (for testing)
-            </p>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                className="flex-1 text-xs px-2"
-                onClick={() => handleDemoLogin('demouser@open.gov.sg')}
-                disabled={demoLoginMutation.isPending}
-              >
-                User
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                className="flex-1 text-xs px-2"
-                onClick={() => handleDemoLogin('demoapprover@open.gov.sg')}
-                disabled={demoLoginMutation.isPending}
-              >
-                Approver
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                className="flex-1 text-xs px-2"
-                onClick={() => handleDemoLogin('demoadmin@open.gov.sg')}
-                disabled={demoLoginMutation.isPending}
-              >
-                Admin
-              </Button>
-            </div>
-            {demoLoginMutation.isPending && (
-              <p className="text-center text-sm text-gray-500 mt-2">
-                Logging in...
-              </p>
-            )}
-          </div>
         </Card>
       </div>
       <Footer />
