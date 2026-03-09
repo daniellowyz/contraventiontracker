@@ -7,6 +7,12 @@
       "maxDuration": 30
     }
   },
+  "crons": [
+    {
+      "path": "/api/cron/keep-alive",
+      "schedule": "0 8 * * *"
+    }
+  ],
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api" },
     { "source": "/((?!api).*)", "destination": "/" }
